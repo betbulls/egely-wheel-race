@@ -7,6 +7,7 @@ deployment:
     - /bin/cp app.js $DEPLOYPATH
     - /bin/cp ble.js $DEPLOYPATH
     - /bin/cp db.js $DEPLOYPATH
+    - /bin/cp analytics.js $DEPLOYPATH
     - /bin/cp view-sessions.js $DEPLOYPATH
     - /bin/cp view-room.js $DEPLOYPATH
     - /bin/cp sessions.html $DEPLOYPATH

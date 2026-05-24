@@ -1,5 +1,6 @@
 import { supabase } from './db.js';
 import * as ble from './ble.js';
+import { computeStats, CATEGORIES, METRIC_HELP, icon, trendLabel } from './analytics.js';
 
 const BROADCAST_MS = 500;   // how often each client samples + broadcasts its LED
 const RENDER_MS = 250;      // how often the board repaints
@@ -106,7 +107,8 @@ export function mount(el, sessionId){
     endMs = startMs + durationMs;
     $('roomTitle').textContent = session.name || 'Session';
     $('roomSub').textContent = `Hosted by ${session.created_by || 'unknown'} · ${session.duration_minutes} min`;
-    start();
+    if(Date.now() > endMs) renderResults();
+    else start();
   })();
 
   function isHostName(name){
@@ -312,8 +314,9 @@ export function mount(el, sessionId){
   }
 
   function render(){
-    const list = [...racers.values()];
     const b = board();
+    if(!b) return;            // results mode has no live board
+    const list = [...racers.values()];
 
     if(list.length === 0){
       b.innerHTML = '<div class="empty">Waiting for racers to connect…</div>';
@@ -387,6 +390,110 @@ export function mount(el, sessionId){
   function fmt(ms){
     const s = Math.max(0, Math.floor(ms / 1000));
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  }
+
+  // ---- Results screen (finished session) ------------------------------------
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+  function zoneBar(z){
+    return `<div class="zonebar">
+      <span class="z-red" style="width:${z.red}%"></span>
+      <span class="z-yellow" style="width:${z.yellow}%"></span>
+      <span class="z-green" style="width:${z.green}%"></span>
+    </div>`;
+  }
+
+  async function renderResults(){
+    $('livePill').hidden = true;
+    const body = $('roomBody');
+    body.hidden = false;
+    body.innerHTML = '<div class="empty">Loading results…</div>';
+
+    const { data, error } = await supabase.from('measurements')
+      .select('racer_name, led_value')
+      .eq('session_id', Number(sessionId))
+      .order('created_at', { ascending: true });
+    if(error){ body.innerHTML = `<div class="empty">Could not load results: ${esc(error.message)}</div>`; return; }
+
+    const byRacer = new Map();
+    for(const row of (data || [])){
+      if(!byRacer.has(row.racer_name)) byRacer.set(row.racer_name, []);
+      byRacer.get(row.racer_name).push(row.led_value);
+    }
+    if(byRacer.size === 0){
+      body.innerHTML = '<div class="empty">No measurements were recorded for this session.</div>';
+      return;
+    }
+
+    const results = [...byRacer.entries()]
+      .map(([name, leds]) => ({ name, leds, stats: computeStats(leds), host: isHostName(name) }))
+      .filter(r => r.stats)
+      .sort((a, b) => b.stats.avg - a.stats.avg);
+
+    const groupAvg = (session.group_avg != null)
+      ? Number(session.group_avg)
+      : results.reduce((s, r) => s + r.stats.avg, 0) / results.length;
+
+    const winners = CATEGORIES.map(cat => {
+      let best = null;
+      for(const r of results){ const v = cat.value(r.stats); if(best === null || v > best.v) best = { name: r.name, v }; }
+      return { cat, best };
+    });
+
+    const catCards = winners.map(w => `
+      <div class="cat-card">
+        <div class="cat-icon">${icon(w.cat.icon)}</div>
+        <div class="cat-name">${esc(w.cat.name)}</div>
+        <div class="cat-desc">${esc(w.cat.desc)}</div>
+        <div class="cat-winner">${w.best ? `${esc(w.best.name)} · ${esc(w.cat.fmt(w.best.v))}` : '—'}</div>
+      </div>`).join('');
+
+    const racerCards = results.map((r, i) => `
+      <div class="res-card">
+        <div class="res-rank">${i + 1}</div>
+        <div class="res-main">
+          <div class="racer-name-row"><span class="racer-name">${esc(r.name)}</span>${r.host ? '<span class="host-tag">Host</span>' : ''}</div>
+          <canvas class="res-curve" id="rc${i}"></canvas>
+          ${zoneBar(r.stats.zone)}
+        </div>
+        <div class="res-stats">
+          <div class="rs"><div class="rs-val">${r.stats.avg.toFixed(1)}</div><div class="rs-lbl">Avg</div></div>
+          <div class="rs"><div class="rs-val">${r.stats.peak}</div><div class="rs-lbl">Peak</div></div>
+          <div class="rs"><div class="rs-val">${r.stats.steadiness}</div><div class="rs-lbl">Steady</div></div>
+          <div class="rs"><div class="rs-val rs-trend">${esc(trendLabel(r.stats.trendTotal))}</div><div class="rs-lbl">Trend</div></div>
+        </div>
+      </div>`).join('');
+
+    body.innerHTML = `
+      <div class="res-group">
+        <div class="res-group-val" style="color:${vitalityColor(Math.round(groupAvg))}">${groupAvg.toFixed(1)}</div>
+        <div class="res-group-lbl">Group average · ${results.length} racer${results.length > 1 ? 's' : ''} · finished</div>
+      </div>
+
+      <h2 class="res-h">Category winners</h2>
+      <div class="cat-grid">${catCards}</div>
+
+      <h2 class="res-h">All racers <span class="res-h-sub">ranked by average</span></h2>
+      <div class="res-list">${racerCards}</div>
+
+      <div class="metric-legend">
+        <div><b>Avg</b> — ${esc(METRIC_HELP.avg)}</div>
+        <div><b>Peak</b> — ${esc(METRIC_HELP.peak)}</div>
+        <div><b>Steady</b> — ${esc(METRIC_HELP.steadiness)}</div>
+        <div><b>Zone bar</b> — ${esc(METRIC_HELP.zones)}</div>
+        <div><b>Trend</b> — ${esc(METRIC_HELP.trend)}</div>
+      </div>
+
+      <p class="room-hint"><a href="#/sessions" class="link">← Back to sessions</a></p>
+    `;
+
+    results.forEach((r, i) => {
+      const cv = body.querySelector('#rc' + i);
+      if(!cv) return;
+      const n = r.leds.length;
+      const hist = r.leds.map((v, k) => ({ t: n > 1 ? (k / (n - 1)) * durationMs : 0, led: v }));
+      drawCurve(cv, hist, vitalityColor(Math.round(r.stats.avg)));
+    });
   }
 
   window.addEventListener('resize', render);

@@ -6,9 +6,6 @@ export function mount(el){
     <div class="view-head">
       <h1 class="page-title">Group Sessions</h1>
       <p class="page-sub">Schedule a session and measure together, live.</p>
-      <div class="cloud-status waiting" id="cloudStatus">
-        <span class="dot"></span><span id="cloudStatusText">Connecting…</span>
-      </div>
     </div>
 
     <div class="panel">
@@ -54,21 +51,15 @@ export function mount(el){
   const $ = id => el.querySelector('#' + id);
   let sessions = [];
 
-  function setCloudStatus(text, state){
-    $('cloudStatus').className = 'cloud-status ' + state;
-    $('cloudStatusText').textContent = text;
-  }
-
   async function loadSessions(){
     const { data, error } = await supabase
       .from('sessions')
       .select('*')
       .order('scheduled_start', { ascending: true });
     if(error){
-      setCloudStatus('Error: ' + error.message, 'err');
+      $('sessionList').innerHTML = '<div class="empty">Could not load sessions: ' + error.message + '</div>';
       return;
     }
-    setCloudStatus('Connected', 'ok');
     sessions = data || [];
     renderSessions();
   }
