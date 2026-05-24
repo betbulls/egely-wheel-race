@@ -32,6 +32,9 @@ export function mount(el){
             <label for="fOrganizer">Organizer name</label>
             <input type="text" id="fOrganizer" placeholder="Your name" required maxlength="60">
           </div>
+          <div class="field full check-field">
+            <label class="check"><input type="checkbox" id="fVerified"> Verified session — only legitimate measurements count toward the results</label>
+          </div>
         </div>
         <div class="form-actions">
           <button type="submit" id="btnCreate">Create session</button>
@@ -118,6 +121,12 @@ export function mount(el){
       const name = document.createElement('div');
       name.className = 'session-name';
       name.textContent = s.name || 'Untitled session';
+      if(s.verified_only){
+        const vt = document.createElement('span');
+        vt.className = 'sess-verified';
+        vt.textContent = '✓ Verified';
+        name.appendChild(vt);
+      }
       const meta = document.createElement('div');
       meta.className = 'session-meta';
       meta.textContent = `${formatStart(s.scheduled_start)} · ${s.duration_minutes} min · by ${s.created_by || 'unknown'}`;
@@ -191,7 +200,8 @@ export function mount(el){
       scheduled_start: start.toISOString(),
       duration_minutes: duration,
       status: 'scheduled',
-      created_by: organizer
+      created_by: organizer,
+      verified_only: $('fVerified').checked
     });
     $('btnCreate').disabled = false;
 

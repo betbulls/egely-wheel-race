@@ -5,6 +5,11 @@ import { computeStats, CATEGORIES, METRIC_HELP, icon, trendLabel } from './analy
 const BROADCAST_MS = 500;   // how often each client samples + broadcasts its LED
 const RENDER_MS = 250;      // how often the board repaints
 
+// Cheat detection: genuine readings drift slowly. If the LED moves by >= 3
+// within any 1-second window (e.g. 2 -> 5), it's hand-spun => not verified.
+const CHANGE_WINDOW_MS = 1000;
+const CHANGE_LIMIT = 3;
+
 function vitalityColor(led){
   if(led <= 5) return '#C0143C';   // red
   if(led <= 12) return '#E9D24A';  // yellow
@@ -28,7 +33,12 @@ export function mount(el, sessionId){
   let bleConnected = false;
 
   let pendingSamples = [];   // buffered measurement rows, flushed in batches
+  let mySamples = [];        // my own LED values (in-window) for my result row
   let groupSaved = false;    // host writes session group_avg once, at the end
+  let myResultSaved = false; // each client writes its own result row once, at the end
+
+  let recentFrames = [];     // {t, led} within the last second (cheat detection)
+  let cheatDetected = false; // latched once an irregular change is seen in-window
 
   const racerId = name => name.trim().toLowerCase().replace(/\s+/g, '_');
   const inWindow = () => { const n = Date.now(); return n >= startMs && n <= endMs; };
@@ -106,7 +116,10 @@ export function mount(el, sessionId){
     durationMs = (session.duration_minutes || 0) * 60000;
     endMs = startMs + durationMs;
     $('roomTitle').textContent = session.name || 'Session';
-    $('roomSub').textContent = `Hosted by ${session.created_by || 'unknown'} · ${session.duration_minutes} min`;
+    const when = new Date(session.scheduled_start).toLocaleString('en-US', {
+      weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+    $('roomSub').textContent = `Hosted by ${session.created_by || 'unknown'} · ${session.duration_minutes} min · ${when}`;
     if(Date.now() > endMs) renderResults();
     else start();
   })();
@@ -137,7 +150,18 @@ export function mount(el, sessionId){
     joinChannel();
 
     unsubStatus = ble.subscribeStatus(s => { bleConnected = s.connected; updateHint(); });
-    unsubFrames = ble.subscribeFrames(frame => { myLed = frame.led; });
+    unsubFrames = ble.subscribeFrames(frame => {
+      myLed = frame.led;
+      if(inWindow()){
+        const now = Date.now();
+        recentFrames.push({ t: now, led: frame.led });
+        recentFrames = recentFrames.filter(f => now - f.t <= CHANGE_WINDOW_MS);
+        const vals = recentFrames.map(f => f.led);
+        if(Math.max(...vals) - Math.min(...vals) >= CHANGE_LIMIT && !cheatDetected){
+          cheatDetected = true; updateHint();
+        }
+      }
+    });
 
     $('lbExpand').addEventListener('click', () => {
       leaderExpanded = !leaderExpanded;
@@ -153,8 +177,10 @@ export function mount(el, sessionId){
   }
 
   function updateHint(){
-    if(bleConnected) $('roomHint').textContent = `You are measuring as "${myName}".`;
-    else $('roomHint').textContent = `Connect your Egely Wheel (top right) to join the measurement — or just watch the leaderboard.`;
+    const h = $('roomHint');
+    if(cheatDetected){ h.innerHTML = '<span class="warn">Irregular spinning detected — this measurement won\'t be verified.</span>'; return; }
+    if(bleConnected) h.textContent = `You are measuring as "${myName}".`;
+    else h.textContent = 'Connect your Egely Wheel (top right) to join the measurement — or just watch the leaderboard.';
   }
 
   // ---- Realtime channel -----------------------------------------------------
@@ -166,17 +192,18 @@ export function mount(el, sessionId){
 
   function applyTick(p){
     if(!p || !p.name) return;
-    upsertRacer(p.name, { led: p.led, avg: p.avg, count: p.count, peak: p.peak, host: isHostName(p.name) });
+    upsertRacer(p.name, { led: p.led, avg: p.avg, count: p.count, peak: p.peak, host: isHostName(p.name), verified: p.verified });
   }
 
-  function upsertRacer(name, { led, avg, count, peak, host }){
+  function upsertRacer(name, { led, avg, count, peak, host, verified }){
     let r = racers.get(name);
     if(!r){
-      r = { name, led: 0, avg: 0, count: 0, peak: 0, host, history: [], el: null };
+      r = { name, led: 0, avg: 0, count: 0, peak: 0, host, verified: true, history: [], el: null };
       racers.set(name, r);
     }
     r.led = led; r.avg = avg; r.count = count; r.host = host;
-    r.peak = Math.max(r.peak || 0, peak || led || 0);
+    r.peak = Math.max(r.peak || 0, peak || 0);
+    if(verified !== undefined) r.verified = verified;
     const t = Math.max(0, Date.now() - startMs);
     r.history.push({ t, led });
     if(r.history.length > 2400) r.history.shift();
@@ -188,16 +215,18 @@ export function mount(el, sessionId){
     if(inWindow()){
       mySum += myLed; myCount++;
       myPeak = Math.max(myPeak, myLed);
+      mySamples.push(myLed);
       pendingSamples.push({
         session_id: Number(sessionId), racer_id: racerId(myName),
         racer_name: myName, led_value: myLed,
       });
     }
     const avg = myCount ? mySum / myCount : 0;
-    upsertRacer(myName, { led: myLed, avg, count: myCount, peak: myPeak, host: isHostName(myName) });
+    const verified = !cheatDetected;
+    upsertRacer(myName, { led: myLed, avg, count: myCount, peak: myPeak, host: isHostName(myName), verified });
     if(channel){
       channel.send({ type: 'broadcast', event: 'tick',
-        payload: { name: myName, led: myLed, avg, count: myCount, peak: myPeak } });
+        payload: { name: myName, led: myLed, avg, count: myCount, peak: myPeak, verified } });
     }
   }
 
@@ -221,6 +250,22 @@ export function mount(el, sessionId){
       .update({ group_avg: Number(groupAvg.toFixed(2)), racer_count: list.length })
       .eq('id', Number(sessionId))
       .then(({ error }) => { if(error) console.warn('group save error:', error.message); });
+  }
+
+  // Each measuring client writes its own summarised result once the session ends.
+  function maybeSaveMyResult(){
+    if(myResultSaved || Date.now() <= endMs || mySamples.length === 0) return;
+    myResultSaved = true;
+    const s = computeStats(mySamples);
+    supabase.from('results').insert({
+      session_id: Number(sessionId), racer_id: racerId(myName), racer_name: myName,
+      avg: Number(s.avg.toFixed(2)), peak: s.peak, steadiness: s.steadiness,
+      zone_green: Number(s.zone.green.toFixed(1)),
+      zone_yellow: Number(s.zone.yellow.toFixed(1)),
+      zone_red: Number(s.zone.red.toFixed(1)),
+      trend: Number(s.trendTotal.toFixed(2)), green_streak: s.greenStreak,
+      samples: s.n, is_host: isHostName(myName), verified: !cheatDetected,
+    }).then(({ error }) => { if(error) console.warn('result save error:', error.message); });
   }
 
   // ---- Rendering ------------------------------------------------------------
@@ -251,6 +296,9 @@ export function mount(el, sessionId){
       tag.textContent = 'Host';
       nameRow.append(tag);
     }
+    const vbadge = document.createElement('span');
+    vbadge.className = 'v-badge';
+    nameRow.append(vbadge);
     const spark = document.createElement('canvas');
     spark.className = 'spark';
     mid.append(nameRow, spark);
@@ -263,7 +311,7 @@ export function mount(el, sessionId){
     metrics.append(live.wrap, peak.wrap, avg.wrap);
 
     card.append(rank, avatar, mid, metrics);
-    r.el = { card, rank, liveVal: live.val, peakVal: peak.val, avgVal: avg.val, spark };
+    r.el = { card, rank, liveVal: live.val, peakVal: peak.val, avgVal: avg.val, spark, vbadge };
     return card;
   }
 
@@ -332,12 +380,15 @@ export function mount(el, sessionId){
         r.el.peakVal.textContent = r.peak;
         r.el.peakVal.style.color = vitalityColor(r.peak);
         r.el.avgVal.textContent = (r.avg || 0).toFixed(1);
+        if(r.verified === false){ r.el.vbadge.className = 'v-badge unverified'; r.el.vbadge.textContent = 'unverified'; }
+        else { r.el.vbadge.className = 'v-badge verified'; r.el.vbadge.textContent = '✓'; }
         drawCurve(r.el.spark, r.history, vitalityColor(r.led));
       });
     }
     renderHost();
     renderGroup();
     maybeSaveGroup();
+    maybeSaveMyResult();
   }
 
   function renderHost(){
@@ -427,16 +478,30 @@ export function mount(el, sessionId){
 
     const results = [...byRacer.entries()]
       .map(([name, leds]) => ({ name, leds, stats: computeStats(leds), host: isHostName(name) }))
-      .filter(r => r.stats)
+      .filter(r => r.stats);
+
+    // Verified verdicts from the results table; filter when the session is verified-only.
+    const { data: vRows } = await supabase.from('results')
+      .select('racer_name, verified').eq('session_id', Number(sessionId));
+    const vMap = new Map((vRows || []).map(r => [r.racer_name, r.verified]));
+    results.forEach(r => { r.verified = vMap.has(r.name) ? vMap.get(r.name) : null; });
+
+    const verifiedOnly = !!session.verified_only;
+    const shown = (verifiedOnly ? results.filter(r => r.verified === true) : results)
       .sort((a, b) => b.stats.avg - a.stats.avg);
 
-    const groupAvg = (session.group_avg != null)
-      ? Number(session.group_avg)
-      : results.reduce((s, r) => s + r.stats.avg, 0) / results.length;
+    if(shown.length === 0){
+      body.innerHTML = verifiedOnly
+        ? '<div class="empty">No verified measurements in this session.</div>'
+        : '<div class="empty">No measurements were recorded for this session.</div>';
+      return;
+    }
+
+    const groupAvg = shown.reduce((s, r) => s + r.stats.avg, 0) / shown.length;
 
     const winners = CATEGORIES.map(cat => {
       let best = null;
-      for(const r of results){ const v = cat.value(r.stats); if(best === null || v > best.v) best = { name: r.name, v }; }
+      for(const r of shown){ const v = cat.value(r.stats); if(best === null || v > best.v) best = { name: r.name, v }; }
       return { cat, best };
     });
 
@@ -448,11 +513,15 @@ export function mount(el, sessionId){
         <div class="cat-winner">${w.best ? `${esc(w.best.name)} · ${esc(w.cat.fmt(w.best.v))}` : '—'}</div>
       </div>`).join('');
 
-    const racerCards = results.map((r, i) => `
+    const vBadge = r => r.verified === true
+      ? '<span class="v-badge verified">✓</span>'
+      : r.verified === false ? '<span class="v-badge unverified">unverified</span>' : '';
+
+    const racerCards = shown.map((r, i) => `
       <div class="res-card">
         <div class="res-rank">${i + 1}</div>
         <div class="res-main">
-          <div class="racer-name-row"><span class="racer-name">${esc(r.name)}</span>${r.host ? '<span class="host-tag">Host</span>' : ''}</div>
+          <div class="racer-name-row"><span class="racer-name">${esc(r.name)}</span>${r.host ? '<span class="host-tag">Host</span>' : ''}${vBadge(r)}</div>
           <canvas class="res-curve" id="rc${i}"></canvas>
           ${zoneBar(r.stats.zone)}
         </div>
@@ -467,7 +536,7 @@ export function mount(el, sessionId){
     body.innerHTML = `
       <div class="res-group">
         <div class="res-group-val" style="color:${vitalityColor(Math.round(groupAvg))}">${groupAvg.toFixed(1)}</div>
-        <div class="res-group-lbl">Group average · ${results.length} racer${results.length > 1 ? 's' : ''} · finished</div>
+        <div class="res-group-lbl">Group average · ${shown.length} racer${shown.length > 1 ? 's' : ''} · finished${verifiedOnly ? ' · verified only' : ''}</div>
       </div>
 
       <h2 class="res-h">Category winners</h2>
@@ -482,12 +551,13 @@ export function mount(el, sessionId){
         <div><b>Steady</b> — ${esc(METRIC_HELP.steadiness)}</div>
         <div><b>Zone bar</b> — ${esc(METRIC_HELP.zones)}</div>
         <div><b>Trend</b> — ${esc(METRIC_HELP.trend)}</div>
+        <div><b>✓ Verified</b> — Measurement looked genuine (no irregular hand-spinning).</div>
       </div>
 
       <p class="room-hint"><a href="#/sessions" class="link">← Back to sessions</a></p>
     `;
 
-    results.forEach((r, i) => {
+    shown.forEach((r, i) => {
       const cv = body.querySelector('#rc' + i);
       if(!cv) return;
       const n = r.leds.length;
