@@ -1,0 +1,5 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home4/pirituj6/public_html/ewr/
+    - /bin/cp index.html $DEPLOYPATH
