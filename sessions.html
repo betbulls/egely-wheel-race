@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Egely Wheel · Group Sessions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;1,400&family=Montserrat:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#00033D;
+    --white:#FFFFFF;
+    --purple-dark:#401D91;
+    --blue:#0033FF;
+    --accent:#5230DA;
+    --panel:rgba(255,255,255,0.04);
+    --panel-border:rgba(255,255,255,0.10);
+    --muted:rgba(255,255,255,0.55);
+    --faint:rgba(255,255,255,0.35);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    font-family:'Inter',system-ui,sans-serif;
+    background:var(--navy);color:var(--white);
+    padding:24px;min-height:100vh;line-height:1.5;
+    max-width:880px;margin:0 auto;
+    background-image:radial-gradient(circle at 20% -10%, rgba(82,48,218,0.25), transparent 45%),
+                     radial-gradient(circle at 90% 0%, rgba(0,51,255,0.18), transparent 40%);
+  }
+  h1,h2,h3{font-family:'Montserrat',sans-serif;font-weight:500;letter-spacing:-0.01em}
+
+  header{display:flex;flex-direction:column;gap:4px;margin-bottom:28px}
+  .wordmark{font-family:'Montserrat',sans-serif;font-weight:600;font-size:15px;
+    letter-spacing:0.35em;text-transform:lowercase;color:var(--white)}
+  .page-title{font-size:34px;font-weight:500;margin-top:8px}
+  .page-sub{color:var(--muted);font-size:15px}
+
+  .cloud-status{display:inline-flex;align-items:center;gap:8px;font-size:12px;
+    color:var(--muted);margin-top:10px}
+  .cloud-status .dot{width:9px;height:9px;border-radius:50%;background:var(--faint);transition:all .3s}
+  .cloud-status.ok .dot{background:#3ddc84;box-shadow:0 0 10px #3ddc84}
+  .cloud-status.err .dot{background:#ff5c5c;box-shadow:0 0 10px #ff5c5c}
+  .cloud-status.waiting .dot{background:var(--blue);box-shadow:0 0 10px var(--blue);animation:pulse 1.4s infinite}
+  @keyframes pulse{50%{opacity:.4}}
+
+  .panel{background:var(--panel);border:1px solid var(--panel-border);
+    border-radius:14px;padding:22px;margin-bottom:22px}
+  .panel h2{font-size:13px;text-transform:uppercase;letter-spacing:0.14em;
+    color:var(--white);margin-bottom:18px;font-weight:600}
+
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media (max-width:560px){.form-grid{grid-template-columns:1fr}}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .field.full{grid-column:1 / -1}
+  label{font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted)}
+  input{
+    background:rgba(255,255,255,0.06);color:var(--white);
+    border:1px solid var(--panel-border);border-radius:8px;
+    padding:11px 13px;font-size:14px;font-family:'Inter',sans-serif;width:100%;
+  }
+  input:focus{outline:none;border-color:var(--accent);background:rgba(82,48,218,0.12)}
+  input::placeholder{color:var(--faint)}
+  /* make native date/time pickers visible on dark bg */
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="time"]::-webkit-calendar-picker-indicator{filter:invert(1) opacity(.7)}
+
+  button{
+    font-family:'Inter',sans-serif;background:var(--accent);color:var(--white);
+    border:none;padding:13px 22px;border-radius:8px;font-size:15px;font-weight:500;
+    cursor:pointer;transition:all .2s;
+  }
+  button:hover:not(:disabled){background:#6a47f0}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .form-actions{margin-top:18px;display:flex;align-items:center;gap:14px}
+  .form-msg{font-size:13px;color:var(--muted)}
+  .form-msg.ok{color:#3ddc84}
+  .form-msg.err{color:#ff7c7c}
+
+  .session-list{display:flex;flex-direction:column;gap:12px}
+  .empty{color:var(--faint);font-size:14px;text-align:center;padding:24px 0}
+  .session-card{
+    background:rgba(255,255,255,0.04);border:1px solid var(--panel-border);
+    border-radius:12px;padding:16px 18px;display:flex;align-items:center;
+    justify-content:space-between;gap:16px;flex-wrap:wrap;
+    transition:border-color .2s;
+  }
+  .session-card.live{border-color:var(--accent);background:rgba(82,48,218,0.12)}
+  .session-card.finished{opacity:.5}
+  .session-main{display:flex;flex-direction:column;gap:4px;min-width:0}
+  .session-name{font-family:'Montserrat',sans-serif;font-size:18px;font-weight:500}
+  .session-meta{font-size:13px;color:var(--muted)}
+  .session-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px;text-align:right}
+  .badge{font-size:10px;letter-spacing:0.12em;text-transform:uppercase;
+    padding:4px 9px;border-radius:20px;font-weight:600}
+  .badge.upcoming{background:rgba(0,51,255,0.2);color:#9db4ff}
+  .badge.live{background:var(--accent);color:var(--white)}
+  .badge.finished{background:rgba(255,255,255,0.1);color:var(--muted)}
+  .countdown{font-family:'Montserrat',sans-serif;font-size:20px;font-weight:500;
+    font-variant-numeric:tabular-nums}
+  .countdown.live{color:#3ddc84}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wordmark">egely wheel</div>
+  <div class="page-title">Group Sessions</div>
+  <div class="page-sub">Schedule a session and measure together, live.</div>
+  <div class="cloud-status waiting" id="cloudStatus">
+    <span class="dot"></span><span id="cloudStatusText">Connecting…</span>
+  </div>
+</header>
+
+<div class="panel">
+  <h2>Create a group session</h2>
+  <form id="createForm">
+    <div class="form-grid">
+      <div class="field full">
+        <label for="fName">Session name</label>
+        <input type="text" id="fName" placeholder="e.g. Sunday Morning Meditation" required maxlength="80">
+      </div>
+      <div class="field">
+        <label for="fDate">Date</label>
+        <input type="date" id="fDate" required>
+      </div>
+      <div class="field">
+        <label for="fTime">Start time</label>
+        <input type="time" id="fTime" required>
+      </div>
+      <div class="field">
+        <label for="fDuration">Duration (minutes)</label>
+        <input type="number" id="fDuration" min="1" max="240" value="10" required>
+      </div>
+      <div class="field">
+        <label for="fOrganizer">Organizer name</label>
+        <input type="text" id="fOrganizer" placeholder="Your name" required maxlength="60">
+      </div>
+    </div>
+    <div class="form-actions">
+      <button type="submit" id="btnCreate">Create session</button>
+      <span class="form-msg" id="formMsg"></span>
+    </div>
+  </form>
+</div>
+
+<div class="panel">
+  <h2>Upcoming sessions</h2>
+  <div class="session-list" id="sessionList">
+    <div class="empty" id="emptyState">Loading…</div>
+  </div>
+</div>
+
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const SUPABASE_URL = 'https://lhyychkrcrndjptptkii.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxoeXljaGtyY3JuZGpwdHB0a2lpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2MjY0NTYsImV4cCI6MjA5NTIwMjQ1Nn0.m94K_KVl-Fdj1vkrAh0mPN3lku4FmcfnHs5W3p_gBFk';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const $ = id => document.getElementById(id);
+
+let sessions = [];
+
+function setCloudStatus(text, state){
+  $('cloudStatus').className = 'cloud-status ' + state;
+  $('cloudStatusText').textContent = text;
+}
+
+// ---- Load + render ----------------------------------------------------------
+
+async function loadSessions(){
+  const { data, error } = await supabase
+    .from('sessions')
+    .select('*')
+    .order('scheduled_start', { ascending: true });
+  if(error){
+    setCloudStatus('Error: ' + error.message, 'err');
+    return;
+  }
+  setCloudStatus('Connected', 'ok');
+  sessions = data || [];
+  renderSessions();
+}
+
+function sessionState(s, now){
+  const start = new Date(s.scheduled_start).getTime();
+  const end = start + (s.duration_minutes || 0) * 60000;
+  if(now < start) return 'upcoming';
+  if(now <= end) return 'live';
+  return 'finished';
+}
+
+function formatStart(iso){
+  return new Date(iso).toLocaleString(undefined, {
+    weekday:'short', month:'short', day:'numeric',
+    hour:'2-digit', minute:'2-digit'
+  });
+}
+
+function formatCountdown(ms){
+  if(ms < 0) ms = 0;
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const sec = totalSec % 60;
+  const pad = n => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${pad(m)}:${pad(sec)}`;
+}
+
+function renderSessions(){
+  const list = $('sessionList');
+  if(sessions.length === 0){
+    list.innerHTML = '<div class="empty">No sessions yet. Create the first one above.</div>';
+    return;
+  }
+  const now = Date.now();
+  // Order: live first, then upcoming (soonest first), then finished (latest first).
+  const order = { live: 0, upcoming: 1, finished: 2 };
+  const sorted = [...sessions].sort((a, b) => {
+    const sa = sessionState(a, now), sb = sessionState(b, now);
+    if(order[sa] !== order[sb]) return order[sa] - order[sb];
+    const ta = new Date(a.scheduled_start).getTime();
+    const tb = new Date(b.scheduled_start).getTime();
+    return sa === 'finished' ? tb - ta : ta - tb;
+  });
+
+  list.innerHTML = '';
+  for(const s of sorted){
+    const state = sessionState(s, now);
+    const card = document.createElement('div');
+    card.className = 'session-card ' + state;
+    card.dataset.start = new Date(s.scheduled_start).getTime();
+    card.dataset.end = new Date(s.scheduled_start).getTime() + (s.duration_minutes || 0) * 60000;
+
+    const main = document.createElement('div');
+    main.className = 'session-main';
+    const name = document.createElement('div');
+    name.className = 'session-name';
+    name.textContent = s.name || 'Untitled session';
+    const meta = document.createElement('div');
+    meta.className = 'session-meta';
+    meta.textContent = `${formatStart(s.scheduled_start)} · ${s.duration_minutes} min · by ${s.created_by || 'unknown'}`;
+    main.append(name, meta);
+
+    const right = document.createElement('div');
+    right.className = 'session-right';
+    const badge = document.createElement('span');
+    badge.className = 'badge ' + state;
+    badge.textContent = state === 'live' ? 'Live' : state === 'upcoming' ? 'Upcoming' : 'Finished';
+    const cd = document.createElement('div');
+    cd.className = 'countdown' + (state === 'live' ? ' live' : '');
+    cd.dataset.role = 'countdown';
+    right.append(badge, cd);
+
+    card.append(main, right);
+    list.appendChild(card);
+  }
+  tickCountdowns();
+}
+
+// Update only the countdown labels every second (cheap, no full re-render).
+function tickCountdowns(){
+  const now = Date.now();
+  let needsReorder = false;
+  document.querySelectorAll('.session-card').forEach(card => {
+    const start = Number(card.dataset.start);
+    const end = Number(card.dataset.end);
+    const cd = card.querySelector('[data-role="countdown"]');
+    const isLive = card.classList.contains('live');
+    const isFinished = card.classList.contains('finished');
+    if(now < start){
+      cd.textContent = 'in ' + formatCountdown(start - now);
+      if(isLive || isFinished) needsReorder = true;
+    } else if(now <= end){
+      cd.textContent = formatCountdown(end - now) + ' left';
+      if(!isLive) needsReorder = true; // crossed into live
+    } else {
+      cd.textContent = '';
+      if(!isFinished) needsReorder = true; // crossed into finished
+    }
+  });
+  // When a session crosses a state boundary, re-render to fix badges/ordering.
+  if(needsReorder) renderSessions();
+}
+setInterval(tickCountdowns, 1000);
+
+// ---- Create -----------------------------------------------------------------
+
+$('createForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = $('fName').value.trim();
+  const date = $('fDate').value;
+  const time = $('fTime').value;
+  const duration = parseInt($('fDuration').value, 10);
+  const organizer = $('fOrganizer').value.trim();
+
+  if(!name || !date || !time || !duration || !organizer){
+    setFormMsg('Please fill in every field.', 'err');
+    return;
+  }
+  const start = new Date(`${date}T${time}`);
+  if(isNaN(start.getTime())){
+    setFormMsg('Invalid date or time.', 'err');
+    return;
+  }
+
+  $('btnCreate').disabled = true;
+  setFormMsg('Creating…', '');
+  const { error } = await supabase.from('sessions').insert({
+    name,
+    scheduled_start: start.toISOString(),
+    duration_minutes: duration,
+    status: 'scheduled',
+    created_by: organizer
+  });
+  $('btnCreate').disabled = false;
+
+  if(error){
+    setFormMsg('Error: ' + error.message, 'err');
+    return;
+  }
+  setFormMsg('Session created.', 'ok');
+  $('fName').value = '';
+  loadSessions();
+});
+
+function setFormMsg(text, state){
+  const el = $('formMsg');
+  el.className = 'form-msg ' + (state || '');
+  el.textContent = text;
+}
+
+// ---- Realtime ---------------------------------------------------------------
+
+supabase.channel('sessions-changes')
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, () => {
+    loadSessions();
+  })
+  .subscribe();
+
+// Default the date field to today for convenience.
+$('fDate').value = new Date().toISOString().slice(0, 10);
+
+loadSessions();
+</script>
+
+</body>
+</html>
