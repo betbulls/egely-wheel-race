@@ -1,531 +1,177 @@
 <!DOCTYPE html>
-<html lang="hu">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Egely Wheel — Live + Cloud</title>
+<title>Egely Wheel Race</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;1,400&family=Montserrat:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="brand.css">
 <style>
-  *{margin:0;padding:0;box-sizing:border-box;font-family:system-ui,-apple-system,sans-serif}
-  body{
-    background:#0a0d14;color:#e8dcc4;padding:20px;min-height:100vh;
-    display:flex;flex-direction:column;gap:16px;max-width:900px;margin:0 auto;
+  .app-header{
+    display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    padding-bottom:16px;margin-bottom:20px;
+    border-bottom:1px solid var(--panel-border);
   }
-  h1{font-size:20px;font-weight:500;letter-spacing:-0.01em}
-  .sub{color:#7a7560;font-size:12px;margin-bottom:8px}
-
-  .status-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  @media (max-width: 600px){.status-row{grid-template-columns:1fr}}
-
-  .status{
-    padding:12px 16px;border-radius:8px;
-    background:rgba(232,220,196,0.04);border:1px solid rgba(232,220,196,0.08);
-    display:flex;align-items:center;gap:12px;font-size:12px;
+  .nav{display:flex;gap:6px;flex:1}
+  .nav a{
+    font-family:'Montserrat',sans-serif;font-size:13px;font-weight:500;
+    text-decoration:none;color:var(--muted);
+    padding:7px 14px;border-radius:8px;transition:all .2s;
   }
-  .status .dot{
-    width:10px;height:10px;border-radius:50%;background:#7a7560;
-    transition:all 0.3s;flex-shrink:0;
+  .nav a:hover{color:var(--white);background:rgba(255,255,255,0.05)}
+  .nav a.active{color:var(--white);background:rgba(82,48,218,0.25)}
+
+  /* Global Egely Wheel connection status bar */
+  .ble-bar{
+    display:inline-flex;align-items:center;gap:10px;
+    background:var(--panel);border:1px solid var(--panel-border);
+    border-radius:30px;padding:6px 6px 6px 14px;font-size:12px;color:var(--muted);
   }
-  .status.ok .dot{background:#7ac060;box-shadow:0 0 12px #7ac060}
-  .status.err .dot{background:#ff6840;box-shadow:0 0 12px #ff6840}
-  .status.waiting .dot{background:#d4a850;box-shadow:0 0 12px #d4a850;animation:pulse 1.5s infinite}
-  @keyframes pulse{50%{opacity:0.4}}
-
-  .status-label{font-size:9px;letter-spacing:0.25em;text-transform:uppercase;color:#7a7560;margin-bottom:3px;display:block}
-
-  .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-  button{
-    background:#d4a850;color:#0a0d14;border:none;padding:12px 20px;border-radius:6px;
-    font-size:13px;font-weight:600;cursor:pointer;transition:all 0.2s;
+  .ble-bar .dot{width:9px;height:9px;border-radius:50%;background:var(--faint);transition:all .3s;flex-shrink:0}
+  .ble-bar.connected .dot{background:#3ddc84;box-shadow:0 0 10px #3ddc84}
+  .ble-bar.connecting .dot{background:var(--blue);box-shadow:0 0 10px var(--blue);animation:pulse 1.4s infinite}
+  .ble-bar.error .dot{background:#ff5c5c;box-shadow:0 0 10px #ff5c5c}
+  .ble-bar.connected{color:var(--white)}
+  .ble-bar button{
+    font-size:11px;font-weight:600;padding:6px 14px;border-radius:24px;
+    background:var(--accent);color:var(--white);
   }
-  button:hover:not(:disabled){background:#f0c870}
-  button:disabled{opacity:0.4;cursor:not-allowed}
-  button.ghost{background:transparent;color:#e8dcc4;border:1px solid rgba(232,220,196,0.2)}
-  button.ghost:hover:not(:disabled){border-color:#d4a850;color:#d4a850}
+  .ble-bar button:hover:not(:disabled){background:#6a47f0}
+  #bleText{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px}
 
-  .input-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-  .input-group{display:flex;flex-direction:column;gap:4px}
-  label{font-size:9px;letter-spacing:0.25em;text-transform:uppercase;color:#7a7560}
-  input{
-    background:rgba(232,220,196,0.06);color:#e8dcc4;
-    border:1px solid rgba(232,220,196,0.15);
-    padding:10px 14px;border-radius:6px;font-size:13px;
-    width:160px;
+  .placeholder{color:var(--muted);font-size:14px}
+
+  /* Sessions view */
+  .view-head{margin-bottom:22px}
+  .page-title{font-size:34px;font-weight:500}
+  .page-sub{color:var(--muted);font-size:15px;margin-top:2px}
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .field.full{grid-column:1 / -1}
+  .form-actions{margin-top:18px;display:flex;align-items:center;gap:14px}
+  .form-msg{font-size:13px;color:var(--muted)}
+  .form-msg.ok{color:#3ddc84}
+  .form-msg.err{color:#ff7c7c}
+  .session-list{display:flex;flex-direction:column;gap:12px}
+  .empty{color:var(--faint);font-size:14px;text-align:center;padding:24px 0}
+  .session-card{
+    background:rgba(255,255,255,0.04);border:1px solid var(--panel-border);
+    border-radius:12px;padding:16px 18px;display:flex;align-items:center;
+    justify-content:space-between;gap:16px;flex-wrap:wrap;transition:border-color .2s;
   }
-  input:focus{outline:none;border-color:#d4a850}
-
-  .cloud-toggle{
-    display:flex;align-items:center;gap:10px;padding:14px 16px;
-    background:rgba(90,176,224,0.05);border:1px solid rgba(90,176,224,0.15);
-    border-radius:8px;
+  .session-card.live{border-color:var(--accent);background:rgba(82,48,218,0.12)}
+  .session-card.finished{opacity:.5}
+  .session-main{display:flex;flex-direction:column;gap:4px;min-width:0}
+  .session-name{font-family:'Montserrat',sans-serif;font-size:18px;font-weight:500}
+  .session-meta{font-size:13px;color:var(--muted)}
+  .session-right{display:flex;align-items:center;gap:14px}
+  .badge{font-size:10px;letter-spacing:0.12em;text-transform:uppercase;
+    padding:4px 9px;border-radius:20px;font-weight:600}
+  .badge.upcoming{background:rgba(0,51,255,0.2);color:#9db4ff}
+  .badge.live{background:var(--accent);color:var(--white)}
+  .badge.finished{background:rgba(255,255,255,0.1);color:var(--muted)}
+  .countdown{font-family:'Montserrat',sans-serif;font-size:18px;font-weight:500;
+    font-variant-numeric:tabular-nums;min-width:78px;text-align:right}
+  .countdown.live{color:#3ddc84}
+  .btn-join{
+    font-family:'Inter',sans-serif;text-decoration:none;font-size:13px;font-weight:600;
+    background:var(--accent);color:var(--white);padding:9px 18px;border-radius:8px;transition:background .2s;
   }
-  .toggle-switch{
-    position:relative;width:44px;height:24px;
-    background:#2a2e38;border-radius:12px;cursor:pointer;
-    transition:background 0.2s;flex-shrink:0;
+  .btn-join:hover{background:#6a47f0}
+
+  /* Room view */
+  .room-head{margin-bottom:8px}
+  .room-title-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .room-title{font-family:'Montserrat',sans-serif;font-size:30px;font-weight:500}
+  .live-pill{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;
+    letter-spacing:0.1em;text-transform:uppercase;background:var(--accent);padding:5px 12px;border-radius:20px}
+  .live-pill .dot{width:8px;height:8px;border-radius:50%;background:#fff;animation:blink 1.2s infinite}
+  @keyframes blink{50%{opacity:.3}}
+  .room-sub{color:var(--muted);font-size:14px;margin-top:2px}
+  .name-gate{margin-top:18px}
+  .room-hint{color:var(--muted);font-size:13px;margin-top:14px;text-align:center}
+  .link{color:#9db4ff;text-decoration:none}
+  .link:hover{text-decoration:underline}
+
+  .leader-banner{display:flex;flex-direction:column;margin:18px 0;
+    background:linear-gradient(120deg, rgba(82,48,218,0.35), rgba(0,51,255,0.16));
+    border:1px solid rgba(82,48,218,0.6);border-radius:14px;padding:16px 20px}
+  .lb-top{display:flex;align-items:center;gap:16px}
+  .avatar{width:42px;height:42px;border-radius:50%;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Montserrat',sans-serif;font-weight:600;font-size:16px;color:#fff;
+    background:linear-gradient(135deg,var(--blue),var(--accent))}
+  .avatar.lg{width:52px;height:52px;font-size:20px}
+  .lb-info{flex-shrink:0;min-width:0}
+  .lb-label{font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted)}
+  .lb-name{font-family:'Montserrat',sans-serif;font-size:24px;font-weight:600;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lb-name.waiting{color:var(--muted);font-style:italic}
+  .lb-spark{flex:1;min-width:80px;height:40px;display:block;background:rgba(0,0,0,0.18);border-radius:6px}
+  .lb-metrics{display:flex;gap:18px;flex-shrink:0;text-align:center}
+  .lb-expand{background:rgba(255,255,255,0.08);border:1px solid var(--panel-border);
+    color:var(--white);width:36px;height:36px;border-radius:9px;font-size:13px;cursor:pointer;
+    flex-shrink:0;transition:transform .25s, background .2s;padding:0;display:flex;align-items:center;justify-content:center}
+  .lb-expand:hover{background:rgba(255,255,255,0.16)}
+  .lb-expand.open{transform:rotate(180deg)}
+  .lb-chart-wrap{margin-top:14px}
+  .lb-chart{width:100%;height:170px;display:block;background:rgba(0,0,0,0.22);border-radius:8px}
+
+  .group-bar{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:18px 0}
+  .gstat{background:var(--panel);border:1px solid var(--panel-border);border-radius:12px;padding:14px 16px;text-align:center}
+  .gstat.time{background:rgba(82,48,218,0.14);border-color:rgba(82,48,218,0.5)}
+  .gval{font-family:'Montserrat',sans-serif;font-size:32px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
+  .glbl{font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:var(--muted);margin-top:7px}
+
+  .scale{margin:18px 0 22px}
+  .scale-label{font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+  .scale-bar{height:12px;border-radius:6px;
+    background:linear-gradient(90deg,var(--red) 0%,var(--red) 21%,var(--yellow) 25%,var(--yellow) 50%,var(--green) 54%,var(--green) 100%)}
+  .scale-ticks{display:flex;justify-content:space-between;font-size:10px;color:var(--faint);font-family:'Montserrat',sans-serif;margin-top:5px}
+
+  .board{display:flex;flex-direction:column;gap:12px}
+  .racer{background:var(--panel);border:1px solid var(--panel-border);border-radius:14px;
+    padding:14px 18px;display:flex;align-items:center;gap:16px;transition:transform .35s ease, border-color .3s}
+  .rank{font-family:'Montserrat',sans-serif;font-size:20px;font-weight:600;color:var(--faint);width:24px;text-align:center;flex-shrink:0}
+  .racer-mid{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
+  .racer-name-row{display:flex;align-items:center;gap:8px;min-width:0}
+  .racer-name{font-family:'Montserrat',sans-serif;font-size:16px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .host-tag{font-size:9px;letter-spacing:0.12em;text-transform:uppercase;font-weight:600;
+    background:rgba(82,48,218,0.3);border:1px solid rgba(82,48,218,0.6);color:#cdbcff;padding:2px 7px;border-radius:20px;flex-shrink:0}
+  .spark{width:100%;height:32px;display:block;background:rgba(0,0,0,0.18);border-radius:5px}
+  .metrics{display:flex;align-items:flex-start;gap:16px;flex-shrink:0;text-align:center}
+  .metric{display:flex;flex-direction:column;align-items:center;min-width:42px}
+  .metric-val{font-family:'Montserrat',sans-serif;font-size:26px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;transition:color .2s}
+  .metric-val.avg{color:var(--white)}
+  .metric-lbl{font-size:9px;letter-spacing:0.16em;text-transform:uppercase;color:var(--muted);margin-top:6px}
+
+  @media (max-width:600px){
+    #bleText{max-width:130px}
+    .form-grid{grid-template-columns:1fr}
+    .lb-spark{display:none}
   }
-  .toggle-switch.on{background:#7ac060}
-  .toggle-switch::after{
-    content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;
-    background:#fff;border-radius:50%;transition:transform 0.2s;
-  }
-  .toggle-switch.on::after{transform:translateX(20px)}
-  .toggle-label{font-size:13px;flex:1}
-  .toggle-meta{font-size:11px;color:#7a7560;margin-top:2px}
-
-  .panel{
-    background:rgba(232,220,196,0.03);border:1px solid rgba(232,220,196,0.08);
-    border-radius:8px;padding:16px;
-  }
-  .panel h2{font-size:12px;text-transform:uppercase;letter-spacing:0.15em;color:#d4a850;margin-bottom:12px;font-weight:500;display:flex;justify-content:space-between;align-items:center}
-  .panel h2 .meta{color:#7a7560;font-size:10px;font-weight:400;letter-spacing:0.1em}
-
-  .live-display{
-    background:linear-gradient(180deg, rgba(212,168,80,0.05), rgba(232,220,196,0.02));
-    border:1px solid rgba(212,168,80,0.15);
-    border-radius:12px;padding:32px 24px;text-align:center;
-  }
-  .live-led{
-    font-family:'JetBrains Mono','Consolas',monospace;
-    font-size:120px;font-weight:700;line-height:1;
-    color:#d4a850;text-shadow:0 0 40px rgba(212,168,80,0.4);
-    transition:all 0.15s ease-out;margin-bottom:8px;
-  }
-  .live-led.idle{color:#4a4838;text-shadow:none}
-  .live-led-label{font-size:11px;letter-spacing:0.5em;text-transform:uppercase;color:#7a7560;margin-bottom:32px}
-
-  .led-bar{display:flex;gap:3px;margin:0 auto 24px;max-width:600px;height:32px;align-items:end}
-  .led-cell{flex:1;background:rgba(232,220,196,0.06);border-radius:2px;transition:all 0.15s ease-out;height:100%}
-  .led-cell.lit{background:#d4a850;box-shadow:0 0 8px rgba(212,168,80,0.5)}
-  .led-cell.peak-marker{background:transparent;border:1px solid #ff8060;box-shadow:0 0 8px rgba(255,128,96,0.4)}
-
-  .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:8px}
-  @media (max-width: 600px){.stats{grid-template-columns:repeat(3,1fr)}}
-  .stat{text-align:center;padding:12px 8px;background:rgba(232,220,196,0.03);border-radius:6px;border:1px solid rgba(232,220,196,0.06)}
-  .stat-value{font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:700;color:#e8dcc4;line-height:1}
-  .stat-value.peak{color:#ff8060}
-  .stat-value.avg{color:#5ab0e0}
-  .stat-value.cloud{color:#7ac060}
-  .stat-label{font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:#7a7560;margin-top:6px}
-
-  .chart-container{height:120px;background:rgba(0,0,0,0.3);border-radius:6px;padding:8px;position:relative}
-  canvas{width:100%;height:100%;display:block}
-  .chart-labels{display:flex;justify-content:space-between;font-size:10px;color:#4a4838;font-family:'JetBrains Mono',monospace;padding:4px 8px 0}
-
-  details{cursor:pointer}
-  details summary{font-size:11px;color:#7a7560;padding:8px 0;letter-spacing:0.1em;text-transform:uppercase;list-style:none;user-select:none}
-  details summary::before{content:"▸ ";color:#4a4838}
-  details[open] summary::before{content:"▾ "}
-
-  .raw-view{font-family:'Consolas','Monaco',monospace;font-size:11px;background:#000;color:#7ac060;padding:12px;border-radius:6px;max-height:180px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;border:1px solid rgba(122,192,96,0.15);line-height:1.5}
-  .log{font-family:'Consolas',monospace;font-size:10px;color:#7a7560;max-height:140px;overflow-y:auto}
-  .log div{padding:1px 0}
-  .log .err{color:#ff8060}
-  .log .ok{color:#7ac060}
-  .log .warn{color:#d4a850}
-  .log .cloud{color:#5ab0e0}
-
-  .warning-box{background:rgba(255,104,64,0.08);border:1px solid rgba(255,104,64,0.3);padding:12px 16px;border-radius:6px;font-size:12px;color:#ffb090;line-height:1.5}
 </style>
 </head>
 <body>
 
-<div>
-  <h1>🌀 Egely Wheel · Live + Cloud</h1>
-  <div class="sub">3. lépés: élő mérés + Supabase felhő-szinkron</div>
-</div>
-
-<div id="httpsWarning" class="warning-box" style="display:none">
-  ⚠ Nem HTTPS-en fut, a Web Bluetooth nem fog működni.
-</div>
-
-<div class="status-row">
-  <div class="status" id="bleStatus">
-    <div class="dot"></div>
-    <div><span class="status-label">Bluetooth</span><div id="bleStatusText">Készenlétben</div></div>
+<header class="app-header">
+  <div class="wordmark">egely wheel</div>
+  <nav class="nav">
+    <a href="#/sessions" data-route="/sessions">Sessions</a>
+    <a href="#/solo" data-route="/solo">Solo</a>
+  </nav>
+  <div class="ble-bar idle" id="bleBar">
+    <span class="dot"></span>
+    <span id="bleText">Egely Wheel not connected</span>
+    <button id="bleBtn">Connect</button>
   </div>
-  <div class="status" id="cloudStatus">
-    <div class="dot"></div>
-    <div><span class="status-label">Felhő (Supabase)</span><div id="cloudStatusText">Csatlakozás...</div></div>
-  </div>
-</div>
+</header>
 
-<div class="controls">
-  <button id="btnConnect">Kerék csatlakoztatása</button>
-  <button id="btnDisconnect" class="ghost" disabled>Lecsatlakozás</button>
-  <button id="btnReset" class="ghost">Statisztika reset</button>
-</div>
+<main id="view"></main>
 
-<div class="panel">
-  <h2>Versenyző és verseny azonosítás</h2>
-  <div class="input-row">
-    <div class="input-group">
-      <label for="racerName">Versenyző neve</label>
-      <input type="text" id="racerName" value="Csaba" placeholder="pl. Csaba">
-    </div>
-    <div class="input-group">
-      <label for="raceId">Verseny azonosító</label>
-      <input type="text" id="raceId" value="DEMO" placeholder="pl. DEMO">
-    </div>
-  </div>
-</div>
-
-<div class="cloud-toggle">
-  <div class="toggle-switch on" id="cloudToggle"></div>
-  <div class="toggle-label">
-    <div><b>Felhő-küldés</b></div>
-    <div class="toggle-meta" id="cloudToggleMeta">Bekapcsolva: a mérések automatikusan Supabase-be kerülnek (kb. 2x/mp)</div>
-  </div>
-</div>
-
-<div class="live-display">
-  <div class="live-led idle" id="liveLed">–</div>
-  <div class="live-led-label">aktuális LED</div>
-  <div class="led-bar" id="ledBar"></div>
-  <div class="stats">
-    <div class="stat"><div class="stat-value peak" id="statPeak">0</div><div class="stat-label">Csúcs</div></div>
-    <div class="stat"><div class="stat-value avg" id="statAvg">0.0</div><div class="stat-label">Átlag</div></div>
-    <div class="stat"><div class="stat-value" id="statSamples">0</div><div class="stat-label">Minták</div></div>
-    <div class="stat"><div class="stat-value" id="statRate">0</div><div class="stat-label">Csom./mp</div></div>
-    <div class="stat"><div class="stat-value cloud" id="statSent">0</div><div class="stat-label">Felküldve</div></div>
-  </div>
-</div>
-
-<div class="panel">
-  <h2>Trend (utolsó 60 mp) <span class="meta" id="chartMeta">–</span></h2>
-  <div class="chart-container"><canvas id="chart"></canvas></div>
-  <div class="chart-labels"><span>-60s</span><span>most</span></div>
-</div>
-
-<details>
-  <summary>Debug / Diagnosztika</summary>
-  <div style="display:flex;flex-direction:column;gap:12px;margin-top:8px">
-    <div class="panel">
-      <h2>Eszköz <span class="meta" id="deviceInfoMeta">–</span></h2>
-      <div style="font-size:11px;font-family:'Consolas',monospace;color:#7a7560;line-height:1.7">
-        <div>Név: <span style="color:#e8dcc4" id="devName">–</span></div>
-        <div>HW/FW: <span style="color:#e8dcc4" id="devVersion">–</span></div>
-        <div>Akkumulátor: <span style="color:#e8dcc4" id="devBattery">–</span></div>
-        <div>Counter: <span style="color:#e8dcc4" id="devCounter">–</span></div>
-      </div>
-    </div>
-    <div class="panel"><h2>Nyers szöveg</h2><div class="raw-view" id="rawView"></div></div>
-    <div class="panel"><h2>Parsolt sorok</h2><div class="raw-view" id="parsedView" style="color:#5ab0e0"></div></div>
-    <div class="panel"><h2>Napló</h2><div class="log" id="log"></div></div>
-  </div>
-</details>
-
-<script type="module">
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const SERVICE_UUID = '49535343-fe7d-4ae5-8fa9-9fafd205e455';
-const TX_CHAR_UUID = '49535343-1e4d-4bd9-ba61-23c647249616';
-
-const SUPABASE_URL = 'https://lhyychkrcrndjptptkii.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxoeXljaGtyY3JuZGpwdHB0a2lpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2MjY0NTYsImV4cCI6MjA5NTIwMjQ1Nn0.m94K_KVl-Fdj1vkrAh0mPN3lku4FmcfnHs5W3p_gBFk';
-
-const CLOUD_BATCH_INTERVAL_MS = 500;
-
-let device = null, server = null, txChar = null;
-let buffer = '';
-let rawDisplayBuffer = '';
-let parsedDisplayLines = [];
-let currentLed = 0, peakLed = 0, sumLed = 0, sampleCount = 0;
-let rateSamples = [];
-let trend = [];
-let cloudEnabled = true;
-let cloudPending = [];
-let cloudSentCount = 0;
-let cloudLastSent = 0;
-
-const $ = id => document.getElementById(id);
-
-if(location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1'){
-  $('httpsWarning').style.display = 'block';
-  $('btnConnect').disabled = true;
-}
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-async function testSupabaseConnection(){
-  setCloudStatus('Tesztelés...', 'waiting');
-  log('Supabase kapcsolat tesztelése...', 'cloud');
-  const { error } = await supabase.from('measurements').select('id').limit(1);
-  if(error){
-    log('Supabase hiba: ' + error.message, 'err');
-    setCloudStatus('Hiba: ' + error.message, 'err');
-    return false;
-  }
-  log('Supabase OK', 'ok');
-  setCloudStatus('✓ Készen áll', 'ok');
-  return true;
-}
-
-async function flushCloudBuffer(){
-  if(!cloudEnabled || cloudPending.length === 0) return;
-  const now = Date.now();
-  if(now - cloudLastSent < CLOUD_BATCH_INTERVAL_MS) return;
-  
-  const latest = cloudPending[cloudPending.length - 1];
-  cloudPending = [];
-  cloudLastSent = now;
-  
-  const racerName = $('racerName').value.trim() || 'Anonim';
-  const raceId = $('raceId').value.trim() || 'DEMO';
-  const racerId = racerName.toLowerCase().replace(/\s+/g, '_');
-  
-  try {
-    const { error } = await supabase.from('measurements').insert({
-      racer_id: racerId, racer_name: racerName,
-      led_value: latest.led, race_id: raceId,
-    });
-    if(error){
-      log('Felküldés hiba: ' + error.message, 'err');
-      setCloudStatus('Küldési hiba', 'err');
-    } else {
-      cloudSentCount++;
-      $('statSent').textContent = cloudSentCount;
-    }
-  } catch(e){
-    log('Felküldés exception: ' + e.message, 'err');
-  }
-}
-setInterval(flushCloudBuffer, 250);
-
-function buildLedBar(){
-  const bar = $('ledBar');
-  bar.innerHTML = '';
-  for(let i = 1; i <= 24; i++){
-    const cell = document.createElement('div');
-    cell.className = 'led-cell';
-    bar.appendChild(cell);
-  }
-}
-buildLedBar();
-
-function updateLedBar(led, peak){
-  const cells = $('ledBar').children;
-  for(let i = 0; i < 24; i++){
-    const idx = i + 1;
-    cells[i].className = 'led-cell';
-    if(idx <= led) cells[i].classList.add('lit');
-    if(idx === peak && peak > 0 && peak !== led) cells[i].classList.add('peak-marker');
-  }
-}
-
-function log(msg, type=''){
-  const div = document.createElement('div');
-  div.className = type;
-  const time = new Date().toLocaleTimeString('hu-HU', {hour12:false});
-  div.textContent = `[${time}] ${msg}`;
-  $('log').insertBefore(div, $('log').firstChild);
-  while($('log').children.length > 40) $('log').removeChild($('log').lastChild);
-}
-function setBleStatus(text, state=''){ $('bleStatus').className = 'status ' + state; $('bleStatusText').textContent = text; }
-function setCloudStatus(text, state=''){ $('cloudStatus').className = 'status ' + state; $('cloudStatusText').textContent = text; }
-
-function parseLine(line){
-  line = line.trim();
-  if(!line) return null;
-  const parts = line.split('|');
-  if(parts.length !== 3) return null;
-  const counterParts = parts[0].split(',');
-  if(counterParts.length !== 2) return null;
-  const counterMsb = parseInt(counterParts[0], 10);
-  const counterLsb = parseInt(counterParts[1], 10);
-  if(isNaN(counterMsb) || isNaN(counterLsb)) return null;
-  const counter = (counterMsb << 8) | counterLsb;
-  const ledParts = parts[1].split(',');
-  if(ledParts.length !== 2) return null;
-  const led = parseInt(ledParts[0], 10);
-  const battery = ledParts[1];
-  if(isNaN(led) || led < 0 || led > 24) return null;
-  const verParts = parts[2].split(',');
-  return { counter, counterMsb, counterLsb, led, battery, hw: verParts[0]||'', fw: verParts[1]||'', raw: line };
-}
-
-function onData(event){
-  const text = new TextDecoder().decode(event.target.value);
-  buffer += text;
-  rawDisplayBuffer += text;
-  if(rawDisplayBuffer.length > 600) rawDisplayBuffer = rawDisplayBuffer.slice(-500);
-  $('rawView').textContent = rawDisplayBuffer;
-  $('rawView').scrollTop = $('rawView').scrollHeight;
-  
-  const now = Date.now();
-  rateSamples.push(now);
-  rateSamples = rateSamples.filter(t => now - t < 1000);
-  $('statRate').textContent = rateSamples.length;
-  
-  while(true){
-    const idx = buffer.indexOf('\n');
-    if(idx === -1) break;
-    const line = buffer.slice(0, idx);
-    buffer = buffer.slice(idx + 1);
-    const parsed = parseLine(line);
-    if(parsed) handleParsedFrame(parsed);
-  }
-  if(buffer.length > 200) buffer = buffer.slice(-200);
-}
-
-function handleParsedFrame(p){
-  currentLed = p.led;
-  if(p.led > peakLed) peakLed = p.led;
-  sumLed += p.led;
-  sampleCount++;
-  const avg = sampleCount > 0 ? sumLed / sampleCount : 0;
-  $('liveLed').textContent = p.led;
-  $('liveLed').classList.toggle('idle', p.led === 0);
-  $('statPeak').textContent = peakLed;
-  $('statAvg').textContent = avg.toFixed(1);
-  $('statSamples').textContent = sampleCount;
-  $('devVersion').textContent = `HW ${p.hw} · FW ${p.fw}`;
-  $('devBattery').textContent = p.battery;
-  $('devCounter').textContent = `${p.counterMsb}, ${p.counterLsb} (= ${p.counter})`;
-  updateLedBar(p.led, peakLed);
-  const now = Date.now();
-  trend.push({ t: now, led: p.led });
-  trend = trend.filter(pt => pt.t >= now - 60000);
-  drawChart();
-  parsedDisplayLines.unshift(`LED ${p.led.toString().padStart(2,' ')} · counter ${p.counter.toString().padStart(5,' ')} · ${p.battery}`);
-  if(parsedDisplayLines.length > 20) parsedDisplayLines.pop();
-  $('parsedView').textContent = parsedDisplayLines.join('\n');
-  if(cloudEnabled) cloudPending.push({ led: p.led, t: now });
-}
-
-const canvas = $('chart');
-const ctx = canvas.getContext('2d');
-let dpr = window.devicePixelRatio || 1;
-function resizeCanvas(){
-  const rect = canvas.getBoundingClientRect();
-  canvas.width = rect.width * dpr;
-  canvas.height = rect.height * dpr;
-  ctx.scale(dpr, dpr);
-}
-window.addEventListener('resize', () => { resizeCanvas(); drawChart(); });
-resizeCanvas();
-
-function drawChart(){
-  const rect = canvas.getBoundingClientRect();
-  const w = rect.width, h = rect.height;
-  ctx.clearRect(0, 0, w, h);
-  ctx.strokeStyle = 'rgba(232,220,196,0.05)';
-  ctx.lineWidth = 1;
-  for(let i = 0; i <= 4; i++){
-    const y = (h / 4) * i;
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
-  }
-  ctx.strokeStyle = 'rgba(255,128,96,0.15)';
-  ctx.setLineDash([4, 4]);
-  ctx.beginPath(); ctx.moveTo(0, 4); ctx.lineTo(w, 4); ctx.stroke();
-  ctx.setLineDash([]);
-  if(trend.length < 2){
-    ctx.fillStyle = '#4a4838'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
-    ctx.fillText('várakozás adatra...', w/2, h/2); return;
-  }
-  const now = Date.now();
-  const tMin = now - 60000;
-  const tRange = 60000;
-  ctx.beginPath();
-  trend.forEach((pt, i) => {
-    const x = ((pt.t - tMin) / tRange) * w;
-    const y = h - (pt.led / 24) * (h - 8) - 4;
-    if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-  });
-  const lastPt = trend[trend.length - 1];
-  const lastX = ((lastPt.t - tMin) / tRange) * w;
-  ctx.lineTo(lastX, h);
-  ctx.lineTo(((trend[0].t - tMin) / tRange) * w, h);
-  ctx.closePath();
-  const grad = ctx.createLinearGradient(0, 0, 0, h);
-  grad.addColorStop(0, 'rgba(212,168,80,0.4)');
-  grad.addColorStop(1, 'rgba(212,168,80,0)');
-  ctx.fillStyle = grad; ctx.fill();
-  ctx.beginPath();
-  trend.forEach((pt, i) => {
-    const x = ((pt.t - tMin) / tRange) * w;
-    const y = h - (pt.led / 24) * (h - 8) - 4;
-    if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-  });
-  ctx.strokeStyle = '#d4a850'; ctx.lineWidth = 2; ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(lastX, h - (lastPt.led / 24) * (h - 8) - 4, 4, 0, Math.PI * 2);
-  ctx.fillStyle = '#f0c870'; ctx.fill();
-  $('chartMeta').textContent = trend.length + ' pont';
-}
-
-async function connect(){
-  if(!navigator.bluetooth){ log('Nincs Web Bluetooth', 'err'); setBleStatus('Nem támogatott', 'err'); return; }
-  try {
-    log('Eszközválasztó...');
-    setBleStatus('Eszközválasztás...', 'waiting');
-    device = await navigator.bluetooth.requestDevice({
-      filters: [{ namePrefix: 'Egely' }, { services: [SERVICE_UUID] }],
-      optionalServices: [SERVICE_UUID]
-    });
-    log(`Eszköz: ${device.name || '(név nélkül)'}`, 'ok');
-    $('devName').textContent = device.name || '(név nélkül)';
-    $('deviceInfoMeta').textContent = device.id.slice(0, 16) + '…';
-    device.addEventListener('gattserverdisconnected', onDisconnect);
-    setBleStatus('Csatlakozás...', 'waiting');
-    server = await device.gatt.connect();
-    const service = await server.getPrimaryService(SERVICE_UUID);
-    txChar = await service.getCharacteristic(TX_CHAR_UUID);
-    await txChar.startNotifications();
-    txChar.addEventListener('characteristicvaluechanged', onData);
-    log('BLE aktív', 'ok');
-    setBleStatus('✓ Adatfolyam aktív', 'ok');
-    $('btnConnect').disabled = true;
-    $('btnDisconnect').disabled = false;
-  } catch(err){
-    log('BLE hiba: ' + err.message, 'err');
-    setBleStatus('Hiba: ' + err.message, 'err');
-  }
-}
-
-function onDisconnect(){
-  log('BLE lecsatlakozott', 'warn');
-  setBleStatus('Lecsatlakozva', 'err');
-  $('btnConnect').disabled = false;
-  $('btnDisconnect').disabled = true;
-  device = null; server = null; txChar = null;
-}
-
-async function disconnect(){
-  if(device && device.gatt.connected) device.gatt.disconnect();
-  onDisconnect();
-}
-
-function reset(){
-  peakLed = 0; sumLed = 0; sampleCount = 0; currentLed = 0;
-  trend = []; cloudSentCount = 0;
-  $('statPeak').textContent = 0; $('statAvg').textContent = '0.0';
-  $('statSamples').textContent = 0; $('statSent').textContent = 0;
-  $('liveLed').textContent = '–'; $('liveLed').classList.add('idle');
-  updateLedBar(0, 0); drawChart();
-  log('Statisztika nullázva');
-}
-
-function updateCloudToggle(){
-  $('cloudToggle').classList.toggle('on', cloudEnabled);
-  $('cloudToggleMeta').textContent = cloudEnabled
-    ? 'Bekapcsolva: a mérések automatikusan Supabase-be kerülnek (kb. 2x/mp)'
-    : 'Kikapcsolva: csak lokálisan jelennek meg, nem mennek felhőbe';
-}
-updateCloudToggle();
-$('cloudToggle').onclick = () => {
-  cloudEnabled = !cloudEnabled;
-  updateCloudToggle();
-  log('Felhő-küldés: ' + (cloudEnabled ? 'BE' : 'KI'), 'cloud');
-};
-
-$('btnConnect').onclick = connect;
-$('btnDisconnect').onclick = disconnect;
-$('btnReset').onclick = reset;
-
-drawChart();
-log('Oldal kész');
-testSupabaseConnection();
-</script>
+<script type="module" src="app.js"></script>
 
 </body>
 </html>

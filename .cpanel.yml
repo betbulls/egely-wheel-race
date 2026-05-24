@@ -4,5 +4,10 @@ deployment:
     - export DEPLOYPATH=/home4/pirituj6/public_html/ewr/
     - /bin/cp brand.css $DEPLOYPATH
     - /bin/cp index.html $DEPLOYPATH
+    - /bin/cp app.js $DEPLOYPATH
+    - /bin/cp ble.js $DEPLOYPATH
+    - /bin/cp db.js $DEPLOYPATH
+    - /bin/cp view-sessions.js $DEPLOYPATH
+    - /bin/cp view-room.js $DEPLOYPATH
     - /bin/cp sessions.html $DEPLOYPATH
     - /bin/cp room.html $DEPLOYPATH
