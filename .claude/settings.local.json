@@ -6,7 +6,8 @@
       "Bash(python -c \"import PyPDF2; print\\('PyPDF2 OK'\\)\")",
       "Bash(python -m pip install --quiet pymupdf)",
       "Bash(python -c \"import fitz; print\\('pymupdf', fitz.__doc__[:40] if fitz.__doc__ else 'OK'\\)\")",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "mcp__Claude_Preview__preview_start"
     ]
   }
 }

@@ -2,5 +2,7 @@
 deployment:
   tasks:
     - export DEPLOYPATH=/home4/pirituj6/public_html/ewr/
+    - /bin/cp brand.css $DEPLOYPATH
     - /bin/cp index.html $DEPLOYPATH
     - /bin/cp sessions.html $DEPLOYPATH
+    - /bin/cp room.html $DEPLOYPATH
