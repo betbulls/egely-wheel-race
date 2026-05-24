@@ -1,4 +1,5 @@
 import * as ble from './ble.js';
+import { mount as mountHome } from './view-home.js';
 import { mount as mountSessions } from './view-sessions.js';
 import { mount as mountRoom } from './view-room.js';
 
@@ -9,7 +10,7 @@ const view = document.getElementById('view');
 function parseHash(){
   const raw = location.hash.replace(/^#/, '');
   const parts = raw.split('/').filter(Boolean);
-  return { path: '/' + (parts[0] || 'sessions'), param: parts[1] || null };
+  return { path: '/' + (parts[0] || 'home'), param: parts[1] || null };
 }
 
 let cleanup = null;
@@ -27,7 +28,8 @@ function router(){
   });
   if(path === '/room') setView(mountRoom, param);
   else if(path === '/solo') setView(mountSolo);
-  else setView(mountSessions);
+  else if(path === '/sessions') setView(mountSessions);
+  else setView(mountHome);
 }
 
 // ---- Placeholder views (replaced in later steps) ----------------------------
@@ -64,5 +66,5 @@ bleBtn.addEventListener('click', () => {
 
 // ---- Boot -------------------------------------------------------------------
 window.addEventListener('hashchange', router);
-if(!location.hash) location.hash = '#/sessions';
+if(!location.hash) location.hash = '#/home';
 router();

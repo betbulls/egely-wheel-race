@@ -44,7 +44,7 @@ export function mount(el){
     </div>
 
     <div class="panel">
-      <h2>Upcoming sessions</h2>
+      <h2>Sessions</h2>
       <div class="session-list" id="sessionList">
         <div class="empty">Loading…</div>
       </div>
@@ -144,7 +144,14 @@ export function mount(el){
       join.className = 'btn-join';
       join.href = '#/room/' + s.id;
       join.textContent = state === 'finished' ? 'View' : 'Join';
-      right.append(badge, cd, join);
+      right.append(badge, cd);
+      if(state === 'finished' && s.group_avg != null){
+        const avgEl = document.createElement('div');
+        avgEl.className = 'session-avg';
+        avgEl.innerHTML = `Avg <b>${Number(s.group_avg).toFixed(1)}</b>`;
+        right.append(avgEl);
+      }
+      right.append(join);
 
       card.append(main, right);
       list.appendChild(card);

@@ -187,6 +187,24 @@
   .check-field .check input{width:16px;height:16px;accent-color:var(--accent)}
   .sess-verified{margin-left:9px;font-size:10px;font-weight:600;letter-spacing:0.08em;color:#3ddc84;
     border:1px solid rgba(61,220,132,0.4);border-radius:20px;padding:2px 7px;vertical-align:middle}
+  .session-avg{font-size:13px;color:var(--muted);white-space:nowrap}
+  .session-avg b{font-family:'Montserrat',sans-serif;color:var(--white);font-weight:600}
+
+  /* Home / dashboard */
+  .home-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  @media (max-width:600px){.home-stats{grid-template-columns:repeat(2,1fr)}}
+  .hstat{text-align:center;padding:14px 8px;background:rgba(255,255,255,0.03);border:1px solid var(--panel-border);border-radius:10px}
+  .hstat-val{font-family:'Montserrat',sans-serif;font-size:26px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
+  .hstat-lbl{font-size:9px;letter-spacing:0.16em;text-transform:uppercase;color:var(--muted);margin-top:7px}
+  .top-table{padding:8px 10px}
+  .top-row{display:flex;align-items:center;gap:14px;padding:11px 10px;border-bottom:1px solid var(--panel-border)}
+  .top-row:last-child{border-bottom:none}
+  .top-head{font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted)}
+  .top-rank{width:24px;text-align:center;font-family:'Montserrat',sans-serif;font-weight:600;color:var(--faint);flex-shrink:0}
+  .top-name{flex:1;min-width:0;font-family:'Montserrat',sans-serif;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .top-sub{display:block;font-family:'Inter',sans-serif;font-weight:400;font-size:11px;color:var(--muted)}
+  .top-val{font-family:'Montserrat',sans-serif;font-weight:600;font-variant-numeric:tabular-nums;flex-shrink:0}
+  .top-head .top-val,.top-head .top-rank{font-family:'Inter',sans-serif;font-weight:400}
 
   @media (max-width:600px){
     #bleText{max-width:130px}
@@ -202,6 +220,7 @@
 <header class="app-header">
   <div class="wordmark">egely wheel</div>
   <nav class="nav">
+    <a href="#/home" data-route="/home">Home</a>
     <a href="#/sessions" data-route="/sessions">Sessions</a>
     <a href="#/solo" data-route="/solo">Solo</a>
   </nav>
