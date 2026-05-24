@@ -572,6 +572,8 @@ export function mount(el, sessionId){
     if(broadcastTimer) clearInterval(broadcastTimer);
     if(renderTimer) clearInterval(renderTimer);
     if(flushTimer) clearInterval(flushTimer);
+    maybeSaveGroup();      // idempotent; only writes if the session has ended
+    maybeSaveMyResult();
     flushSamples();
     if(unsubFrames) unsubFrames();
     if(unsubStatus) unsubStatus();

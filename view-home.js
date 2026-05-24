@@ -16,16 +16,34 @@ export function mount(el){
   `;
 
   (async () => {
-    const [mineRes, topRacersRes, topSessRes] = await Promise.all([
+    const [mineRes, verifiedRes, verifiedSessRes] = await Promise.all([
       myId ? supabase.from('results').select('*').eq('racer_id', myId)
             : Promise.resolve({ data: [] }),
-      supabase.from('results').select('*').eq('verified', true).order('avg', { ascending: false }).limit(10),
-      supabase.from('sessions').select('*').eq('verified_only', true).not('group_avg', 'is', null).order('group_avg', { ascending: false }).limit(10),
+      supabase.from('results').select('*').eq('verified', true),
+      supabase.from('sessions').select('id,name,created_by,verified_only').eq('verified_only', true),
     ]);
 
     const mine = mineRes.data || [];
-    const topRacers = topRacersRes.data || [];
-    const topSessions = topSessRes.data || [];
+    const verified = verifiedRes.data || [];
+
+    // Top racers: verified measurements ranked by average.
+    const topRacers = [...verified].sort((a, b) => (b.avg || 0) - (a.avg || 0)).slice(0, 10);
+
+    // Top sessions: average the verified results per verified session (no group_avg dependency).
+    const bySession = new Map();
+    for(const r of verified){
+      if(r.session_id == null) continue;
+      if(!bySession.has(r.session_id)) bySession.set(r.session_id, []);
+      bySession.get(r.session_id).push(r.avg || 0);
+    }
+    const topSessions = (verifiedSessRes.data || [])
+      .map(s => {
+        const a = bySession.get(s.id) || [];
+        return { ...s, avg: a.length ? a.reduce((x, y) => x + y, 0) / a.length : null, count: a.length };
+      })
+      .filter(s => s.count > 0)
+      .sort((a, b) => b.avg - a.avg)
+      .slice(0, 10);
 
     renderHome(el.querySelector('#homeBody'), { myName, mine, topRacers, topSessions });
   })();
@@ -85,8 +103,8 @@ function renderTopSessions(rows){
   const items = rows.map((s, i) => `
     <div class="top-row">
       <div class="top-rank">${i + 1}</div>
-      <div class="top-name">${esc(s.name || 'Session')}<span class="top-sub">by ${esc(s.created_by || '—')} · ${s.racer_count || 0} racers</span></div>
-      <div class="top-val" style="color:${vColor(Number(s.group_avg))}">${Number(s.group_avg).toFixed(1)}</div>
+      <div class="top-name">${esc(s.name || 'Session')}<span class="top-sub">by ${esc(s.created_by || '—')} · ${s.count} racer${s.count > 1 ? 's' : ''}</span></div>
+      <div class="top-val" style="color:${vColor(s.avg)}">${s.avg.toFixed(1)}</div>
     </div>`).join('');
   return `<div class="panel top-table">
     <div class="top-row top-head"><div class="top-rank">#</div><div class="top-name">Session</div><div class="top-val">Avg</div></div>

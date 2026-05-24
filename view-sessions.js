@@ -53,15 +53,22 @@ export function mount(el){
 
   const $ = id => el.querySelector('#' + id);
   let sessions = [];
+  let resultsBySession = new Map();
 
   async function loadSessions(){
-    const { data, error } = await supabase
-      .from('sessions')
-      .select('*')
-      .order('scheduled_start', { ascending: true });
+    const [{ data, error }, resRes] = await Promise.all([
+      supabase.from('sessions').select('*').order('scheduled_start', { ascending: true }),
+      supabase.from('results').select('session_id, avg, verified'),
+    ]);
     if(error){
       $('sessionList').innerHTML = '<div class="empty">Could not load sessions: ' + error.message + '</div>';
       return;
+    }
+    resultsBySession = new Map();
+    for(const r of (resRes.data || [])){
+      if(r.session_id == null) continue;
+      if(!resultsBySession.has(r.session_id)) resultsBySession.set(r.session_id, []);
+      resultsBySession.get(r.session_id).push({ avg: r.avg || 0, verified: r.verified });
     }
     sessions = data || [];
     renderSessions();
@@ -145,11 +152,16 @@ export function mount(el){
       join.href = '#/room/' + s.id;
       join.textContent = state === 'finished' ? 'View' : 'Join';
       right.append(badge, cd);
-      if(state === 'finished' && s.group_avg != null){
-        const avgEl = document.createElement('div');
-        avgEl.className = 'session-avg';
-        avgEl.innerHTML = `Avg <b>${Number(s.group_avg).toFixed(1)}</b>`;
-        right.append(avgEl);
+      if(state === 'finished'){
+        const rs = resultsBySession.get(s.id) || [];
+        const arr = (s.verified_only ? rs.filter(r => r.verified) : rs).map(r => r.avg);
+        if(arr.length){
+          const avg = arr.reduce((x, y) => x + y, 0) / arr.length;
+          const avgEl = document.createElement('div');
+          avgEl.className = 'session-avg';
+          avgEl.innerHTML = `Avg <b>${avg.toFixed(1)}</b>`;
+          right.append(avgEl);
+        }
       }
       right.append(join);
 
