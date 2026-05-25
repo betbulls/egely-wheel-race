@@ -4,6 +4,7 @@ import { mount as mountSessions } from './view-sessions.js';
 import { mount as mountRoom } from './view-room.js';
 import { mount as mountSolo } from './view-solo.js';
 import { mount as mountMeasurements } from './view-measurements.js';
+import { mount as mountMeasurementDetail } from './view-measurement-detail.js';
 
 const view = document.getElementById('view');
 
@@ -30,6 +31,7 @@ function router(){
   });
   if(path === '/room') setView(mountRoom, param);
   else if(path === '/solo') setView(mountSolo);
+  else if(path === '/m') setView(mountMeasurementDetail, param);
   else if(path === '/me') setView(mountMeasurements);
   else if(path === '/sessions') setView(mountSessions);
   else setView(mountHome);

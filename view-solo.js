@@ -4,7 +4,7 @@ import { computeStats, vitalityLevel, vitalityColor as vColor } from './analytic
 
 const SAMPLE_MS = 250;        // how often the curve is sampled while measuring
 const LIVE_WINDOW_MS = 60000; // idle live-preview window
-const CHANGE_WINDOW_MS = 1000, CHANGE_LIMIT = 3; // cheat detection (same as rooms)
+const CHANGE_WINDOW_MS = 1000, CHANGE_LIMIT = 4; // cheat detection (same as rooms)
 
 const racerId = name => name.trim().toLowerCase().replace(/\s+/g, '_');
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
@@ -28,7 +28,7 @@ export function mount(el){
 
     <div class="panel">
       <div class="solo-controls">
-        <div class="field"><label for="sName">Your name</label><input id="sName" maxlength="60" placeholder="Your name"></div>
+        <div class="field"><label for="sLabel">Measurement name</label><input id="sLabel" maxlength="60" placeholder="e.g. Morning practice"></div>
         <div class="field"><label for="sDur">Duration (seconds)</label><input id="sDur" type="number" min="5" max="600" value="60"></div>
         <button id="sStart">Start measurement</button>
       </div>
@@ -50,7 +50,8 @@ export function mount(el){
   `;
 
   const $ = id => el.querySelector('#' + id);
-  $('sName').value = (localStorage.getItem('ewr_name') || '').trim();
+  // Identity comes from the (future) account; for now it's remembered locally.
+  const identity = (localStorage.getItem('ewr_name') || '').trim() || 'Me';
 
   // 0-24 status bar (always reflects the current value).
   const bar = $('sBar');
@@ -100,6 +101,16 @@ export function mount(el){
       ctx.fillText(txt, x, y0 + plotH + 5);
     }
 
+    // Running-average reference line (moves as the average changes)
+    if((measuring || finished) && samples.length){
+      const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
+      const y = ledToY(avg);
+      ctx.strokeStyle = vColor(avg); ctx.setLineDash([5, 4]); ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x0 + plotW, y); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = vColor(avg); ctx.font = '10px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+      ctx.fillText('avg ' + avg.toFixed(1), x0 + 4, y - 2);
+    }
+
     // Curve
     let pts;
     if(measuring || finished){
@@ -141,11 +152,8 @@ export function mount(el){
   }
 
   function startMeasurement(){
-    const name = $('sName').value.trim();
     duration = Math.max(5, Math.min(600, parseInt($('sDur').value, 10) || 60));
     if(!connected){ setMsg('Connect your Egely Wheel (top right) first.', 'err'); return; }
-    if(!name){ setMsg('Please enter your name.', 'err'); $('sName').focus(); return; }
-    localStorage.setItem('ewr_name', name);
     samples = []; recentFrames = []; cheatDetected = false; finished = false; lastStats = null; saved = false;
     measuring = true; startMs = Date.now(); endMs = startMs + duration * 1000;
     $('sEval').hidden = true;
@@ -196,13 +204,13 @@ export function mount(el){
 
   async function saveMeasurement(){
     if(saved || !lastStats) return;
-    const name = $('sName').value.trim();
-    if(!name){ $('sSaveMsg').textContent = 'Enter your name first.'; return; }
     const btn = $('sSave'); btn.disabled = true;
     const comment = ($('sComment').value || '').trim();
+    const label = ($('sLabel').value || '').trim();
     const s = lastStats;
     const { error } = await supabase.from('results').insert({
-      session_id: null, racer_id: racerId(name), racer_name: name,
+      session_id: null, racer_id: racerId(identity), racer_name: identity,
+      label: label || null, duration_seconds: duration,
       avg: Number(s.avg.toFixed(2)), peak: s.peak, steadiness: s.steadiness,
       zone_green: Number(s.zone.green.toFixed(1)), zone_yellow: Number(s.zone.yellow.toFixed(1)),
       zone_red: Number(s.zone.red.toFixed(1)), trend: Number(s.trendTotal.toFixed(2)),

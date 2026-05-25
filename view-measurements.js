@@ -41,9 +41,9 @@ export function mount(el){
       const when = new Date(r.created_at).toLocaleString('en-US', {
         month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
       });
-      const title = solo ? 'Solo measurement' : (sessMap.get(r.session_id) || 'Session');
+      const title = solo ? (r.label || 'Solo measurement') : (sessMap.get(r.session_id) || 'Session');
       return `
-        <div class="me-card">
+        <a class="me-card" href="#/m/${r.id}">
           <div class="me-main">
             <div class="me-title-row">
               <span class="me-kind ${solo ? 'solo' : 'session'}">${solo ? 'Solo' : 'Session'}</span>
@@ -57,7 +57,7 @@ export function mount(el){
             <div class="rs"><div class="rs-val" style="color:${vColor(r.peak)}">${r.peak}</div><div class="rs-lbl">Peak</div></div>
             <div class="rs"><div class="rs-val">${r.steadiness}</div><div class="rs-lbl">Steady</div></div>
           </div>
-        </div>`;
+        </a>`;
     }).join('');
   })();
 

@@ -13,5 +13,6 @@ deployment:
     - /bin/cp view-room.js $DEPLOYPATH
     - /bin/cp view-solo.js $DEPLOYPATH
     - /bin/cp view-measurements.js $DEPLOYPATH
+    - /bin/cp view-measurement-detail.js $DEPLOYPATH
     - /bin/cp sessions.html $DEPLOYPATH
     - /bin/cp room.html $DEPLOYPATH

@@ -5,10 +5,10 @@ import { computeStats, CATEGORIES, METRIC_HELP, icon, trendLabel, vitalityColor 
 const BROADCAST_MS = 500;   // how often each client samples + broadcasts its LED
 const RENDER_MS = 250;      // how often the board repaints
 
-// Cheat detection: genuine readings drift slowly. If the LED moves by >= 3
-// within any 1-second window (e.g. 2 -> 5), it's hand-spun => not verified.
+// Cheat detection: genuine readings drift slowly. If the LED moves by >= 4
+// within any 1-second window, it's hand-spun => not verified.
 const CHANGE_WINDOW_MS = 1000;
-const CHANGE_LIMIT = 3;
+const CHANGE_LIMIT = 4;
 
 // Mounts the Session Room view. Returns a cleanup function.
 export function mount(el, sessionId){
