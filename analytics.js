@@ -65,3 +65,19 @@ export function trendLabel(trendTotal){
   if(trendTotal < -1.5) return 'Fading';
   return 'Steady';
 }
+
+// Egely Wheel Vitality Scale (LED ~ RPM). The evaluation level is chosen by the
+// average. `max` is the exclusive upper LED bound for the level.
+export const VITALITY_LEVELS = [
+  { max: 2,        name: 'Very Low Vitality',    meaning: 'Very low, must be improved',  color: '#C0143C' },
+  { max: 4,        name: 'Low Vitality',         meaning: 'Low vitality, worth improving', color: '#C0143C' },
+  { max: 6,        name: 'Below Average',        meaning: 'Still under average',          color: '#C0143C' },
+  { max: 6.5,      name: 'Average Level',        meaning: 'Average level',                color: '#E9D24A' },
+  { max: 13,       name: 'Good / Healthy Level', meaning: 'Good, healthy level',          color: '#E9D24A' },
+  { max: 24.5,     name: 'Outstanding Level',    meaning: 'Outstandingly high level',     color: '#3CC98A' },
+  { max: Infinity, name: 'Exceptional Talent',   meaning: 'Exceptional talent',           color: '#3CC98A' },
+];
+
+export function vitalityLevel(led){
+  return VITALITY_LEVELS.find(l => led < l.max) || VITALITY_LEVELS[VITALITY_LEVELS.length - 1];
+}

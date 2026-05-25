@@ -2,6 +2,8 @@ import * as ble from './ble.js';
 import { mount as mountHome } from './view-home.js';
 import { mount as mountSessions } from './view-sessions.js';
 import { mount as mountRoom } from './view-room.js';
+import { mount as mountSolo } from './view-solo.js';
+import { mount as mountMeasurements } from './view-measurements.js';
 
 const view = document.getElementById('view');
 
@@ -28,16 +30,9 @@ function router(){
   });
   if(path === '/room') setView(mountRoom, param);
   else if(path === '/solo') setView(mountSolo);
+  else if(path === '/me') setView(mountMeasurements);
   else if(path === '/sessions') setView(mountSessions);
   else setView(mountHome);
-}
-
-// ---- Placeholder views (replaced in later steps) ----------------------------
-function placeholder(title, note){
-  return (el) => { el.innerHTML = `<div class="panel"><h2>${title}</h2><p class="placeholder">${note}</p></div>`; };
-}
-function mountSolo(el){
-  placeholder('Solo Measurement', 'Solo view — coming in step 4.')(el);
 }
 
 // ---- Global Egely Wheel status bar ------------------------------------------

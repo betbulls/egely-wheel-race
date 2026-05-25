@@ -206,6 +206,41 @@
   .top-val{font-family:'Montserrat',sans-serif;font-weight:600;font-variant-numeric:tabular-nums;flex-shrink:0}
   .top-head .top-val,.top-head .top-rank{font-family:'Inter',sans-serif;font-weight:400}
 
+  /* Solo view */
+  .solo-controls{display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap}
+  .solo-controls .field{flex:1;min-width:120px}
+  .solo-controls button{flex-shrink:0}
+  .solo-msg{margin-top:12px;font-size:13px;color:var(--muted)}
+  .solo-msg.err{color:#ff7c7c}
+  .solo-nums{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+  .solo-num{text-align:center;padding:10px;background:rgba(255,255,255,0.03);border:1px solid var(--panel-border);border-radius:10px}
+  .solo-num-val{font-family:'Montserrat',sans-serif;font-size:40px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+  .solo-num-lbl{font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin-top:8px}
+  .solo-chart-wrap{height:160px;background:rgba(0,0,0,0.22);border-radius:8px;padding:6px;margin-bottom:14px}
+  #sChart{width:100%;height:100%;display:block}
+  .led-bar{display:flex;gap:3px;height:26px}
+  .led-cell{flex:1;background:rgba(255,255,255,0.06);border-radius:2px;transition:background .1s}
+  .led-cell.lit.red{background:var(--red)}
+  .led-cell.lit.yellow{background:var(--yellow)}
+  .led-cell.lit.green{background:var(--green)}
+  .eval-panel{text-align:center}
+  .eval-level{font-family:'Montserrat',sans-serif;font-size:28px;font-weight:600;margin-top:4px}
+  .eval-meaning{color:var(--muted);font-size:14px;margin-top:4px}
+  .eval-stats{display:flex;justify-content:center;gap:20px;flex-wrap:wrap;margin-top:14px;font-size:12px;color:var(--muted);align-items:center}
+  .eval-stats b{font-family:'Montserrat',sans-serif;font-size:20px;color:var(--white);margin-right:4px}
+  .solo-saved{color:#3ddc84;font-size:12px;margin-top:12px}
+
+  /* My measurements */
+  .me-card{background:var(--panel);border:1px solid var(--panel-border);border-radius:14px;padding:14px 18px;display:flex;align-items:center;gap:16px;margin-bottom:12px}
+  .me-main{flex:1;min-width:0}
+  .me-title-row{display:flex;align-items:center;gap:9px}
+  .me-kind{font-size:9px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;padding:2px 8px;border-radius:20px;flex-shrink:0}
+  .me-kind.solo{background:rgba(0,51,255,0.2);color:#9db4ff}
+  .me-kind.session{background:rgba(82,48,218,0.25);color:#cdbcff}
+  .me-title{font-family:'Montserrat',sans-serif;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .me-meta{font-size:12px;color:var(--muted);margin-top:4px}
+  .me-stats{display:flex;gap:14px;flex-shrink:0;text-align:center}
+
   @media (max-width:600px){
     #bleText{max-width:130px}
     .form-grid{grid-template-columns:1fr}
@@ -223,6 +258,7 @@
     <a href="#/home" data-route="/home">Home</a>
     <a href="#/sessions" data-route="/sessions">Sessions</a>
     <a href="#/solo" data-route="/solo">Solo</a>
+    <a href="#/me" data-route="/me">My measurements</a>
   </nav>
   <div class="ble-bar idle" id="bleBar">
     <span class="dot"></span>

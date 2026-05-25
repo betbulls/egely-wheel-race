@@ -26,8 +26,9 @@ export function mount(el){
     const mine = mineRes.data || [];
     const verified = verifiedRes.data || [];
 
-    // Top racers: verified measurements ranked by average.
-    const topRacers = [...verified].sort((a, b) => (b.avg || 0) - (a.avg || 0)).slice(0, 10);
+    // Top racers: verified SESSION measurements ranked by average (solo is personal, excluded from global).
+    const topRacers = verified.filter(r => r.session_id != null)
+      .sort((a, b) => (b.avg || 0) - (a.avg || 0)).slice(0, 10);
 
     // Top sessions: average the verified results per verified session (no group_avg dependency).
     const bySession = new Map();
