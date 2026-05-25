@@ -1,6 +1,6 @@
 import { supabase } from './db.js';
 import * as ble from './ble.js';
-import { computeStats, CATEGORIES, METRIC_HELP, icon, trendLabel } from './analytics.js';
+import { computeStats, CATEGORIES, METRIC_HELP, icon, trendLabel, vitalityColor } from './analytics.js';
 
 const BROADCAST_MS = 500;   // how often each client samples + broadcasts its LED
 const RENDER_MS = 250;      // how often the board repaints
@@ -9,12 +9,6 @@ const RENDER_MS = 250;      // how often the board repaints
 // within any 1-second window (e.g. 2 -> 5), it's hand-spun => not verified.
 const CHANGE_WINDOW_MS = 1000;
 const CHANGE_LIMIT = 3;
-
-function vitalityColor(led){
-  if(led <= 5) return '#C0143C';   // red
-  if(led <= 12) return '#E9D24A';  // yellow
-  return '#3CC98A';                // green
-}
 
 // Mounts the Session Room view. Returns a cleanup function.
 export function mount(el, sessionId){

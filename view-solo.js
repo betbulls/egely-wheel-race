@@ -1,13 +1,13 @@
 import { supabase } from './db.js';
 import * as ble from './ble.js';
-import { computeStats, vitalityLevel } from './analytics.js';
+import { computeStats, vitalityLevel, vitalityColor as vColor } from './analytics.js';
 
 const SAMPLE_MS = 250;        // how often the curve is sampled while measuring
 const LIVE_WINDOW_MS = 60000; // idle live-preview window
 const CHANGE_WINDOW_MS = 1000, CHANGE_LIMIT = 3; // cheat detection (same as rooms)
 
-function vColor(led){ if(led <= 5) return '#C0143C'; if(led <= 12) return '#E9D24A'; return '#3CC98A'; }
 const racerId = name => name.trim().toLowerCase().replace(/\s+/g, '_');
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
 export function mount(el){
   let duration = 60;          // seconds
@@ -17,6 +17,7 @@ export function mount(el){
   let liveHistory = [];       // {t, led} rolling buffer for the idle preview
   let curLed = 0, connected = false;
   let recentFrames = [], cheatDetected = false;
+  let lastStats = null, saved = false;   // held until the user clicks Save
   let sampleTimer = null, uiTimer = null, unsubFrames = null, unsubStatus = null;
 
   el.innerHTML = `
@@ -40,6 +41,7 @@ export function mount(el){
         <div class="solo-num"><div class="solo-num-val" id="sAvg">–</div><div class="solo-num-lbl">Avg</div></div>
         <div class="solo-num"><div class="solo-num-val" id="sTime">–</div><div class="solo-num-lbl">Time left</div></div>
       </div>
+      <div class="solo-verify" id="sVerify" hidden></div>
       <div class="solo-chart-wrap"><canvas id="sChart"></canvas></div>
       <div class="led-bar" id="sBar"></div>
     </div>
@@ -50,21 +52,17 @@ export function mount(el){
   const $ = id => el.querySelector('#' + id);
   $('sName').value = (localStorage.getItem('ewr_name') || '').trim();
 
-  // Build the 0-24 status bar (always reflects the current value).
+  // 0-24 status bar (always reflects the current value).
   const bar = $('sBar');
-  for(let i = 1; i <= 24; i++){
-    const cell = document.createElement('div');
-    cell.className = 'led-cell';
-    cell.dataset.idx = i;
-    bar.appendChild(cell);
-  }
+  for(let i = 1; i <= 24; i++){ const c = document.createElement('div'); c.className = 'led-cell'; bar.appendChild(c); }
   function updateBar(led){
     [...bar.children].forEach((cell, i) => {
       const idx = i + 1;
-      cell.className = 'led-cell' + (idx <= led ? ' lit ' + (idx <= 5 ? 'red' : idx <= 12 ? 'yellow' : 'green') : '');
+      cell.className = 'led-cell' + (idx <= led ? ' lit ' + (idx < 6 ? 'red' : idx < 13 ? 'yellow' : 'green') : '');
     });
   }
 
+  // ---- Chart with numbered axes and red/yellow/green Y zones ----------------
   const chart = $('sChart');
   function drawChart(){
     const w = chart.clientWidth, h = chart.clientHeight;
@@ -74,9 +72,35 @@ export function mount(el){
     const ctx = chart.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
-    ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 1;
-    for(let i = 0; i <= 4; i++){ const y = h / 4 * i; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
 
+    const padL = 30, padR = 8, padT = 8, padB = 20;
+    const x0 = padL, y0 = padT, plotW = w - padL - padR, plotH = h - padT - padB;
+    const ledToY = led => y0 + plotH - (led / 24) * plotH;
+
+    // Vitality zone bands
+    const band = (lo, hi, color) => { const yt = ledToY(hi); ctx.fillStyle = color; ctx.fillRect(x0, yt, plotW, ledToY(lo) - yt); };
+    band(0, 6, 'rgba(192,20,60,0.12)');
+    band(6, 13, 'rgba(233,210,74,0.12)');
+    band(13, 24, 'rgba(60,201,138,0.12)');
+
+    // Y gridlines + labels at the zone boundaries
+    ctx.font = '10px Inter, sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    [0, 6, 13, 24].forEach(v => {
+      const y = ledToY(v);
+      ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x0 + plotW, y); ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fillText(String(v), x0 - 6, y);
+    });
+
+    // X labels (time)
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    const live = !(measuring || finished);
+    for(let i = 0; i <= 4; i++){
+      const frac = i / 4, x = x0 + frac * plotW;
+      const txt = live ? (i === 4 ? 'now' : '-' + Math.round((1 - frac) * 60) + 's') : Math.round(frac * duration) + 's';
+      ctx.fillText(txt, x, y0 + plotH + 5);
+    }
+
+    // Curve
     let pts;
     if(measuring || finished){
       const total = duration * 1000;
@@ -86,10 +110,9 @@ export function mount(el){
       pts = liveHistory.map(p => ({ x: (p.t - (now - LIVE_WINDOW_MS)) / LIVE_WINDOW_MS, led: p.led })).filter(p => p.x >= 0);
     }
     if(pts.length < 2) return;
-    const xOf = x => x * w, yOf = led => h - (led / 24) * (h - 6) - 3;
     ctx.beginPath();
-    pts.forEach((p, i) => { const x = xOf(p.x), y = yOf(p.led); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
-    ctx.strokeStyle = vColor(curLed); ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
+    pts.forEach((p, i) => { const x = x0 + p.x * plotW, y = ledToY(p.led); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    ctx.strokeStyle = '#e8e6ff'; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
   }
 
   function tick(){
@@ -104,9 +127,17 @@ export function mount(el){
         $('sAvg').textContent = avg.toFixed(1);
         $('sAvg').style.color = vColor(avg);
       }
+      updateVerify();
       if(Date.now() >= endMs) stopMeasurement();
     }
     drawChart();
+  }
+
+  function updateVerify(){
+    const v = $('sVerify');
+    v.hidden = false;
+    if(cheatDetected){ v.className = 'solo-verify bad'; v.textContent = 'Unverified — irregular spinning detected'; }
+    else { v.className = 'solo-verify good'; v.textContent = '✓ Looks genuine'; }
   }
 
   function startMeasurement(){
@@ -115,65 +146,80 @@ export function mount(el){
     if(!connected){ setMsg('Connect your Egely Wheel (top right) first.', 'err'); return; }
     if(!name){ setMsg('Please enter your name.', 'err'); $('sName').focus(); return; }
     localStorage.setItem('ewr_name', name);
-    samples = []; recentFrames = []; cheatDetected = false; finished = false;
+    samples = []; recentFrames = []; cheatDetected = false; finished = false; lastStats = null; saved = false;
     measuring = true; startMs = Date.now(); endMs = startMs + duration * 1000;
     $('sEval').hidden = true;
     $('sStart').textContent = 'Stop';
     $('sDur').disabled = true;
     setMsg('Measuring…', '');
+    updateVerify();
     sampleTimer = setInterval(() => samples.push(curLed), SAMPLE_MS);
   }
 
-  async function stopMeasurement(){
+  function stopMeasurement(){
     if(!measuring) return;
     measuring = false; finished = true;
     if(sampleTimer){ clearInterval(sampleTimer); sampleTimer = null; }
     $('sStart').textContent = 'Start measurement';
     $('sDur').disabled = false;
     $('sTime').textContent = '–';
+    $('sVerify').hidden = true;
     setMsg('', '');
-
-    const stats = computeStats(samples);
-    if(!stats){ return; }
-    showEval(stats);
-
-    const name = $('sName').value.trim();
-    if(name){
-      const { error } = await supabase.from('results').insert({
-        session_id: null, racer_id: racerId(name), racer_name: name,
-        avg: Number(stats.avg.toFixed(2)), peak: stats.peak, steadiness: stats.steadiness,
-        zone_green: Number(stats.zone.green.toFixed(1)), zone_yellow: Number(stats.zone.yellow.toFixed(1)),
-        zone_red: Number(stats.zone.red.toFixed(1)), trend: Number(stats.trendTotal.toFixed(2)),
-        green_streak: stats.greenStreak, samples: stats.n, is_host: false, verified: !cheatDetected,
-      });
-      if(error) console.warn('solo save error:', error.message);
-    }
+    lastStats = computeStats(samples);
+    if(lastStats) showEval(lastStats);
   }
 
   function showEval(stats){
     const lvl = vitalityLevel(stats.avg);
-    $('sEval').hidden = false;
-    $('sEval').innerHTML = `
+    const eval_ = $('sEval');
+    eval_.hidden = false;
+    eval_.innerHTML = `
       <h2>Result</h2>
-      <div class="eval-level" style="color:${lvl.color}">${lvl.name}</div>
-      <div class="eval-meaning">${lvl.meaning}</div>
+      <div class="eval-level" style="color:${lvl.color}">${esc(lvl.name)}</div>
+      <div class="eval-meaning">${esc(lvl.meaning)}</div>
       <div class="eval-stats">
         <span><b style="color:${vColor(stats.avg)}">${stats.avg.toFixed(1)}</b> Avg</span>
         <span><b style="color:${vColor(stats.peak)}">${stats.peak}</b> Peak</span>
         <span><b>${stats.steadiness}</b> Steady</span>
-        ${cheatDetected ? '<span class="warn">Not verified (irregular spinning)</span>' : '<span class="v-badge verified">✓ Verified</span>'}
+        ${cheatDetected ? '<span class="warn">Not verified</span>' : '<span class="v-badge verified">✓ Verified</span>'}
       </div>
-      <p class="solo-saved">Saved to your measurements.</p>`;
+      <div class="field full" style="margin-top:16px">
+        <label for="sComment">Comment (optional)</label>
+        <textarea id="sComment" maxlength="500" rows="2" placeholder="Add a note about this measurement…"></textarea>
+      </div>
+      <div class="form-actions">
+        <button id="sSave">Save to my measurements</button>
+        <span class="form-msg" id="sSaveMsg"></span>
+      </div>`;
+    eval_.querySelector('#sSave').addEventListener('click', saveMeasurement);
+  }
+
+  async function saveMeasurement(){
+    if(saved || !lastStats) return;
+    const name = $('sName').value.trim();
+    if(!name){ $('sSaveMsg').textContent = 'Enter your name first.'; return; }
+    const btn = $('sSave'); btn.disabled = true;
+    const comment = ($('sComment').value || '').trim();
+    const s = lastStats;
+    const { error } = await supabase.from('results').insert({
+      session_id: null, racer_id: racerId(name), racer_name: name,
+      avg: Number(s.avg.toFixed(2)), peak: s.peak, steadiness: s.steadiness,
+      zone_green: Number(s.zone.green.toFixed(1)), zone_yellow: Number(s.zone.yellow.toFixed(1)),
+      zone_red: Number(s.zone.red.toFixed(1)), trend: Number(s.trendTotal.toFixed(2)),
+      green_streak: s.greenStreak, samples: s.n, is_host: false, verified: !cheatDetected,
+      comment: comment || null,
+    });
+    if(error){ btn.disabled = false; $('sSaveMsg').className = 'form-msg err'; $('sSaveMsg').textContent = 'Error: ' + error.message; return; }
+    saved = true;
+    $('sSaveMsg').className = 'form-msg ok';
+    $('sSaveMsg').textContent = 'Saved to your measurements.';
   }
 
   function setMsg(text, state){ const m = $('sMsg'); m.className = 'solo-msg ' + (state || ''); m.textContent = text; }
 
   $('sStart').addEventListener('click', () => { measuring ? stopMeasurement() : startMeasurement(); });
 
-  unsubStatus = ble.subscribeStatus(s => {
-    connected = s.connected;
-    if(!connected && !measuring) setMsg('', '');
-  });
+  unsubStatus = ble.subscribeStatus(s => { connected = s.connected; if(!connected && !measuring) setMsg('', ''); });
   unsubFrames = ble.subscribeFrames(frame => {
     curLed = frame.led;
     const now = Date.now();

@@ -81,3 +81,9 @@ export const VITALITY_LEVELS = [
 export function vitalityLevel(led){
   return VITALITY_LEVELS.find(l => led < l.max) || VITALITY_LEVELS[VITALITY_LEVELS.length - 1];
 }
+
+// Single source of truth for value colors — always matches the vitality level,
+// so e.g. 5.1 ("Below Average") is red, not yellow.
+export function vitalityColor(led){
+  return vitalityLevel(led).color;
+}

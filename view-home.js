@@ -1,7 +1,7 @@
 import { supabase } from './db.js';
+import { vitalityColor as vColor } from './analytics.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
-function vColor(led){ if(led <= 5) return '#C0143C'; if(led <= 12) return '#E9D24A'; return '#3CC98A'; }
 
 export function mount(el){
   const myName = (localStorage.getItem('ewr_name') || '').trim();
