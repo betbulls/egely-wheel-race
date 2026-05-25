@@ -1,6 +1,6 @@
 import { supabase } from './db.js';
 import * as ble from './ble.js';
-import { computeStats, vitalityLevel, vitalityColor as vColor } from './analytics.js';
+import { computeStats, vitalityLevel, vitalityColor as vColor, downsample } from './analytics.js';
 
 const SAMPLE_MS = 250;        // how often the curve is sampled while measuring
 const LIVE_WINDOW_MS = 60000; // idle live-preview window
@@ -215,7 +215,7 @@ export function mount(el){
       zone_green: Number(s.zone.green.toFixed(1)), zone_yellow: Number(s.zone.yellow.toFixed(1)),
       zone_red: Number(s.zone.red.toFixed(1)), trend: Number(s.trendTotal.toFixed(2)),
       green_streak: s.greenStreak, samples: s.n, is_host: false, verified: !cheatDetected,
-      comment: comment || null,
+      comment: comment || null, curve: downsample(samples, 80),
     });
     if(error){ btn.disabled = false; $('sSaveMsg').className = 'form-msg err'; $('sSaveMsg').textContent = 'Error: ' + error.message; return; }
     saved = true;

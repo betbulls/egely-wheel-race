@@ -87,3 +87,11 @@ export function vitalityLevel(led){
 export function vitalityColor(led){
   return vitalityLevel(led).color;
 }
+
+// Reduce a long sample series to at most `max` points (for compact curve storage).
+export function downsample(arr, max = 80){
+  if(!arr || arr.length <= max) return (arr || []).slice();
+  const out = [], step = arr.length / max;
+  for(let i = 0; i < max; i++) out.push(arr[Math.floor(i * step)]);
+  return out;
+}

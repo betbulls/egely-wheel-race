@@ -1,5 +1,6 @@
 import { supabase } from './db.js';
 import { vitalityLevel, vitalityColor as vColor, trendLabel } from './analytics.js';
+import { drawVitalityChart } from './chart.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
@@ -12,6 +13,8 @@ export function mount(el, id){
     </div>
     <div id="dBody"><div class="empty">Loading…</div></div>
   `;
+
+  let onResize = null;
 
   (async () => {
     const { data: r, error } = await supabase.from('results').select('*').eq('id', Number(id)).single();
@@ -45,6 +48,10 @@ export function mount(el, id){
         <div class="eval-level" style="color:${lvl.color};margin-top:16px">${esc(lvl.name)}</div>
         <div class="eval-meaning">${esc(lvl.meaning)}</div>
 
+        ${Array.isArray(r.curve) && r.curve.length > 1
+          ? '<div class="solo-chart-wrap" style="margin-top:16px"><canvas id="dChart"></canvas></div>'
+          : '<p class="d-meta" style="margin-top:16px">No curve stored for this measurement.</p>'}
+
         <div class="res-stats" style="justify-content:flex-start;margin-top:18px;gap:22px">
           <div class="rs"><div class="rs-val" style="color:${vColor(r.avg)}">${(r.avg || 0).toFixed(1)}</div><div class="rs-lbl">Avg</div></div>
           <div class="rs"><div class="rs-val" style="color:${vColor(r.peak)}">${r.peak}</div><div class="rs-lbl">Peak</div></div>
@@ -61,7 +68,13 @@ export function mount(el, id){
         ${r.comment ? `<div class="d-comment"><div class="d-comment-lbl">Comment</div><p>${esc(r.comment)}</p></div>` : ''}
       </div>
     `;
+
+    if(Array.isArray(r.curve) && r.curve.length > 1){
+      onResize = () => drawVitalityChart(el.querySelector('#dChart'), r.curve, r.duration_seconds);
+      onResize();
+      window.addEventListener('resize', onResize);
+    }
   })();
 
-  return () => {};
+  return () => { if(onResize) window.removeEventListener('resize', onResize); };
 }

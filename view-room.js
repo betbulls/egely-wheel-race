@@ -1,6 +1,6 @@
 import { supabase } from './db.js';
 import * as ble from './ble.js';
-import { computeStats, CATEGORIES, METRIC_HELP, icon, trendLabel, vitalityColor } from './analytics.js';
+import { computeStats, CATEGORIES, METRIC_HELP, icon, trendLabel, vitalityColor, downsample } from './analytics.js';
 
 const BROADCAST_MS = 500;   // how often each client samples + broadcasts its LED
 const RENDER_MS = 250;      // how often the board repaints
@@ -259,6 +259,7 @@ export function mount(el, sessionId){
       zone_red: Number(s.zone.red.toFixed(1)),
       trend: Number(s.trendTotal.toFixed(2)), green_streak: s.greenStreak,
       samples: s.n, is_host: isHostName(myName), verified: !cheatDetected,
+      curve: downsample(mySamples, 80), duration_seconds: (session.duration_minutes || 0) * 60,
     }).then(({ error }) => { if(error) console.warn('result save error:', error.message); });
   }
 
