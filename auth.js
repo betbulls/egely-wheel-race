@@ -44,6 +44,14 @@ export function subscribeAuth(cb){
 // Re-verify subscription (e.g. before starting a measurement).
 export async function recheckSubscriber(){ await refreshSubscriber(); emit(); return subscriber; }
 
+// Pre-check at login: is this email an active subscriber? (so we don't send
+// login codes to non-subscribers). Returns true / false / null (check failed).
+export async function isSubscriberEmail(email){
+  const { data, error } = await supabase.rpc('is_subscriber_email', { check_email: email.trim() });
+  if(error){ console.warn('subscriber check error:', error.message); return null; }
+  return data === true;
+}
+
 // Sends a login email containing a 6-digit code (more reliable than magic links,
 // which email scanners can consume before the user clicks).
 export function signIn(email){

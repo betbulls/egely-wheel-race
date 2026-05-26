@@ -60,6 +60,7 @@ function mountLogin(el){
         <button id="liVerify" hidden>Verify &amp; log in</button>
         <span class="form-msg" id="liMsg"></span>
       </div>
+      <div class="subscribe-note" id="liSubscribe" hidden></div>
     </div>`;
   const msg = el.querySelector('#liMsg');
   const emailInput = el.querySelector('#liEmail');
@@ -67,12 +68,29 @@ function mountLogin(el){
   const codeInput = el.querySelector('#liCode');
   const sendBtn = el.querySelector('#liSend');
   const verifyBtn = el.querySelector('#liVerify');
+  const subNote = el.querySelector('#liSubscribe');
+  const SUBSCRIBE_URL = 'https://egelywheel.com/products/ewr-subscription';
 
   sendBtn.addEventListener('click', async () => {
     const email = emailInput.value.trim();
     if(!email){ msg.className = 'form-msg err'; msg.textContent = 'Enter your email.'; return; }
-    msg.className = 'form-msg'; msg.textContent = 'Sending…';
+    msg.className = 'form-msg'; msg.textContent = 'Checking…';
     sendBtn.disabled = true;
+    subNote.hidden = true;
+
+    // Only send a login code to active subscribers.
+    const sub = await auth.isSubscriberEmail(email);
+    if(sub === false){
+      sendBtn.disabled = false;
+      msg.textContent = '';
+      subNote.hidden = false;
+      subNote.innerHTML = `
+        <p>This email isn't an active subscriber yet. Subscribe to measure — watching always stays free:</p>
+        <a class="btn-join" href="${SUBSCRIBE_URL}" target="_blank" rel="noopener">Subscribe to Egely Wheel</a>`;
+      return;
+    }
+
+    msg.textContent = 'Sending…';
     const { error } = await auth.signIn(email);
     sendBtn.disabled = false;
     if(error){ msg.className = 'form-msg err'; msg.textContent = 'Error: ' + error.message; return; }
@@ -131,7 +149,7 @@ bleBtn.addEventListener('click', () => {
   const mode = bleBtn.dataset.mode;
   if(mode === 'disconnect') ble.disconnect();
   else if(mode === 'login') location.hash = '#/login';
-  else if(mode === 'subscribe') window.open('https://egelywheel.com/products/ewr-subscription?selling_plan=710867255682&variant=56516037312898', '_blank');
+  else if(mode === 'subscribe') window.open('https://egelywheel.com/products/ewr-subscription', '_blank');
   else ble.connect();
 });
 
