@@ -21,14 +21,17 @@ async function refreshSubscriber(){
   subscriber = !error && !!(data && data.active);
 }
 
-async function setUser(u){
+function applyUser(u){
   user = u;
-  await refreshSubscriber();
   emit();
+  // Defer the subscriber lookup OUTSIDE this callback. Calling another Supabase
+  // function directly inside onAuthStateChange deadlocks supabase-js's auth lock
+  // (verify succeeds on the server but the promise never resolves).
+  setTimeout(async () => { await refreshSubscriber(); emit(); }, 0);
 }
 
-supabase.auth.getSession().then(({ data }) => setUser(data.session?.user || null));
-supabase.auth.onAuthStateChange((_event, session) => setUser(session?.user || null));
+supabase.auth.getSession().then(({ data }) => applyUser(data.session?.user || null));
+supabase.auth.onAuthStateChange((_event, session) => applyUser(session?.user || null));
 
 export function getState(){ return state(); }
 
