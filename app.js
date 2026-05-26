@@ -80,28 +80,42 @@ function statusText(s){
   return 'Egely Wheel not connected';
 }
 
+// The Connect button is the single gate for measuring (Solo + rooms both use
+// the connected wheel). Only logged-in active subscribers can connect.
+function updateBleButton(){
+  const s = ble.getState();
+  const a = auth.getState();
+  if(s.connected){ bleBtn.textContent = 'Disconnect'; bleBtn.dataset.mode = 'disconnect'; bleBtn.disabled = false; }
+  else if(!a.user){ bleBtn.textContent = 'Log in to measure'; bleBtn.dataset.mode = 'login'; bleBtn.disabled = false; }
+  else if(!a.subscriber){ bleBtn.textContent = 'Subscribe to measure'; bleBtn.dataset.mode = 'subscribe'; bleBtn.disabled = false; }
+  else { bleBtn.textContent = 'Connect'; bleBtn.dataset.mode = 'connect'; bleBtn.disabled = s.status === 'connecting'; }
+}
+
 ble.subscribeStatus(s => {
   bleBar.className = 'ble-bar ' + s.status;
   bleText.textContent = statusText(s);
-  bleBtn.textContent = s.connected ? 'Disconnect' : 'Connect';
-  bleBtn.disabled = s.status === 'connecting';
+  updateBleButton();
 });
 
 bleBtn.addEventListener('click', () => {
-  if(ble.getState().connected) ble.disconnect();
+  const mode = bleBtn.dataset.mode;
+  if(mode === 'disconnect') ble.disconnect();
+  else if(mode === 'login') location.hash = '#/login';
+  else if(mode === 'subscribe') window.open('https://egelywheel.com/products/ewr-subscription?selling_plan=710867255682&variant=56516037312898', '_blank');
   else ble.connect();
 });
 
 // ---- Auth header area -------------------------------------------------------
 const authArea = document.getElementById('authArea');
-auth.subscribeAuth(user => {
-  if(user){
-    authArea.innerHTML = `<span class="auth-email" title="${user.email}">${user.email}</span><button class="auth-btn" id="logoutBtn">Log out</button>`;
+auth.subscribeAuth(a => {
+  if(a.user){
+    authArea.innerHTML = `<span class="auth-email" title="${a.email}">${a.email}</span><button class="auth-btn" id="logoutBtn">Log out</button>`;
     authArea.querySelector('#logoutBtn').addEventListener('click', () => auth.signOut());
     if(location.hash === '#/login') location.hash = '#/home';
   } else {
     authArea.innerHTML = '<a class="auth-btn" href="#/login">Log in</a>';
   }
+  updateBleButton();
 });
 
 // ---- Boot -------------------------------------------------------------------
