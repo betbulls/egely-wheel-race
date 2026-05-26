@@ -6,6 +6,9 @@ import { mount as mountRoom } from './view-room.js';
 import { mount as mountSolo } from './view-solo.js';
 import { mount as mountMeasurements } from './view-measurements.js';
 import { mount as mountMeasurementDetail } from './view-measurement-detail.js';
+import { mount as mountProfile } from './view-profile.js';
+
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
 const view = document.getElementById('view');
 
@@ -34,6 +37,7 @@ function router(){
   else if(path === '/solo') setView(mountSolo);
   else if(path === '/m') setView(mountMeasurementDetail, param);
   else if(path === '/me') setView(mountMeasurements);
+  else if(path === '/profile') setView(mountProfile);
   else if(path === '/login') setView(mountLogin);
   else if(path === '/sessions') setView(mountSessions);
   else setView(mountHome);
@@ -157,7 +161,11 @@ bleBtn.addEventListener('click', () => {
 const authArea = document.getElementById('authArea');
 auth.subscribeAuth(a => {
   if(a.user){
-    authArea.innerHTML = `<span class="auth-email" title="${a.email}">${a.email}</span><button class="auth-btn" id="logoutBtn">Log out</button>`;
+    const name = a.displayName || a.email;
+    const avatar = a.avatarUrl
+      ? `<img class="auth-avatar" src="${esc(a.avatarUrl)}" alt="">`
+      : `<span class="auth-avatar auth-avatar-initial">${esc((name || '?').charAt(0).toUpperCase())}</span>`;
+    authArea.innerHTML = `<a class="auth-user" href="#/profile" title="Profile">${avatar}<span class="auth-email">${esc(name)}</span></a><button class="auth-btn" id="logoutBtn">Log out</button>`;
     authArea.querySelector('#logoutBtn').addEventListener('click', () => auth.signOut());
     if(location.hash === '#/login') location.hash = '#/home';
   } else {
