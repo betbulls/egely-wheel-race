@@ -41,11 +41,15 @@ export function subscribeAuth(cb){
 // Re-verify subscription (e.g. before starting a measurement).
 export async function recheckSubscriber(){ await refreshSubscriber(); emit(); return subscriber; }
 
+// Sends a login email containing a 6-digit code (more reliable than magic links,
+// which email scanners can consume before the user clicks).
 export function signIn(email){
-  return supabase.auth.signInWithOtp({
-    email: email.trim(),
-    options: { emailRedirectTo: window.location.origin + window.location.pathname },
-  });
+  return supabase.auth.signInWithOtp({ email: email.trim() });
+}
+
+// Verify the 6-digit code the user typed in.
+export function verifyCode(email, token){
+  return supabase.auth.verifyOtp({ email: email.trim(), token: token.trim(), type: 'email' });
 }
 
 export function signOut(){ return supabase.auth.signOut(); }

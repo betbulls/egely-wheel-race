@@ -51,20 +51,50 @@ function mountLogin(el){
         <label for="liEmail">Email</label>
         <input id="liEmail" type="email" placeholder="you@example.com" autocomplete="email">
       </div>
+      <div class="field full" id="liCodeWrap" hidden>
+        <label for="liCode">Login code (from your email)</label>
+        <input id="liCode" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="6-digit code">
+      </div>
       <div class="form-actions">
-        <button id="liSend">Send login link</button>
+        <button id="liSend">Send code</button>
+        <button id="liVerify" hidden>Verify &amp; log in</button>
         <span class="form-msg" id="liMsg"></span>
       </div>
     </div>`;
   const msg = el.querySelector('#liMsg');
-  el.querySelector('#liSend').addEventListener('click', async () => {
-    const email = el.querySelector('#liEmail').value.trim();
+  const emailInput = el.querySelector('#liEmail');
+  const codeWrap = el.querySelector('#liCodeWrap');
+  const codeInput = el.querySelector('#liCode');
+  const sendBtn = el.querySelector('#liSend');
+  const verifyBtn = el.querySelector('#liVerify');
+
+  sendBtn.addEventListener('click', async () => {
+    const email = emailInput.value.trim();
     if(!email){ msg.className = 'form-msg err'; msg.textContent = 'Enter your email.'; return; }
     msg.className = 'form-msg'; msg.textContent = 'Sending…';
+    sendBtn.disabled = true;
     const { error } = await auth.signIn(email);
+    sendBtn.disabled = false;
+    if(error){ msg.className = 'form-msg err'; msg.textContent = 'Error: ' + error.message; return; }
+    codeWrap.hidden = false;
+    verifyBtn.hidden = false;
+    sendBtn.textContent = 'Resend code';
+    msg.className = 'form-msg ok';
+    msg.textContent = 'We sent a 6-digit code to your email. Enter it below.';
+    codeInput.focus();
+  });
+
+  verifyBtn.addEventListener('click', async () => {
+    const email = emailInput.value.trim();
+    const code = codeInput.value.trim();
+    if(!code){ msg.className = 'form-msg err'; msg.textContent = 'Enter the code from your email.'; return; }
+    msg.className = 'form-msg'; msg.textContent = 'Verifying…';
+    verifyBtn.disabled = true;
+    const { error } = await auth.verifyCode(email, code);
+    verifyBtn.disabled = false;
     if(error){ msg.className = 'form-msg err'; msg.textContent = 'Error: ' + error.message; return; }
     msg.className = 'form-msg ok';
-    msg.textContent = 'Check your email for the login link.';
+    msg.textContent = 'Logged in!';
   });
 }
 
