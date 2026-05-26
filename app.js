@@ -1,4 +1,5 @@
 import * as ble from './ble.js';
+import * as auth from './auth.js';
 import { mount as mountHome } from './view-home.js';
 import { mount as mountSessions } from './view-sessions.js';
 import { mount as mountRoom } from './view-room.js';
@@ -33,8 +34,38 @@ function router(){
   else if(path === '/solo') setView(mountSolo);
   else if(path === '/m') setView(mountMeasurementDetail, param);
   else if(path === '/me') setView(mountMeasurements);
+  else if(path === '/login') setView(mountLogin);
   else if(path === '/sessions') setView(mountSessions);
   else setView(mountHome);
+}
+
+// ---- Login view -------------------------------------------------------------
+function mountLogin(el){
+  el.innerHTML = `
+    <div class="view-head">
+      <h1 class="page-title">Log in</h1>
+      <p class="page-sub">Log in with your email to measure. Watching is free — no login needed.</p>
+    </div>
+    <div class="panel">
+      <div class="field full">
+        <label for="liEmail">Email</label>
+        <input id="liEmail" type="email" placeholder="you@example.com" autocomplete="email">
+      </div>
+      <div class="form-actions">
+        <button id="liSend">Send login link</button>
+        <span class="form-msg" id="liMsg"></span>
+      </div>
+    </div>`;
+  const msg = el.querySelector('#liMsg');
+  el.querySelector('#liSend').addEventListener('click', async () => {
+    const email = el.querySelector('#liEmail').value.trim();
+    if(!email){ msg.className = 'form-msg err'; msg.textContent = 'Enter your email.'; return; }
+    msg.className = 'form-msg'; msg.textContent = 'Sending…';
+    const { error } = await auth.signIn(email);
+    if(error){ msg.className = 'form-msg err'; msg.textContent = 'Error: ' + error.message; return; }
+    msg.className = 'form-msg ok';
+    msg.textContent = 'Check your email for the login link.';
+  });
 }
 
 // ---- Global Egely Wheel status bar ------------------------------------------
@@ -59,6 +90,18 @@ ble.subscribeStatus(s => {
 bleBtn.addEventListener('click', () => {
   if(ble.getState().connected) ble.disconnect();
   else ble.connect();
+});
+
+// ---- Auth header area -------------------------------------------------------
+const authArea = document.getElementById('authArea');
+auth.subscribeAuth(user => {
+  if(user){
+    authArea.innerHTML = `<span class="auth-email" title="${user.email}">${user.email}</span><button class="auth-btn" id="logoutBtn">Log out</button>`;
+    authArea.querySelector('#logoutBtn').addEventListener('click', () => auth.signOut());
+    if(location.hash === '#/login') location.hash = '#/home';
+  } else {
+    authArea.innerHTML = '<a class="auth-btn" href="#/login">Log in</a>';
+  }
 });
 
 // ---- Boot -------------------------------------------------------------------
