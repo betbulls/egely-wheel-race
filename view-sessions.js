@@ -1,4 +1,12 @@
 import { supabase } from './db.js';
+import * as auth from './auth.js';
+
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+function avatarHtml(url, name){
+  if(url) return `<img class="sess-avatar" src="${esc(url)}" alt="">`;
+  return `<span class="sess-avatar sess-avatar-initial">${esc((name || '?').charAt(0).toUpperCase())}</span>`;
+}
 
 // Mounts the Group Sessions view into `el`. Returns a cleanup function.
 export function mount(el){
@@ -28,14 +36,11 @@ export function mount(el){
             <label for="fDuration">Duration (minutes)</label>
             <input type="number" id="fDuration" min="1" max="240" value="10" required>
           </div>
-          <div class="field">
-            <label for="fOrganizer">Organizer name</label>
-            <input type="text" id="fOrganizer" placeholder="Your name" required maxlength="60">
-          </div>
           <div class="field full check-field">
             <label class="check"><input type="checkbox" id="fVerified"> Verified session — only legitimate measurements count toward the results</label>
           </div>
         </div>
+        <div class="organizer-note" id="organizerNote"></div>
         <div class="form-actions">
           <button type="submit" id="btnCreate">Create session</button>
           <span class="form-msg" id="formMsg"></span>
@@ -54,6 +59,7 @@ export function mount(el){
   const $ = id => el.querySelector('#' + id);
   let sessions = [];
   let resultsBySession = new Map();
+  let organizersById = new Map();   // user_id -> { display_name, avatar_url }
 
   async function loadSessions(){
     const [{ data, error }, resRes] = await Promise.all([
@@ -71,6 +77,14 @@ export function mount(el){
       resultsBySession.get(r.session_id).push({ avg: r.avg || 0, verified: r.verified });
     }
     sessions = data || [];
+
+    const organizerIds = [...new Set(sessions.map(s => s.created_by_user_id).filter(Boolean))];
+    organizersById = new Map();
+    if(organizerIds.length){
+      const { data: profs } = await supabase
+        .from('profiles').select('id, display_name, avatar_url').in('id', organizerIds);
+      for(const p of (profs || [])) organizersById.set(p.id, p);
+    }
     renderSessions();
   }
 
@@ -134,9 +148,13 @@ export function mount(el){
         vt.textContent = '✓ Verified';
         name.appendChild(vt);
       }
+      const prof = s.created_by_user_id ? organizersById.get(s.created_by_user_id) : null;
+      const organizerName = (prof && prof.display_name) || s.created_by || 'unknown';
       const meta = document.createElement('div');
       meta.className = 'session-meta';
-      meta.textContent = `${formatStart(s.scheduled_start)} · ${s.duration_minutes} min · by ${s.created_by || 'unknown'}`;
+      meta.innerHTML = `${esc(formatStart(s.scheduled_start))} · ${s.duration_minutes} min`
+        + ` · <span class="session-organizer">${avatarHtml(prof && prof.avatar_url, organizerName)}`
+        + `<span class="organizer-name">${esc(organizerName)}</span></span>`;
       main.append(name, meta);
 
       const right = document.createElement('div');
@@ -196,13 +214,17 @@ export function mount(el){
 
   $('createForm').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const a = auth.getState();
+    if(!a.user){
+      setFormMsg('Log in to create a session.', 'err');
+      return;
+    }
     const name = $('fName').value.trim();
     const date = $('fDate').value;
     const time = $('fTime').value;
     const duration = parseInt($('fDuration').value, 10);
-    const organizer = $('fOrganizer').value.trim();
 
-    if(!name || !date || !time || !duration || !organizer){
+    if(!name || !date || !time || !duration){
       setFormMsg('Please fill in every field.', 'err');
       return;
     }
@@ -219,7 +241,8 @@ export function mount(el){
       scheduled_start: start.toISOString(),
       duration_minutes: duration,
       status: 'scheduled',
-      created_by: organizer,
+      created_by: a.displayName,
+      created_by_user_id: a.user.id,
       verified_only: $('fVerified').checked
     });
     $('btnCreate').disabled = false;
@@ -241,6 +264,18 @@ export function mount(el){
 
   $('fDate').value = new Date().toISOString().slice(0, 10);
 
+  const unsubAuth = auth.subscribeAuth(a => {
+    const note = $('organizerNote');
+    if(!note) return;
+    if(a.user){
+      note.innerHTML = `<span class="organizer-label">Organized by</span> ${avatarHtml(a.avatarUrl, a.displayName)} <b>${esc(a.displayName)}</b>`;
+      $('btnCreate').disabled = false;
+    } else {
+      note.innerHTML = `<a class="link" href="#/login">Log in</a> to create a session.`;
+      $('btnCreate').disabled = true;
+    }
+  });
+
   const channel = supabase.channel('sessions-changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, () => loadSessions())
     .subscribe();
@@ -251,6 +286,7 @@ export function mount(el){
 
   return () => {
     clearInterval(tickTimer);
+    unsubAuth();
     supabase.removeChannel(channel);
   };
 }
