@@ -1,5 +1,6 @@
 import { supabase } from './db.js';
 import * as ble from './ble.js';
+import * as auth from './auth.js';
 import { computeStats, vitalityLevel, vitalityColor as vColor, downsample } from './analytics.js';
 
 const SAMPLE_MS = 250;        // how often the curve is sampled while measuring
@@ -50,8 +51,6 @@ export function mount(el){
   `;
 
   const $ = id => el.querySelector('#' + id);
-  // Identity comes from the (future) account; for now it's remembered locally.
-  const identity = (localStorage.getItem('ewr_name') || '').trim() || 'Me';
 
   // 0-24 status bar (always reflects the current value).
   const bar = $('sBar');
@@ -204,12 +203,15 @@ export function mount(el){
 
   async function saveMeasurement(){
     if(saved || !lastStats) return;
+    const a = auth.getState();
+    const identity = (a.displayName || '').trim() || 'Me';
     const btn = $('sSave'); btn.disabled = true;
     const comment = ($('sComment').value || '').trim();
     const label = ($('sLabel').value || '').trim();
     const s = lastStats;
     const { error } = await supabase.from('results').insert({
-      session_id: null, racer_id: racerId(identity), racer_name: identity,
+      session_id: null, user_id: a.user?.id || null,
+      racer_id: racerId(identity), racer_name: identity,
       label: label || null, duration_seconds: duration,
       avg: Number(s.avg.toFixed(2)), peak: s.peak, steadiness: s.steadiness,
       zone_green: Number(s.zone.green.toFixed(1)), zone_yellow: Number(s.zone.yellow.toFixed(1)),

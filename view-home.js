@@ -1,11 +1,13 @@
 import { supabase } from './db.js';
+import * as auth from './auth.js';
 import { vitalityColor as vColor } from './analytics.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
 export function mount(el){
-  const myName = (localStorage.getItem('ewr_name') || '').trim();
-  const myId = myName ? myName.toLowerCase().replace(/\s+/g, '_') : null;
+  const a = auth.getState();
+  const userId = a.user?.id || null;
+  const myName = a.displayName || '';
 
   el.innerHTML = `
     <div class="view-head">
@@ -17,7 +19,7 @@ export function mount(el){
 
   (async () => {
     const [mineRes, verifiedRes, verifiedSessRes] = await Promise.all([
-      myId ? supabase.from('results').select('*').eq('racer_id', myId)
+      userId ? supabase.from('results').select('*').eq('user_id', userId)
             : Promise.resolve({ data: [] }),
       supabase.from('results').select('*').eq('verified', true),
       supabase.from('sessions').select('id,name,created_by,verified_only').eq('verified_only', true),
@@ -64,7 +66,7 @@ function renderHome(body, { myName, mine, topRacers, topSessions }){
 
 function renderPrivate(myName, mine){
   if(!myName){
-    return `<div class="panel"><p class="placeholder">Join a session and enter your name to start tracking your personal stats.</p></div>`;
+    return `<div class="panel"><p class="placeholder">Log in to track your personal stats.</p></div>`;
   }
   if(mine.length === 0){
     return `<div class="panel"><h2>Your stats — ${esc(myName)}</h2><p class="placeholder">No finished measurements yet. Your results will appear here.</p></div>`;

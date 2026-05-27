@@ -1,11 +1,11 @@
 import { supabase } from './db.js';
+import * as auth from './auth.js';
 import { vitalityLevel, vitalityColor as vColor } from './analytics.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
 export function mount(el){
-  const myName = (localStorage.getItem('ewr_name') || '').trim();
-  const myId = myName ? myName.toLowerCase().replace(/\s+/g, '_') : null;
+  const userId = auth.getState().user?.id || null;
 
   el.innerHTML = `
     <div class="view-head">
@@ -17,14 +17,18 @@ export function mount(el){
 
   const list = el.querySelector('#meList');
 
-  if(!myId){
-    list.innerHTML = '<div class="panel"><p class="placeholder">Enter your name in a Solo or Session measurement first, then your history will appear here.</p></div>';
+  if(!userId){
+    list.innerHTML = `
+      <div class="panel">
+        <p class="placeholder">Log in to see your measurements.</p>
+        <div class="form-actions"><a class="btn-join" href="#/login">Log in</a></div>
+      </div>`;
     return () => {};
   }
 
   (async () => {
     const [resR, sessR] = await Promise.all([
-      supabase.from('results').select('*').eq('racer_id', myId).order('created_at', { ascending: false }),
+      supabase.from('results').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
       supabase.from('sessions').select('id, name'),
     ]);
     const sessMap = new Map((sessR.data || []).map(s => [s.id, s.name]));

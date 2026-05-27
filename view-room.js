@@ -1,5 +1,6 @@
 import { supabase } from './db.js';
 import * as ble from './ble.js';
+import * as auth from './auth.js';
 import { computeStats, CATEGORIES, METRIC_HELP, icon, trendLabel, vitalityColor, downsample } from './analytics.js';
 
 const BROADCAST_MS = 500;   // how often each client samples + broadcasts its LED
@@ -14,7 +15,7 @@ const CHANGE_LIMIT = 4;
 export function mount(el, sessionId){
   let session = null;
   let startMs = 0, endMs = 0, durationMs = 0;
-  let myName = (localStorage.getItem('ewr_name') || '').trim();
+  let myName = (auth.getState().displayName || localStorage.getItem('ewr_name') || '').trim();
 
   // racers: name -> { name, led, avg, count, host, history:[{t,led}], el }
   const racers = new Map();
@@ -211,8 +212,8 @@ export function mount(el, sessionId){
       myPeak = Math.max(myPeak, myLed);
       mySamples.push(myLed);
       pendingSamples.push({
-        session_id: Number(sessionId), racer_id: racerId(myName),
-        racer_name: myName, led_value: myLed,
+        session_id: Number(sessionId), user_id: auth.getState().user?.id || null,
+        racer_id: racerId(myName), racer_name: myName, led_value: myLed,
       });
     }
     const avg = myCount ? mySum / myCount : 0;
@@ -252,7 +253,8 @@ export function mount(el, sessionId){
     myResultSaved = true;
     const s = computeStats(mySamples);
     supabase.from('results').insert({
-      session_id: Number(sessionId), racer_id: racerId(myName), racer_name: myName,
+      session_id: Number(sessionId), user_id: auth.getState().user?.id || null,
+      racer_id: racerId(myName), racer_name: myName,
       avg: Number(s.avg.toFixed(2)), peak: s.peak, steadiness: s.steadiness,
       zone_green: Number(s.zone.green.toFixed(1)),
       zone_yellow: Number(s.zone.yellow.toFixed(1)),
