@@ -160,14 +160,19 @@ export async function getMyClients(){
   });
 }
 
-// A single client's measurement history (practitioner view). RLS gates access.
+// A single client's measurement history (practitioner view).
+// Connection is verified by the active link; the profile is only for display
+// (a client may have connected without setting up a profile yet).
 export async function getClientMeasurements(clientId){
-  if(!user) return { profile: null, rows: [] };
+  if(!user) return { connected: false, profile: null, rows: [] };
+  const { data: link } = await supabase.from('practitioner_links')
+    .select('status').eq('practitioner_id', user.id).eq('client_id', clientId).eq('status', 'active').maybeSingle();
+  if(!link) return { connected: false, profile: null, rows: [] };
   const [{ data: prof }, { data: rows }] = await Promise.all([
     supabase.from('profiles').select('id, display_name, avatar_url, bio').eq('id', clientId).maybeSingle(),
     supabase.from('results').select('*').eq('user_id', clientId).order('created_at', { ascending: false }),
   ]);
-  return { profile: prof || null, rows: rows || [] };
+  return { connected: true, profile: prof || null, rows: rows || [] };
 }
 
 // Whether the current user is connected to a given practitioner.

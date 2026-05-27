@@ -173,7 +173,11 @@ auth.subscribeAuth(a => {
       : `<span class="auth-avatar auth-avatar-initial">${esc((name || '?').charAt(0).toUpperCase())}</span>`;
     authArea.innerHTML = `<a class="auth-user" href="#/profile" title="Profile">${avatar}<span class="auth-email">${esc(name)}</span></a><button class="auth-btn" id="logoutBtn">Log out</button>`;
     authArea.querySelector('#logoutBtn').addEventListener('click', () => auth.signOut());
-    if(location.hash === '#/login') location.hash = '#/home';
+    if(location.hash === '#/login'){
+      let pending = null;
+      try { pending = localStorage.getItem('ewr_pending_connect'); } catch {}
+      location.hash = pending ? '#/connect/' + pending : '#/home';
+    }
   } else {
     authArea.innerHTML = '<a class="auth-btn" href="#/login">Log in</a>';
   }

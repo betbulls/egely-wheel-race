@@ -115,14 +115,15 @@ function mountDetail(el, clientId){
     <div id="clBody"><div class="empty">Loading…</div></div>`;
 
   (async () => {
-    const { profile, rows } = await auth.getClientMeasurements(clientId);
-    if(!profile){
-      el.querySelector('#clTitle').textContent = 'Client not found';
+    const { connected, profile, rows } = await auth.getClientMeasurements(clientId);
+    if(!connected){
+      el.querySelector('#clTitle').textContent = 'Not connected';
       el.querySelector('#clBody').innerHTML = '<div class="empty">This client isn\'t connected to you.</div>';
       return;
     }
+    const name = (profile && profile.display_name) || 'Client';
     el.querySelector('#clTitle').innerHTML =
-      `<span class="client-title-avatar">${avatarHtml(profile.avatar_url, profile.display_name)}</span> ${esc(profile.display_name || 'Client')}`;
+      `<span class="client-title-avatar">${avatarHtml(profile && profile.avatar_url, name)}</span> ${esc(name)}`;
 
     const sessIds = [...new Set(rows.filter(r => r.session_id != null).map(r => r.session_id))];
     const sessMap = new Map();

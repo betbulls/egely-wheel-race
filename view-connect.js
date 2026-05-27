@@ -48,7 +48,12 @@ export function mount(el, handle){
       if(!a.user){
         action.innerHTML = `
           <p class="connect-note">Log in to connect — watching the leaderboards is always free.</p>
-          <a class="btn-join" href="#/login">Log in</a>`;
+          <button class="btn-join" id="cnLogin">Log in to connect</button>`;
+        action.querySelector('#cnLogin').addEventListener('click', () => {
+          // Remember the intent so we can finish the connection right after login.
+          try { localStorage.setItem('ewr_pending_connect', handle); } catch {}
+          location.hash = '#/login';
+        });
         return;
       }
       if(a.user.id === pr.id){
@@ -56,6 +61,13 @@ export function mount(el, handle){
         return;
       }
       action.innerHTML = `<div class="empty">Checking…</div>`;
+      // Came back from logging in via this link → connect automatically.
+      let pending = null;
+      try { pending = localStorage.getItem('ewr_pending_connect'); } catch {}
+      if(pending === handle){
+        try { localStorage.removeItem('ewr_pending_connect'); } catch {}
+        await auth.connectToPractitioner(pr.id);
+      }
       const connected = await auth.isConnectedTo(pr.id);
       if(connected){
         action.innerHTML = `
