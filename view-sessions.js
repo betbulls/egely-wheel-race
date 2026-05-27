@@ -114,6 +114,7 @@ export function mount(el){
 
   function renderSessions(){
     const list = $('sessionList');
+    if(!list) return;   // view was unmounted before an async/realtime update resolved
     if(sessions.length === 0){
       list.innerHTML = '<div class="empty">No sessions yet. Create the first one above.</div>';
       return;

@@ -125,6 +125,51 @@ export async function getMyPractitioners(){
   return links.map(l => ({ ...byId.get(l.practitioner_id), id: l.practitioner_id, connectedAt: l.created_at }));
 }
 
+// Clients connected to the current practitioner, each with their latest measurement.
+export async function getMyClients(){
+  if(!user) return [];
+  const { data: links } = await supabase.from('practitioner_links')
+    .select('client_id, created_at').eq('practitioner_id', user.id).eq('status', 'active');
+  if(!links || !links.length) return [];
+  const ids = links.map(l => l.client_id);
+  const connectedAt = new Map(links.map(l => [l.client_id, l.created_at]));
+
+  const [{ data: profs }, { data: results }] = await Promise.all([
+    supabase.from('profiles').select('id, display_name, avatar_url').in('id', ids),
+    supabase.from('results').select('*').in('user_id', ids).order('created_at', { ascending: false }),
+  ]);
+  const byId = new Map((profs || []).map(p => [p.id, p]));
+  const stats = new Map();   // user_id -> { last result, count }
+  for(const r of (results || [])){
+    const cur = stats.get(r.user_id);
+    if(!cur) stats.set(r.user_id, { last: r, count: 1 });
+    else cur.count++;          // results are ordered desc, so the first seen is the latest
+  }
+
+  return ids.map(id => {
+    const p = byId.get(id) || {};
+    const s = stats.get(id);
+    return {
+      id,
+      displayName: p.display_name || 'Client',
+      avatarUrl: p.avatar_url || null,
+      connectedAt: connectedAt.get(id),
+      count: s ? s.count : 0,
+      last: s ? s.last : null,
+    };
+  });
+}
+
+// A single client's measurement history (practitioner view). RLS gates access.
+export async function getClientMeasurements(clientId){
+  if(!user) return { profile: null, rows: [] };
+  const [{ data: prof }, { data: rows }] = await Promise.all([
+    supabase.from('profiles').select('id, display_name, avatar_url, bio').eq('id', clientId).maybeSingle(),
+    supabase.from('results').select('*').eq('user_id', clientId).order('created_at', { ascending: false }),
+  ]);
+  return { profile: prof || null, rows: rows || [] };
+}
+
 // Whether the current user is connected to a given practitioner.
 export async function isConnectedTo(practitionerId){
   if(!user) return false;

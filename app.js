@@ -8,6 +8,7 @@ import { mount as mountMeasurements } from './view-measurements.js';
 import { mount as mountMeasurementDetail } from './view-measurement-detail.js';
 import { mount as mountProfile } from './view-profile.js';
 import { mount as mountConnect } from './view-connect.js';
+import { mount as mountClients } from './view-clients.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
@@ -39,6 +40,7 @@ function router(){
   else if(path === '/m') setView(mountMeasurementDetail, param);
   else if(path === '/me') setView(mountMeasurements);
   else if(path === '/profile') setView(mountProfile);
+  else if(path === '/clients') setView(mountClients, param);
   else if(path === '/connect') setView(mountConnect, param);
   else if(path === '/login') setView(mountLogin);
   else if(path === '/sessions') setView(mountSessions);
@@ -161,7 +163,9 @@ bleBtn.addEventListener('click', () => {
 
 // ---- Auth header area -------------------------------------------------------
 const authArea = document.getElementById('authArea');
+const navClients = document.getElementById('navClients');
 auth.subscribeAuth(a => {
+  if(navClients) navClients.hidden = !(a.user && a.isPractitioner);
   if(a.user){
     const name = a.displayName || a.email;
     const avatar = a.avatarUrl
