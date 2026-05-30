@@ -9,6 +9,7 @@ import { mount as mountMeasurementDetail } from './view-measurement-detail.js';
 import { mount as mountProfile } from './view-profile.js';
 import { mount as mountConnect } from './view-connect.js';
 import { mount as mountClients } from './view-clients.js';
+import { mount as mountLeaderboard } from './view-leaderboard.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
@@ -41,6 +42,7 @@ function router(){
   else if(path === '/me') setView(mountMeasurements);
   else if(path === '/profile') setView(mountProfile);
   else if(path === '/clients') setView(mountClients, param);
+  else if(path === '/leaderboard') setView(mountLeaderboard);
   else if(path === '/connect') setView(mountConnect, param);
   else if(path === '/login') setView(mountLogin);
   else if(path === '/sessions') setView(mountSessions);

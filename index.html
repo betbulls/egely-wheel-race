@@ -393,6 +393,171 @@
   .dash-badge{position:relative}
   .dash-badge.unlocked:hover{transform:translateY(-2px)}
 
+  /* Global Ranking — Leaderboard */
+  .lb-tabs{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap}
+  .lb-tab{padding:8px 16px;border-radius:99px;background:transparent;
+    border:1px solid var(--panel-border);color:var(--muted);cursor:pointer;
+    font-family:'Inter',sans-serif;font-size:13px;font-weight:500;
+    transition:background .2s,color .2s,border-color .2s}
+  .lb-tab:hover{color:#fff;border-color:rgba(155,109,255,0.5)}
+  .lb-tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  .lb-podium{display:grid;grid-template-columns:1fr 1.25fr 1fr;gap:14px;align-items:end;margin-bottom:18px}
+  .lb-podium-card{position:relative;text-align:center;border-radius:14px;padding:18px 14px;
+    background:linear-gradient(160deg, rgba(255,255,255,0.05), rgba(82,48,218,0.08));
+    border:1px solid var(--panel-border)}
+  .lb-podium-card.place-1{order:2;padding:22px 14px;
+    background:linear-gradient(160deg, rgba(255,212,121,0.2), rgba(82,48,218,0.1));
+    border-color:rgba(255,212,121,0.55);
+    box-shadow:0 10px 36px -14px rgba(255,212,121,0.5)}
+  .lb-podium-card.place-2{order:1;
+    background:linear-gradient(160deg, rgba(201,209,217,0.14), rgba(82,48,218,0.06));
+    border-color:rgba(201,209,217,0.45)}
+  .lb-podium-card.place-3{order:3;
+    background:linear-gradient(160deg, rgba(205,127,50,0.16), rgba(82,48,218,0.06));
+    border-color:rgba(205,127,50,0.45)}
+  .lb-medal{font-size:30px;line-height:1;margin-bottom:6px}
+  .lb-podium-card.place-1 .lb-medal{font-size:36px}
+
+  .lb-avatar{border-radius:50%;overflow:hidden;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,var(--blue),var(--accent))}
+  .lb-avatar img{width:100%;height:100%;object-fit:cover}
+  .lb-avatar .avatar-initial{font-family:'Montserrat',sans-serif;font-weight:600;color:#fff}
+  .lb-avatar.sm{width:32px;height:32px}
+  .lb-avatar.sm .avatar-initial{font-size:13px}
+  .lb-avatar.md{width:44px;height:44px}
+  .lb-avatar.md .avatar-initial{font-size:17px}
+  .lb-avatar.lg{width:54px;height:54px;margin:0 auto 10px}
+  .lb-avatar.lg .avatar-initial{font-size:22px}
+  .lb-podium-card.place-1 .lb-avatar.lg{width:64px;height:64px}
+  .lb-podium-card.place-1 .lb-avatar.lg .avatar-initial{font-size:26px}
+
+  .lb-name{font-family:'Montserrat',sans-serif;font-size:15px;font-weight:500;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lb-podium-card .lb-name{font-size:16px;margin-top:4px}
+  .lb-podium-card.place-1 .lb-name{font-size:18px}
+  .lb-level{margin-top:6px}
+  .lb-podium-card .lb-xp{font-family:'Montserrat',sans-serif;font-size:18px;font-weight:500;margin-top:8px}
+  .lb-podium-card.place-1 .lb-xp{font-size:22px}
+  .lb-podium-card .lb-rare{margin-top:8px;display:flex;gap:6px;justify-content:center;min-height:18px}
+  .lb-rare-icon{display:inline-block;font-size:16px;line-height:1}
+  .lb-xp-label{font-family:'Inter',sans-serif;font-size:10px;letter-spacing:0.12em;
+    text-transform:uppercase;color:var(--muted);font-weight:400;margin-left:3px}
+
+  .lb-level-pill{display:inline-flex;align-items:center;gap:4px;
+    background:rgba(155,109,255,0.22);border:1px solid rgba(155,109,255,0.4);
+    border-radius:99px;padding:2px 9px;font-size:10px;letter-spacing:0.04em;
+    font-family:'Inter',sans-serif;color:#cdbcff}
+  .lb-level-pill.lv-5,.lb-level-pill.lv-6{background:rgba(255,212,121,0.22);
+    border-color:rgba(255,212,121,0.5);color:#ffd479}
+
+  /* Your standing card */
+  .lb-mine{margin-bottom:18px;padding:14px 18px;border-radius:14px;
+    background:linear-gradient(135deg, rgba(82,48,218,0.2), rgba(0,51,255,0.06));
+    border:1px solid rgba(155,109,255,0.45);
+    display:flex;flex-direction:column;gap:10px}
+  .lb-mine.empty{align-items:center;text-align:center;padding:18px}
+  .lb-mine-eyebrow{font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted)}
+  .lb-mine-row{display:flex;align-items:center;gap:14px}
+  .lb-mine-id{flex:1;min-width:0}
+  .lb-meta{font-size:12px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .lb-mine-rank{text-align:right;flex-shrink:0}
+  .lb-rank-num{font-family:'Montserrat',sans-serif;font-size:26px;font-weight:500;line-height:1}
+  .lb-rank-meta{font-size:11px;color:var(--muted);margin-top:3px;letter-spacing:0.08em}
+  .lb-mine-copy{font-size:13px;color:#cdbcff}
+  .lb-mine-msg{font-size:14px;color:var(--muted)}
+
+  /* List rows */
+  .lb-list{display:flex;flex-direction:column;gap:8px}
+  .lb-row{display:flex;align-items:center;gap:14px;cursor:pointer;
+    background:rgba(255,255,255,0.03);border:1px solid var(--panel-border);
+    border-radius:12px;padding:10px 14px;transition:transform .15s,border-color .15s,background .15s}
+  .lb-row:hover{transform:translateY(-1px);border-color:rgba(155,109,255,0.45);background:rgba(255,255,255,0.05)}
+  .lb-row.mine{border-color:rgba(155,109,255,0.55);
+    background:linear-gradient(135deg, rgba(82,48,218,0.14), rgba(0,51,255,0.04));
+    box-shadow:0 4px 18px -10px rgba(155,109,255,0.5)}
+  .lb-row-rank{font-family:'Montserrat',sans-serif;font-size:14px;font-weight:600;
+    color:var(--muted);min-width:34px;text-align:center;font-variant-numeric:tabular-nums}
+  .lb-row-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+  .lb-name-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+  .lb-name-line .lb-name{min-width:0;flex-shrink:1}
+  .lb-meta-line{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+  .lb-status{color:#cdbcff}
+  .lb-pract-tag{font-size:9px;letter-spacing:0.1em;padding:2px 7px;border-radius:99px;
+    background:rgba(61,220,132,0.18);color:#3ddc84;border:1px solid rgba(61,220,132,0.4);
+    text-transform:uppercase;font-weight:600;flex-shrink:0}
+  .lb-pract-pin{display:inline-block;margin-left:4px;color:#3ddc84;font-weight:700}
+  .lb-row-rare{display:flex;gap:4px;flex-shrink:0;align-items:center}
+  .lb-row-xp{font-family:'Montserrat',sans-serif;font-size:16px;font-weight:500;
+    flex-shrink:0;font-variant-numeric:tabular-nums}
+
+  /* Podium cards also clickable */
+  .lb-podium-card{cursor:pointer;transition:transform .2s,box-shadow .2s}
+  .lb-podium-card:hover{transform:translateY(-2px)}
+  .lb-podium-status{font-size:11px;color:#cdbcff;margin-top:4px}
+
+  /* Your-standing card also clickable */
+  .lb-mine[data-user-id]{cursor:pointer;transition:transform .15s}
+  .lb-mine[data-user-id]:hover{transform:translateY(-1px)}
+
+  .lb-empty{text-align:center;padding:40px 18px;color:var(--muted);
+    background:rgba(255,255,255,0.03);border:1px solid var(--panel-border);
+    border-radius:14px}
+
+  /* ---- Mini-profile popup ------------------------------------------------ */
+  .lb-modal-backdrop{position:fixed;inset:0;z-index:1000;
+    background:rgba(8,5,30,0.7);backdrop-filter:blur(6px);
+    display:flex;align-items:center;justify-content:center;padding:18px;
+    opacity:0;transition:opacity .18s ease}
+  .lb-modal-backdrop.open{opacity:1}
+  .lb-modal{
+    width:100%;max-width:440px;max-height:90vh;overflow:auto;position:relative;
+    background:linear-gradient(160deg, rgba(82,48,218,0.32), rgba(13,11,40,0.95));
+    border:1px solid rgba(155,109,255,0.45);border-radius:18px;padding:24px 22px;
+    box-shadow:0 24px 60px -16px rgba(82,48,218,0.55);
+    transform:translateY(8px);transition:transform .22s ease;
+    color:#fff
+  }
+  .lb-modal-backdrop.open .lb-modal{transform:translateY(0)}
+  .lb-modal-close{position:absolute;top:10px;right:12px;
+    width:32px;height:32px;border-radius:50%;cursor:pointer;
+    background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);
+    color:#fff;font-size:18px;line-height:1;padding:0;
+    display:flex;align-items:center;justify-content:center}
+  .lb-modal-close:hover{background:rgba(255,255,255,0.16)}
+  .lb-modal-head{text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px}
+  .lb-avatar.xl{width:90px;height:90px}
+  .lb-avatar.xl .avatar-initial{font-size:36px}
+  .lb-modal-name{font-family:'Montserrat',sans-serif;font-size:22px;font-weight:500;margin-top:8px}
+  .lb-modal-pract{font-size:11px;letter-spacing:0.12em;text-transform:uppercase;
+    color:#3ddc84;background:rgba(61,220,132,0.12);
+    border:1px solid rgba(61,220,132,0.35);
+    padding:3px 10px;border-radius:99px}
+  .lb-modal-status{font-size:13px;color:#cdbcff;margin-top:2px}
+  .lb-modal-level{display:flex;align-items:baseline;justify-content:center;gap:10px;
+    margin:14px 0;padding:12px;border-radius:12px;
+    background:rgba(155,109,255,0.12);border:1px solid rgba(155,109,255,0.35)}
+  .lb-modal-level-eyebrow{font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted)}
+  .lb-modal-level-title{font-family:'Montserrat',sans-serif;font-size:18px;font-weight:500}
+  .lb-modal-rare{display:flex;gap:8px;justify-content:center;font-size:22px;margin-bottom:14px;
+    flex-wrap:wrap;min-height:24px}
+  .lb-modal-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+  .lbm-stat{background:rgba(255,255,255,0.04);border:1px solid var(--panel-border);
+    border-radius:10px;padding:10px 12px;text-align:center}
+  .lbm-val{font-family:'Montserrat',sans-serif;font-size:18px;font-weight:500;
+    line-height:1;font-variant-numeric:tabular-nums}
+  .lbm-lbl{font-size:10px;letter-spacing:0.12em;text-transform:uppercase;
+    color:var(--muted);margin-top:5px}
+
+  @media (max-width:520px){
+    .lb-modal{padding:20px 16px;max-height:95vh}
+    .lb-modal-stats{grid-template-columns:repeat(2,1fr)}
+    .lb-avatar.xl{width:76px;height:76px}
+    .lb-avatar.xl .avatar-initial{font-size:30px}
+    .lb-modal-name{font-size:20px}
+  }
+
   /* Info "i" button — taps on mobile (and clicks on desktop) reveal a description */
   .db-info{position:absolute;top:8px;left:8px;
     width:20px;height:20px;border-radius:50%;
@@ -592,6 +757,13 @@
     .lj-label{font-size:9px}
     .lj-marker .lj-label{display:none}
     .lj-marker.current .lj-label{display:block}
+    .lb-podium{grid-template-columns:1fr;gap:10px}
+    .lb-podium-card.place-1,
+    .lb-podium-card.place-2,
+    .lb-podium-card.place-3{order:initial}
+    .lb-row{gap:10px;padding:9px 12px}
+    .lb-row-rare{display:none}
+    .lb-row-xp{font-size:14px}
   }
 </style>
 </head>
@@ -605,6 +777,7 @@
     <a href="#/solo" data-route="/solo">Solo</a>
     <a href="#/me" data-route="/me">My measurements</a>
     <a href="#/clients" data-route="/clients" id="navClients" hidden>Clients</a>
+    <a href="#/leaderboard" data-route="/leaderboard">Global Ranking</a>
   </nav>
   <div class="ble-bar idle" id="bleBar">
     <span class="dot"></span>
