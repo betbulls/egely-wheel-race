@@ -77,6 +77,7 @@ export function mount(el){
     });
   }
 
+  // Precise MM:SS / HH:MM:SS — used while a session is LIVE (time left).
   function formatCountdown(ms){
     if(ms < 0) ms = 0;
     const totalSec = Math.floor(ms / 1000);
@@ -85,6 +86,21 @@ export function mount(el){
     const sec = totalSec % 60;
     const pad = n => String(n).padStart(2, '0');
     return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${pad(m)}:${pad(sec)}`;
+  }
+
+  // Adaptive "time until start" — readable at any distance.
+  function formatUntil(ms){
+    if(ms <= 0) return 'now';
+    const sec   = Math.floor(ms / 1000);
+    const mins  = Math.floor(sec / 60);
+    const hours = Math.floor(sec / 3600);
+    const days  = Math.floor(sec / 86400);
+    if(days >= 60)  return `${Math.floor(days / 30)} months`;
+    if(days >= 14)  return `${Math.floor(days / 7)} weeks`;
+    if(days >= 1)   return `${days} ${days === 1 ? 'day' : 'days'}`;
+    if(hours >= 1)  return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+    if(mins  >= 1)  return `${mins} min`;
+    return 'less than a minute';
   }
 
   function buildSessionCard(s, state, now){
@@ -193,7 +209,7 @@ export function mount(el){
       const isLive = card.classList.contains('live');
       const isFinished = card.classList.contains('finished');
       if(now < start){
-        cd.textContent = 'in ' + formatCountdown(start - now);
+        cd.textContent = 'in ' + formatUntil(start - now);
         if(isLive || isFinished) needsReorder = true;
       } else if(now <= end){
         cd.textContent = formatCountdown(end - now) + ' left';
