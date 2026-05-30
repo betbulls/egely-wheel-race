@@ -375,6 +375,31 @@
   .lm-lbl{font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin-top:2px}
   .live-curve{width:100%;height:170px;display:block}
 
+  /* Session Pulse: Host / Group / You — three curves on one chart */
+  .session-pulse{margin:18px 0;padding:16px 18px;border-radius:14px;
+    background:linear-gradient(120deg, rgba(82,48,218,0.18), rgba(0,51,255,0.06));
+    border:1px solid var(--panel-border);display:flex;flex-direction:column;gap:14px}
+  .sp-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .sp-title{font-family:'Montserrat',sans-serif;font-size:11px;letter-spacing:0.16em;
+    text-transform:uppercase;color:var(--muted)}
+  .sp-legend{display:flex;gap:14px;margin-left:auto;flex-wrap:wrap}
+  .leg-item{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+  .leg-dot{width:14px;height:3px;border-radius:2px;display:inline-block}
+  .leg-host .leg-dot{background:#f5a623}
+  .leg-group .leg-dot{background:#9db4ff}
+  .leg-me .leg-dot{background:#ffffff}
+  .sp-chart{width:100%;height:210px;display:block}
+  .sp-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .sp-col{background:rgba(255,255,255,0.03);border:1px solid var(--panel-border);
+    border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;min-width:0}
+  .sp-col-head{display:flex;align-items:center;gap:7px;min-width:0}
+  .sp-col-name{font-family:'Montserrat',sans-serif;font-size:14px;font-weight:500;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .sp-stats{display:flex;gap:14px}
+  .ss{text-align:left;flex:1;min-width:0}
+  .ss-val{font-family:'Montserrat',sans-serif;font-size:20px;font-weight:500;font-variant-numeric:tabular-nums}
+  .ss-lbl{font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin-top:2px}
+
   @media (max-width:600px){
     #bleText{max-width:130px}
     .form-grid{grid-template-columns:1fr}
@@ -386,6 +411,8 @@
     .me-stats{justify-content:space-between;gap:10px}
     .live-metrics{gap:14px}
     .lm-val{font-size:20px}
+    .sp-metrics{grid-template-columns:1fr}
+    .sp-chart{height:170px}
   }
 </style>
 </head>

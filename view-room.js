@@ -24,7 +24,7 @@ export function mount(el, sessionId){
   let channel = null;
   let broadcastTimer = null, renderTimer = null, flushTimer = null;
   let unsubFrames = null, unsubStatus = null;
-  let leaderExpanded = false;
+
   let bleConnected = false;
 
   let pendingSamples = [];   // buffered measurement rows, flushed in batches
@@ -59,23 +59,29 @@ export function mount(el, sessionId){
     </div>
 
     <div id="roomBody" hidden>
-      <div class="leader-banner">
-        <div class="lb-top">
-          <div class="avatar lg" id="lbAvatar">–</div>
-          <div class="lb-info">
-            <div class="lb-label">Session host</div>
-            <div class="lb-name" id="lbName">—</div>
+      <div class="session-pulse">
+        <div class="sp-head">
+          <span class="sp-title">Session pulse</span>
+          <div class="sp-legend">
+            <span class="leg-item leg-host"><i class="leg-dot"></i>Host</span>
+            <span class="leg-item leg-group"><i class="leg-dot"></i>Group</span>
+            <span class="leg-item leg-me"><i class="leg-dot"></i>You</span>
           </div>
-          <canvas class="lb-spark" id="lbSpark"></canvas>
-          <div class="lb-metrics">
-            <div class="metric"><div class="metric-val live" id="lbLive">0</div><div class="metric-lbl">Live</div></div>
-            <div class="metric"><div class="metric-val peak" id="lbPeak">0</div><div class="metric-lbl">Peak</div></div>
-            <div class="metric"><div class="metric-val avg" id="lbAvg">0.0</div><div class="metric-lbl">Avg</div></div>
-          </div>
-          <button class="lb-expand" id="lbExpand" title="Expand live chart">&#9662;</button>
         </div>
-        <div class="lb-chart-wrap" id="lbChartWrap" hidden>
-          <canvas class="lb-chart" id="lbChart"></canvas>
+        <canvas class="sp-chart" id="spChart"></canvas>
+        <div class="sp-metrics">
+          <div class="sp-col"><div class="sp-col-head leg-host"><i class="leg-dot"></i><span class="sp-col-name" id="spHostName">Host</span></div>
+            <div class="sp-stats"><div class="ss"><div class="ss-val" id="spHostLive">–</div><div class="ss-lbl">Live</div></div>
+            <div class="ss"><div class="ss-val" id="spHostPeak">–</div><div class="ss-lbl">Peak</div></div>
+            <div class="ss"><div class="ss-val" id="spHostAvg">–</div><div class="ss-lbl">Avg</div></div></div></div>
+          <div class="sp-col"><div class="sp-col-head leg-group"><i class="leg-dot"></i><span class="sp-col-name">Group</span></div>
+            <div class="sp-stats"><div class="ss"><div class="ss-val" id="spGroupLive">–</div><div class="ss-lbl">Live</div></div>
+            <div class="ss"><div class="ss-val" id="spGroupPeak">–</div><div class="ss-lbl">Peak</div></div>
+            <div class="ss"><div class="ss-val" id="spGroupAvg">–</div><div class="ss-lbl">Avg</div></div></div></div>
+          <div class="sp-col"><div class="sp-col-head leg-me"><i class="leg-dot"></i><span class="sp-col-name">You</span></div>
+            <div class="sp-stats"><div class="ss"><div class="ss-val" id="spMeLive">–</div><div class="ss-lbl">Live</div></div>
+            <div class="ss"><div class="ss-val" id="spMePeak">–</div><div class="ss-lbl">Peak</div></div>
+            <div class="ss"><div class="ss-val" id="spMeAvg">–</div><div class="ss-lbl">Avg</div></div></div></div>
         </div>
       </div>
 
@@ -156,12 +162,6 @@ export function mount(el, sessionId){
           cheatDetected = true; updateHint();
         }
       }
-    });
-
-    $('lbExpand').addEventListener('click', () => {
-      leaderExpanded = !leaderExpanded;
-      $('lbChartWrap').hidden = !leaderExpanded;
-      $('lbExpand').classList.toggle('open', leaderExpanded);
     });
 
     broadcastTimer = setInterval(sampleAndBroadcast, BROADCAST_MS);
@@ -382,34 +382,128 @@ export function mount(el, sessionId){
         drawCurve(r.el.spark, r.history, vitalityColor(r.led));
       });
     }
-    renderHost();
+    renderPulse();
     renderGroup();
     maybeSaveGroup();
     maybeSaveMyResult();
   }
 
-  function renderHost(){
-    const host = [...racers.values()].find(r => r.host);
-    if(!host){
-      $('lbName').textContent = session ? (session.created_by || '—') : '—';
-      $('lbAvatar').textContent = session && session.created_by ? session.created_by.charAt(0).toUpperCase() : '–';
-      $('lbLive').textContent = '–';
-      $('lbPeak').textContent = '–';
-      $('lbAvg').textContent = '–';
-      $('lbName').classList.add('waiting');
-      return;
+  // ---- Session Pulse: Host + Group + You as 3 lines on one chart -----------
+  const HOST_COLOR = '#f5a623', GROUP_COLOR = '#9db4ff', ME_COLOR = '#ffffff';
+
+  function computeGroupHistory(){
+    if(!racers.size) return [];
+    const buckets = new Map();
+    for(const r of racers.values()){
+      for(const pt of r.history){
+        const idx = Math.floor(pt.t / BROADCAST_MS);
+        const b = buckets.get(idx) || { sum: 0, count: 0 };
+        b.sum += pt.led; b.count++;
+        buckets.set(idx, b);
+      }
     }
-    $('lbName').classList.remove('waiting');
-    const color = vitalityColor(host.led);
-    $('lbAvatar').textContent = host.name.charAt(0).toUpperCase();
-    $('lbName').textContent = host.name;
-    $('lbLive').textContent = host.led;
-    $('lbLive').style.color = color;
-    $('lbPeak').textContent = host.peak;
-    $('lbPeak').style.color = vitalityColor(host.peak);
-    $('lbAvg').textContent = (host.avg || 0).toFixed(1);
-    drawCurve($('lbSpark'), host.history, color);
-    if(leaderExpanded) drawCurve($('lbChart'), host.history, color, { big: true, fill: true, grid: true });
+    const keys = [...buckets.keys()].sort((a, b) => a - b);
+    return keys.map(k => ({ t: k * BROADCAST_MS, led: buckets.get(k).sum / buckets.get(k).count }));
+  }
+
+  function drawTrio(canvas, series, opts){
+    if(!canvas) return;
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    if(!w || !h) return;
+    const dpr = window.devicePixelRatio || 1;
+    if(canvas.width !== Math.round(w * dpr)){ canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+
+    const padL = 30, padR = 8, padT = 8, padB = 22;
+    const x0 = padL, y0 = padT, plotW = w - padL - padR, plotH = h - padT - padB;
+    const span = opts.durationMs || 60000;
+    const ledToY = led => y0 + plotH - (led / 24) * plotH;
+    const xOf = t => x0 + (Math.min(t, span) / span) * plotW;
+
+    // Vitality zone bands
+    const band = (lo, hi, color) => { const yt = ledToY(hi); ctx.fillStyle = color; ctx.fillRect(x0, yt, plotW, ledToY(lo) - yt); };
+    band(0, 6, 'rgba(192,20,60,0.12)');
+    band(6, 13, 'rgba(233,210,74,0.12)');
+    band(13, 24, 'rgba(60,201,138,0.12)');
+
+    ctx.font = '10px Inter, sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    [0, 6, 13, 24].forEach(v => {
+      const y = ledToY(v);
+      ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x0 + plotW, y); ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fillText(String(v), x0 - 6, y);
+    });
+
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    const totalSec = Math.round(span / 1000);
+    for(let i = 0; i <= 4; i++){
+      const frac = i / 4;
+      ctx.fillText(Math.round(frac * totalSec) + 's', x0 + frac * plotW, y0 + plotH + 5);
+    }
+
+    const drawLine = (hist, color, lineWidth) => {
+      if(!hist || hist.length < 2) return;
+      ctx.beginPath();
+      hist.forEach((pt, i) => {
+        const x = xOf(pt.t), y = ledToY(pt.led);
+        if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.strokeStyle = color; ctx.lineWidth = lineWidth; ctx.lineJoin = 'round'; ctx.stroke();
+    };
+    drawLine(series.group, GROUP_COLOR, 2);
+    drawLine(series.host,  HOST_COLOR,  2.5);
+    drawLine(series.me,    ME_COLOR,    2);
+  }
+
+  function setVal(id, v){
+    const e = $(id); if(!e) return;
+    e.textContent = (v == null || v === '') ? '–' : v;
+  }
+
+  function renderPulse(){
+    const list = [...racers.values()];
+    const hostR = list.find(r => r.host);
+    const meR = racers.get(myName);
+    const groupHist = computeGroupHistory();
+
+    drawTrio($('spChart'), {
+      host: hostR ? hostR.history : [],
+      group: groupHist,
+      me: meR ? meR.history : [],
+    }, { durationMs });
+
+    const hostName = hostR ? hostR.name : (session ? (session.created_by || '—') : '—');
+    setVal('spHostName', hostName);
+    setVal('spHostLive', hostR ? hostR.led : null);
+    setVal('spHostPeak', hostR ? hostR.peak : null);
+    setVal('spHostAvg',  hostR ? (hostR.avg || 0).toFixed(1) : null);
+    if(hostR){
+      $('spHostLive').style.color = vitalityColor(hostR.led);
+      $('spHostPeak').style.color = vitalityColor(hostR.peak);
+      $('spHostAvg').style.color  = vitalityColor(hostR.avg || 0);
+    }
+
+    if(list.length){
+      const gLive = list.reduce((s, r) => s + r.led, 0) / list.length;
+      const gAvg  = list.reduce((s, r) => s + (r.avg || 0), 0) / list.length;
+      const gPeak = Math.max(0, ...list.map(r => r.peak || 0));
+      setVal('spGroupLive', gLive.toFixed(1));
+      setVal('spGroupPeak', gPeak);
+      setVal('spGroupAvg', gAvg.toFixed(1));
+      $('spGroupAvg').style.color = vitalityColor(gAvg);
+    } else {
+      setVal('spGroupLive', null); setVal('spGroupPeak', null); setVal('spGroupAvg', null);
+    }
+
+    setVal('spMeLive', meR ? meR.led : null);
+    setVal('spMePeak', meR ? meR.peak : null);
+    setVal('spMeAvg',  meR ? (meR.avg || 0).toFixed(1) : null);
+    if(meR){
+      $('spMeLive').style.color = vitalityColor(meR.led);
+      $('spMePeak').style.color = vitalityColor(meR.peak);
+      $('spMeAvg').style.color  = vitalityColor(meR.avg || 0);
+    }
   }
 
   function renderGroup(){
@@ -496,7 +590,7 @@ export function mount(el, sessionId){
 
     const groupAvg = shown.reduce((s, r) => s + r.stats.avg, 0) / shown.length;
 
-    // ---- Group Energy: per-time-index average across racers (the collective curve) ----
+    // ---- Build histories for the Session Pulse trio (Host / Group / You) ----
     const maxLen = shown.reduce((m, r) => Math.max(m, r.leds.length), 0);
     const groupLeds = [];
     for(let i = 0; i < maxLen; i++){
@@ -506,21 +600,51 @@ export function mount(el, sessionId){
       }
       if(n > 0) groupLeds.push(sum / n);
     }
-    const groupStats = (shown.length >= 2 && groupLeds.length) ? computeStats(groupLeds) : null;
-    const groupEnergyCard = groupStats ? `
-      <h2 class="res-h">Group Energy <span class="res-h-sub">collective curve across all racers</span></h2>
-      <div class="res-card group-energy">
-        <div class="res-main">
-          <canvas class="res-curve" id="rcGroup"></canvas>
-          ${zoneBar(groupStats.zone)}
+    const ledsToHist = leds => {
+      const n = leds.length;
+      return leds.map((v, k) => ({ t: n > 1 ? (k / (n - 1)) * durationMs : 0, led: v }));
+    };
+    const hostResult = shown.find(r => r.host);
+    const meResult = shown.find(r => r.name === myName);
+    const pulseHist = {
+      host: hostResult ? ledsToHist(hostResult.leds) : [],
+      group: ledsToHist(groupLeds),
+      me: meResult ? ledsToHist(meResult.leds) : [],
+    };
+    const pulseStats = {
+      host: hostResult ? hostResult.stats : null,
+      group: groupLeds.length ? computeStats(groupLeds) : null,
+      me: meResult ? meResult.stats : null,
+    };
+    const fmtAvg = s => s ? s.avg.toFixed(1) : '–';
+    const fmtPeak = s => s ? s.peak : '–';
+
+    const pulsePanel = `
+      <div class="session-pulse">
+        <div class="sp-head">
+          <span class="sp-title">Session pulse</span>
+          <div class="sp-legend">
+            <span class="leg-item leg-host"><i class="leg-dot"></i>Host</span>
+            <span class="leg-item leg-group"><i class="leg-dot"></i>Group</span>
+            <span class="leg-item leg-me"><i class="leg-dot"></i>You</span>
+          </div>
         </div>
-        <div class="res-stats">
-          <div class="rs"><div class="rs-val" style="color:${vitalityColor(Math.round(groupStats.avg))}">${groupStats.avg.toFixed(1)}</div><div class="rs-lbl">Avg</div></div>
-          <div class="rs"><div class="rs-val" style="color:${vitalityColor(groupStats.peak)}">${groupStats.peak}</div><div class="rs-lbl">Peak</div></div>
-          <div class="rs"><div class="rs-val">${groupStats.steadiness}</div><div class="rs-lbl">Steady</div></div>
-          <div class="rs"><div class="rs-val rs-trend">${esc(trendLabel(groupStats.trendTotal))}</div><div class="rs-lbl">Trend</div></div>
+        <canvas class="sp-chart" id="spChartRes"></canvas>
+        <div class="sp-metrics">
+          <div class="sp-col"><div class="sp-col-head leg-host"><i class="leg-dot"></i><span class="sp-col-name">${esc(hostResult ? hostResult.name : (session.created_by || 'Host'))}</span></div>
+            <div class="sp-stats"><div class="ss"><div class="ss-val">${fmtAvg(pulseStats.host)}</div><div class="ss-lbl">Avg</div></div>
+            <div class="ss"><div class="ss-val">${fmtPeak(pulseStats.host)}</div><div class="ss-lbl">Peak</div></div>
+            <div class="ss"><div class="ss-val">${pulseStats.host ? pulseStats.host.steadiness : '–'}</div><div class="ss-lbl">Steady</div></div></div></div>
+          <div class="sp-col"><div class="sp-col-head leg-group"><i class="leg-dot"></i><span class="sp-col-name">Group</span></div>
+            <div class="sp-stats"><div class="ss"><div class="ss-val">${fmtAvg(pulseStats.group)}</div><div class="ss-lbl">Avg</div></div>
+            <div class="ss"><div class="ss-val">${fmtPeak(pulseStats.group)}</div><div class="ss-lbl">Peak</div></div>
+            <div class="ss"><div class="ss-val">${pulseStats.group ? pulseStats.group.steadiness : '–'}</div><div class="ss-lbl">Steady</div></div></div></div>
+          <div class="sp-col"><div class="sp-col-head leg-me"><i class="leg-dot"></i><span class="sp-col-name">${meResult ? 'You' : 'You (not joined)'}</span></div>
+            <div class="sp-stats"><div class="ss"><div class="ss-val">${fmtAvg(pulseStats.me)}</div><div class="ss-lbl">Avg</div></div>
+            <div class="ss"><div class="ss-val">${fmtPeak(pulseStats.me)}</div><div class="ss-lbl">Peak</div></div>
+            <div class="ss"><div class="ss-val">${pulseStats.me ? pulseStats.me.steadiness : '–'}</div><div class="ss-lbl">Steady</div></div></div></div>
         </div>
-      </div>` : '';
+      </div>`;
 
     const winners = CATEGORIES.map(cat => {
       let best = null;
@@ -557,12 +681,12 @@ export function mount(el, sessionId){
       </div>`).join('');
 
     body.innerHTML = `
+      ${pulsePanel}
+
       <div class="res-group">
         <div class="res-group-val" style="color:${vitalityColor(Math.round(groupAvg))}">${groupAvg.toFixed(1)}</div>
         <div class="res-group-lbl">Group average · ${shown.length} racer${shown.length > 1 ? 's' : ''} · finished${verifiedOnly ? ' · verified only' : ''}</div>
       </div>
-
-      ${groupEnergyCard}
 
       <h2 class="res-h">Category winners</h2>
       <div class="cat-grid">${catCards}</div>
@@ -590,14 +714,7 @@ export function mount(el, sessionId){
       drawCurve(cv, hist, vitalityColor(Math.round(r.stats.avg)));
     });
 
-    if(groupStats){
-      const gcv = body.querySelector('#rcGroup');
-      if(gcv){
-        const n = groupLeds.length;
-        const ghist = groupLeds.map((v, k) => ({ t: n > 1 ? (k / (n - 1)) * durationMs : 0, led: v }));
-        drawCurve(gcv, ghist, vitalityColor(Math.round(groupStats.avg)));
-      }
-    }
+    drawTrio(body.querySelector('#spChartRes'), pulseHist, { durationMs });
   }
 
   window.addEventListener('resize', render);
