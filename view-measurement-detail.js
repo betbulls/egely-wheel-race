@@ -1,7 +1,7 @@
 import { supabase } from './db.js';
 import * as auth from './auth.js';
-import { vitalityLevel, vitalityColor as vColor, trendLabel } from './analytics.js';
-import { drawVitalityChart } from './chart.js';
+import { vitalityLevel, vitalityColor as vColor, trendLabel, computeStats } from './analytics.js';
+import { drawVitalityChart, drawTrio } from './chart.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
@@ -18,10 +18,12 @@ export function mount(el, id){
       <h1 class="page-title" id="dTitle">Loading…</h1>
       <div id="dClient"></div>
     </div>
+    <div id="dPulse"></div>
     <div id="dBody"><div class="empty">Loading…</div></div>
   `;
 
   let onResize = null;
+  let onResizeTrio = null;
 
   (async () => {
     const { data: r, error } = await supabase.from('results').select('*').eq('id', Number(id)).single();
@@ -55,6 +57,85 @@ export function mount(el, id){
       title = (sess && sess.name) || 'Session';
     }
     el.querySelector('#dTitle').textContent = title;
+
+    // ---- Session Pulse: Host + Group + You for a finished session row ------
+    if(!solo){
+      const { data: sessRows } = await supabase.from('results')
+        .select('id, curve, racer_name, is_host, duration_seconds')
+        .eq('session_id', r.session_id);
+      if(sessRows && sessRows.length){
+        const durationMs = (r.duration_seconds || 60) * 1000;
+        const maxLen = sessRows.reduce((m, rw) => Math.max(m, Array.isArray(rw.curve) ? rw.curve.length : 0), 0);
+        const groupLeds = [];
+        for(let i = 0; i < maxLen; i++){
+          let sum = 0, n = 0;
+          for(const rw of sessRows){
+            if(Array.isArray(rw.curve) && i < rw.curve.length){ sum += rw.curve[i]; n++; }
+          }
+          if(n) groupLeds.push(sum / n);
+        }
+        const hostRow = sessRows.find(rw => rw.is_host);
+        const ledsToHist = leds => {
+          const n = leds.length;
+          return leds.map((v, k) => ({ t: n > 1 ? (k / (n - 1)) * durationMs : 0, led: v }));
+        };
+        const pulseHist = {
+          host: hostRow && Array.isArray(hostRow.curve) ? ledsToHist(hostRow.curve) : [],
+          group: groupLeds.length ? ledsToHist(groupLeds) : [],
+          me: Array.isArray(r.curve) ? ledsToHist(r.curve) : [],
+        };
+        const safeStats = leds => (Array.isArray(leds) && leds.length) ? computeStats(leds) : null;
+        const hostStats = hostRow ? safeStats(hostRow.curve) : null;
+        const groupStats = safeStats(groupLeds);
+        const meStats = safeStats(r.curve);
+        const fmtAvg = s => s ? s.avg.toFixed(1) : '–';
+        const fmtPeak = s => s ? s.peak : '–';
+        const fmtSteady = s => s ? s.steadiness : '–';
+        const hostName = (hostRow && hostRow.racer_name) || 'Host';
+
+        el.querySelector('#dPulse').innerHTML = `
+          <div class="session-pulse">
+            <div class="sp-head">
+              <span class="sp-title">Session pulse</span>
+              <div class="sp-legend">
+                <span class="leg-item leg-host"><i class="leg-dot"></i>Host</span>
+                <span class="leg-item leg-group"><i class="leg-dot"></i>Group</span>
+                <span class="leg-item leg-me"><i class="leg-dot"></i>You</span>
+              </div>
+            </div>
+            <canvas class="sp-chart" id="spChartMd"></canvas>
+            <div class="sp-metrics">
+              <div class="sp-col">
+                <div class="sp-col-head leg-host"><i class="leg-dot"></i><span class="sp-col-name">${esc(hostName)}</span></div>
+                <div class="sp-stats">
+                  <div class="ss"><div class="ss-val">${fmtAvg(hostStats)}</div><div class="ss-lbl">Avg</div></div>
+                  <div class="ss"><div class="ss-val">${fmtPeak(hostStats)}</div><div class="ss-lbl">Peak</div></div>
+                  <div class="ss"><div class="ss-val">${fmtSteady(hostStats)}</div><div class="ss-lbl">Steady</div></div>
+                </div>
+              </div>
+              <div class="sp-col">
+                <div class="sp-col-head leg-group"><i class="leg-dot"></i><span class="sp-col-name">Group · ${sessRows.length} racer${sessRows.length > 1 ? 's' : ''}</span></div>
+                <div class="sp-stats">
+                  <div class="ss"><div class="ss-val">${fmtAvg(groupStats)}</div><div class="ss-lbl">Avg</div></div>
+                  <div class="ss"><div class="ss-val">${fmtPeak(groupStats)}</div><div class="ss-lbl">Peak</div></div>
+                  <div class="ss"><div class="ss-val">${fmtSteady(groupStats)}</div><div class="ss-lbl">Steady</div></div>
+                </div>
+              </div>
+              <div class="sp-col">
+                <div class="sp-col-head leg-me"><i class="leg-dot"></i><span class="sp-col-name">You</span></div>
+                <div class="sp-stats">
+                  <div class="ss"><div class="ss-val">${fmtAvg(meStats)}</div><div class="ss-lbl">Avg</div></div>
+                  <div class="ss"><div class="ss-val">${fmtPeak(meStats)}</div><div class="ss-lbl">Peak</div></div>
+                  <div class="ss"><div class="ss-val">${fmtSteady(meStats)}</div><div class="ss-lbl">Steady</div></div>
+                </div>
+              </div>
+            </div>
+          </div>`;
+        onResizeTrio = () => drawTrio(el.querySelector('#spChartMd'), pulseHist, { durationMs });
+        onResizeTrio();
+        window.addEventListener('resize', onResizeTrio);
+      }
+    }
 
     const lvl = vitalityLevel(r.avg || 0);
     const when = new Date(r.created_at).toLocaleString('en-US', {
@@ -103,5 +184,8 @@ export function mount(el, id){
     }
   })();
 
-  return () => { if(onResize) window.removeEventListener('resize', onResize); };
+  return () => {
+    if(onResize) window.removeEventListener('resize', onResize);
+    if(onResizeTrio) window.removeEventListener('resize', onResizeTrio);
+  };
 }

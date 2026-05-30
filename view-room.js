@@ -2,6 +2,7 @@ import { supabase } from './db.js';
 import * as ble from './ble.js';
 import * as auth from './auth.js';
 import { computeStats, CATEGORIES, METRIC_HELP, icon, trendLabel, vitalityColor, downsample } from './analytics.js';
+import { drawTrio } from './chart.js';
 
 const BROADCAST_MS = 500;   // how often each client samples + broadcasts its LED
 const RENDER_MS = 250;      // how often the board repaints
@@ -389,8 +390,6 @@ export function mount(el, sessionId){
   }
 
   // ---- Session Pulse: Host + Group + You as 3 lines on one chart -----------
-  const HOST_COLOR = '#f5a623', GROUP_COLOR = '#9db4ff', ME_COLOR = '#ffffff';
-
   function computeGroupHistory(){
     if(!racers.size) return [];
     const buckets = new Map();
@@ -404,56 +403,6 @@ export function mount(el, sessionId){
     }
     const keys = [...buckets.keys()].sort((a, b) => a - b);
     return keys.map(k => ({ t: k * BROADCAST_MS, led: buckets.get(k).sum / buckets.get(k).count }));
-  }
-
-  function drawTrio(canvas, series, opts){
-    if(!canvas) return;
-    const w = canvas.clientWidth, h = canvas.clientHeight;
-    if(!w || !h) return;
-    const dpr = window.devicePixelRatio || 1;
-    if(canvas.width !== Math.round(w * dpr)){ canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
-    const ctx = canvas.getContext('2d');
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, w, h);
-
-    const padL = 30, padR = 8, padT = 8, padB = 22;
-    const x0 = padL, y0 = padT, plotW = w - padL - padR, plotH = h - padT - padB;
-    const span = opts.durationMs || 60000;
-    const ledToY = led => y0 + plotH - (led / 24) * plotH;
-    const xOf = t => x0 + (Math.min(t, span) / span) * plotW;
-
-    // Vitality zone bands
-    const band = (lo, hi, color) => { const yt = ledToY(hi); ctx.fillStyle = color; ctx.fillRect(x0, yt, plotW, ledToY(lo) - yt); };
-    band(0, 6, 'rgba(192,20,60,0.12)');
-    band(6, 13, 'rgba(233,210,74,0.12)');
-    band(13, 24, 'rgba(60,201,138,0.12)');
-
-    ctx.font = '10px Inter, sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-    [0, 6, 13, 24].forEach(v => {
-      const y = ledToY(v);
-      ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x0 + plotW, y); ctx.stroke();
-      ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fillText(String(v), x0 - 6, y);
-    });
-
-    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillStyle = 'rgba(255,255,255,0.45)';
-    const totalSec = Math.round(span / 1000);
-    for(let i = 0; i <= 4; i++){
-      const frac = i / 4;
-      ctx.fillText(Math.round(frac * totalSec) + 's', x0 + frac * plotW, y0 + plotH + 5);
-    }
-
-    const drawLine = (hist, color, lineWidth) => {
-      if(!hist || hist.length < 2) return;
-      ctx.beginPath();
-      hist.forEach((pt, i) => {
-        const x = xOf(pt.t), y = ledToY(pt.led);
-        if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      });
-      ctx.strokeStyle = color; ctx.lineWidth = lineWidth; ctx.lineJoin = 'round'; ctx.stroke();
-    };
-    drawLine(series.group, GROUP_COLOR, 2);
-    drawLine(series.host,  HOST_COLOR,  2.5);
-    drawLine(series.me,    ME_COLOR,    2);
   }
 
   function setVal(id, v){
