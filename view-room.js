@@ -537,9 +537,9 @@ export function mount(el, sessionId){
       return;
     }
 
-    const groupAvg = shown.reduce((s, r) => s + r.stats.avg, 0) / shown.length;
-
     // ---- Build histories for the Session Pulse trio (Host / Group / You) ----
+    // The per-tick group curve is also our source of truth for the Group AVG —
+    // so the big "GROUP AVERAGE" number matches the blue line on the chart.
     const maxLen = shown.reduce((m, r) => Math.max(m, r.leds.length), 0);
     const groupLeds = [];
     for(let i = 0; i < maxLen; i++){
@@ -549,6 +549,9 @@ export function mount(el, sessionId){
       }
       if(n > 0) groupLeds.push(sum / n);
     }
+    const groupAvg = groupLeds.length
+      ? groupLeds.reduce((s, v) => s + v, 0) / groupLeds.length
+      : 0;
     const ledsToHist = leds => {
       const n = leds.length;
       return leds.map((v, k) => ({ t: n > 1 ? (k / (n - 1)) * durationMs : 0, led: v }));

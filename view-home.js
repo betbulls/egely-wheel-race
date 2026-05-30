@@ -180,6 +180,15 @@ export function mount(el){
       ${renderNext(achievements)}
       ${renderCollection(achievements, newIds)}
     `;
+
+    // Mobile-friendly tap: the "i" button on each badge toggles the description.
+    el.querySelector('#homeBody').addEventListener('click', (e) => {
+      const btn = e.target.closest('.db-info');
+      if(!btn) return;
+      e.preventDefault();
+      const card = btn.closest('.dash-badge, .dash-recent-card');
+      if(card) card.classList.toggle('expanded');
+    });
   })();
 
   return () => {};
@@ -296,8 +305,10 @@ function recentCard(a, isNew){
   return `
     <div class="dash-recent-card tier-${a.tier}${isNew ? ' is-new' : ''}" title="${esc(a.description)}">
       ${isNew ? '<span class="dash-new-pill">NEW</span>' : ''}
+      <button type="button" class="db-info" aria-label="Info">i</button>
       <div class="drc-icon">${a.icon}</div>
       <div class="drc-title">${esc(a.title)}</div>
+      <div class="db-desc">${esc(a.description)}</div>
     </div>`;
 }
 
@@ -366,8 +377,10 @@ function badgeCard(a, isNew){
   return `
     <div class="${cls.join(' ')}" title="${esc(a.description)}">
       ${isNew ? '<span class="dash-new-pill">NEW</span>' : ''}
+      <button type="button" class="db-info" aria-label="Info">i</button>
       <div class="db-icon">${a.icon}</div>
       <div class="db-title">${esc(a.title)}</div>
       ${status}
+      <div class="db-desc">${esc(a.description)}</div>
     </div>`;
 }

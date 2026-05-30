@@ -335,6 +335,10 @@
     font-size:10px;letter-spacing:0.04em;color:var(--faint);white-space:nowrap}
   .lj-marker.reached .lj-label{color:rgba(255,255,255,0.7)}
   .lj-marker.current .lj-label{color:#ffd479;font-weight:600}
+  /* Anchor the first and last labels to the bar edges so they don't overlap
+     the left/right info columns. */
+  .lj-marker:first-child .lj-label{transform:translateX(0)}
+  .lj-marker:last-child .lj-label{transform:translateX(-100%)}
 
   /* Home Dashboard */
   .dash-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:8px}
@@ -388,6 +392,22 @@
   .db-status.unlocked{color:#3ddc84}
   .dash-badge{position:relative}
   .dash-badge.unlocked:hover{transform:translateY(-2px)}
+
+  /* Info "i" button — taps on mobile (and clicks on desktop) reveal a description */
+  .db-info{position:absolute;top:8px;left:8px;
+    width:20px;height:20px;border-radius:50%;
+    background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);
+    color:rgba(255,255,255,0.7);
+    font-family:'Inter',sans-serif;font-size:11px;font-weight:700;font-style:italic;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+    padding:0;line-height:1;
+    transition:background .15s ease,color .15s ease,border-color .15s ease;
+    z-index:2}
+  .db-info:hover{background:rgba(255,255,255,0.16);color:#fff;border-color:rgba(255,255,255,0.3)}
+  .db-desc{display:none;font-size:11px;color:var(--muted);line-height:1.45;
+    margin-top:8px;padding-top:8px;border-top:1px solid var(--panel-border);text-align:left}
+  .dash-badge.expanded .db-desc,
+  .dash-recent-card.expanded .db-desc{display:block}
 
   /* Recent achievements strip */
   .dash-recent{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
