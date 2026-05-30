@@ -1,5 +1,6 @@
 import { supabase } from './db.js';
 import * as auth from './auth.js';
+import * as wakeLock from './wake-lock.js';
 import { vitalityLevel, vitalityColor as vColor } from './analytics.js';
 import { drawVitalityChart } from './chart.js';
 
@@ -83,7 +84,9 @@ function mountWall(el){
               <div class="client-name">${esc(c.displayName)}</div>
               <div class="client-sub">${last ? esc(whenStr(last.created_at)) : 'No measurements yet'}</div>
             </div>
-            <span class="live-pill-mini" hidden><span class="dot"></span><span class="live-pill-text">LIVE</span></span>
+            <div class="client-badges">
+              <span class="live-pill-mini" hidden><span class="dot"></span><span class="live-pill-text">LIVE</span></span>
+            </div>
           </div>
           ${last ? `
             <canvas class="client-spark" data-curve='${esc(JSON.stringify(last.curve || []))}'></canvas>
@@ -131,11 +134,11 @@ function mountWall(el){
       const ok = liveVerified.get(cid) !== false;
       let uv = card.querySelector('.client-unverified');
       if(!ok && !uv){
-        const head = card.querySelector('.client-head');
+        const badges = card.querySelector('.client-badges');
         const span = document.createElement('span');
         span.className = 'client-unverified v-badge unverified';
         span.textContent = 'unverified';
-        head.appendChild(span);
+        if(badges) badges.appendChild(span);
       } else if(ok && uv){ uv.remove(); }
     };
 
@@ -217,6 +220,7 @@ function mountDetail(el, clientId){
     <div id="clBody"><div class="empty">Loading…</div></div>`;
 
   let liveChannel = null;
+  let updateChannel = null;
   let liveCurve = [];
   let liveActive = false;
   let liveName = 'Client';
@@ -242,15 +246,10 @@ function mountDetail(el, clientId){
     }
 
     const body = el.querySelector('#clBody');
-    if(!rows.length){
-      body.innerHTML = `<div class="panel"><p class="placeholder">${esc(profile.display_name || 'This client')} hasn't recorded any measurements yet.</p></div>`;
-      return;
-    }
 
-    body.innerHTML = rows.map(r => {
+    const rowCardHTML = (r, title) => {
       const solo = r.session_id == null;
       const lvl = vitalityLevel(r.avg || 0);
-      const title = solo ? (r.label || 'Solo measurement') : (sessMap.get(r.session_id) || 'Session');
       return `
         <a class="me-card" href="#/m/${r.id}">
           <div class="me-main">
@@ -267,7 +266,30 @@ function mountDetail(el, clientId){
             <div class="rs"><div class="rs-val">${r.steadiness}</div><div class="rs-lbl">Steady</div></div>
           </div>
         </a>`;
-    }).join('');
+    };
+
+    const titleFor = (r) => r.session_id == null
+      ? (r.label || 'Solo measurement')
+      : (sessMap.get(r.session_id) || 'Session');
+
+    body.innerHTML = rows.length
+      ? rows.map(r => rowCardHTML(r, titleFor(r))).join('')
+      : `<div class="panel"><p class="placeholder">${esc((profile && profile.display_name) || 'This client')} hasn't recorded any measurements yet.</p></div>`;
+
+    // Auto-update: when the client saves a new measurement, prepend it instantly.
+    updateChannel = supabase.channel('client-updates-' + clientId)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'results', filter: `user_id=eq.${clientId}` }, async ({ new: r }) => {
+        if(!r) return;
+        if(r.session_id != null && !sessMap.has(r.session_id)){
+          const { data: s } = await supabase.from('sessions').select('name').eq('id', r.session_id).maybeSingle();
+          sessMap.set(r.session_id, (s && s.name) || 'Session');
+        }
+        // Drop the "no measurements yet" placeholder if it's still there.
+        const empty = body.querySelector('.placeholder');
+        if(empty) body.innerHTML = '';
+        body.insertAdjacentHTML('afterbegin', rowCardHTML(r, titleFor(r)));
+      })
+      .subscribe();
 
     // ---- Live banner: shown while the client is actively measuring ---------
     const banner = el.querySelector('#clLiveBanner');
@@ -275,6 +297,7 @@ function mountDetail(el, clientId){
     function showLive(){
       if(liveActive) return;
       liveActive = true; liveCurve = []; liveVerified = true;
+      wakeLock.acquire();
       banner.hidden = false;
       banner.innerHTML = `
         <div class="live-head">
@@ -292,6 +315,7 @@ function mountDetail(el, clientId){
     function hideLive(){
       if(!liveActive) return;
       liveActive = false; liveCurve = []; liveVerified = true;
+      wakeLock.release();
       banner.hidden = true; banner.innerHTML = '';
     }
     function drawLive(){
@@ -343,5 +367,9 @@ function mountDetail(el, clientId){
     });
   })();
 
-  return () => { if(liveChannel) supabase.removeChannel(liveChannel); };
+  return () => {
+    if(liveChannel) supabase.removeChannel(liveChannel);
+    if(updateChannel) supabase.removeChannel(updateChannel);
+    wakeLock.release();
+  };
 }

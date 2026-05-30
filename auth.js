@@ -32,7 +32,12 @@ async function refreshSubscriber(){
 async function refreshProfile(){
   if(!user){ profile = null; return; }
   const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
-  profile = data || null;
+  if(data){ profile = data; return; }
+  // First-time profile — seed display_name from the email's local part so a
+  // practitioner can identify the user before they finish setting up their profile.
+  const fallback = (user.email || '').split('@')[0] || 'User';
+  const { data: created } = await supabase.from('profiles').insert({ id: user.id, display_name: fallback }).select().maybeSingle();
+  profile = created || null;
 }
 
 function applyUser(u){
@@ -98,6 +103,17 @@ export async function getPractitionerByHandle(handle){
 // The client initiates the connection (= consent). Reactivates a revoked link.
 export async function connectToPractitioner(practitionerId){
   if(!user) return { error: { message: 'Not logged in' } };
+  // Make sure the practitioner can identify this client by something better than
+  // "Client". Seed a display_name from the email's local part if there's no profile yet.
+  try {
+    const { data: existing } = await supabase.from('profiles')
+      .select('display_name').eq('id', user.id).maybeSingle();
+    if(!existing || !existing.display_name){
+      const fallback = (user.email || '').split('@')[0] || 'Client';
+      await supabase.from('profiles').upsert({ id: user.id, display_name: fallback });
+      await refreshProfile(); emit();
+    }
+  } catch {}
   const { error } = await supabase.from('practitioner_links')
     .upsert({ practitioner_id: practitionerId, client_id: user.id, status: 'active' },
             { onConflict: 'practitioner_id,client_id' });

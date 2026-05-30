@@ -496,6 +496,32 @@ export function mount(el, sessionId){
 
     const groupAvg = shown.reduce((s, r) => s + r.stats.avg, 0) / shown.length;
 
+    // ---- Group Energy: per-time-index average across racers (the collective curve) ----
+    const maxLen = shown.reduce((m, r) => Math.max(m, r.leds.length), 0);
+    const groupLeds = [];
+    for(let i = 0; i < maxLen; i++){
+      let sum = 0, n = 0;
+      for(const r of shown){
+        if(i < r.leds.length){ sum += r.leds[i]; n++; }
+      }
+      if(n > 0) groupLeds.push(sum / n);
+    }
+    const groupStats = (shown.length >= 2 && groupLeds.length) ? computeStats(groupLeds) : null;
+    const groupEnergyCard = groupStats ? `
+      <h2 class="res-h">Group Energy <span class="res-h-sub">collective curve across all racers</span></h2>
+      <div class="res-card group-energy">
+        <div class="res-main">
+          <canvas class="res-curve" id="rcGroup"></canvas>
+          ${zoneBar(groupStats.zone)}
+        </div>
+        <div class="res-stats">
+          <div class="rs"><div class="rs-val" style="color:${vitalityColor(Math.round(groupStats.avg))}">${groupStats.avg.toFixed(1)}</div><div class="rs-lbl">Avg</div></div>
+          <div class="rs"><div class="rs-val" style="color:${vitalityColor(groupStats.peak)}">${groupStats.peak}</div><div class="rs-lbl">Peak</div></div>
+          <div class="rs"><div class="rs-val">${groupStats.steadiness}</div><div class="rs-lbl">Steady</div></div>
+          <div class="rs"><div class="rs-val rs-trend">${esc(trendLabel(groupStats.trendTotal))}</div><div class="rs-lbl">Trend</div></div>
+        </div>
+      </div>` : '';
+
     const winners = CATEGORIES.map(cat => {
       let best = null;
       for(const r of shown){ const v = cat.value(r.stats); if(best === null || v > best.v) best = { name: r.name, v }; }
@@ -536,6 +562,8 @@ export function mount(el, sessionId){
         <div class="res-group-lbl">Group average · ${shown.length} racer${shown.length > 1 ? 's' : ''} · finished${verifiedOnly ? ' · verified only' : ''}</div>
       </div>
 
+      ${groupEnergyCard}
+
       <h2 class="res-h">Category winners</h2>
       <div class="cat-grid">${catCards}</div>
 
@@ -561,6 +589,15 @@ export function mount(el, sessionId){
       const hist = r.leds.map((v, k) => ({ t: n > 1 ? (k / (n - 1)) * durationMs : 0, led: v }));
       drawCurve(cv, hist, vitalityColor(Math.round(r.stats.avg)));
     });
+
+    if(groupStats){
+      const gcv = body.querySelector('#rcGroup');
+      if(gcv){
+        const n = groupLeds.length;
+        const ghist = groupLeds.map((v, k) => ({ t: n > 1 ? (k / (n - 1)) * durationMs : 0, led: v }));
+        drawCurve(gcv, ghist, vitalityColor(Math.round(groupStats.avg)));
+      }
+    }
   }
 
   window.addEventListener('resize', render);
