@@ -9,14 +9,46 @@ const T = { bronze: 'bronze', silver: 'silver', gold: 'gold', special: 'special'
 
 export const CATEGORIES = [
   { id: 'getting-started', title: 'Getting Started' },
+  { id: 'discovery',       title: 'Discovery' },
   { id: 'consistency',     title: 'Consistency' },
   { id: 'vitality',        title: 'Vitality Milestones' },
   { id: 'stability',       title: 'Stability & Control' },
   { id: 'endurance',       title: 'Endurance' },
+  { id: 'personal-growth', title: 'Personal Growth' },
   { id: 'social',          title: 'Social & Community' },
   { id: 'practitioner',    title: 'Practitioner Path', practitionerOnly: true },
   { id: 'special',         title: 'Rare & Special' },
 ];
+
+// XP value per tier — used by the Level system.
+export const TIER_XP = { bronze: 10, silver: 25, gold: 50, special: 100 };
+export const LEVELS = [
+  { idx: 1, title: 'Explorer',   threshold: 0    },
+  { idx: 2, title: 'Adept',      threshold: 100  },
+  { idx: 3, title: 'Seeker',     threshold: 250  },
+  { idx: 4, title: 'Pathfinder', threshold: 500  },
+  { idx: 5, title: 'Guide',      threshold: 1000 },
+  { idx: 6, title: 'Master',     threshold: 1500 },
+];
+
+export function xpForAchievement(a){ return TIER_XP[a.tier] || 0; }
+
+export function computeLevelState(achievements){
+  const totalXP = achievements.filter(a => a.unlocked).reduce((s, a) => s + xpForAchievement(a), 0);
+  let level = LEVELS[0], nextLevel = null;
+  for(let i = 0; i < LEVELS.length; i++){
+    if(totalXP >= LEVELS[i].threshold){
+      level = LEVELS[i];
+      nextLevel = LEVELS[i + 1] || null;
+    }
+  }
+  const isMax = !nextLevel;
+  const xpInLevel = totalXP - level.threshold;
+  const xpForThis = nextLevel ? (nextLevel.threshold - level.threshold) : 0;
+  const xpToNext = nextLevel ? (nextLevel.threshold - totalXP) : 0;
+  const pct = nextLevel ? Math.min(100, Math.round((xpInLevel / xpForThis) * 100)) : 100;
+  return { totalXP, level, nextLevel, isMax, xpInLevel, xpForThis, xpToNext, pct };
+}
 
 // ---- helpers ---------------------------------------------------------------
 const longestStreak = (arr, pred) => {
@@ -198,6 +230,135 @@ export const ACHIEVEMENTS = [
       const flawless = total > 0 && verified === total;
       return { current: flawless ? total : 0, target: 20 };
     }},
+
+  // Discovery — when (time of day, weekly rhythm)
+  { id: 'morning-energy', category: 'discovery', tier: T.bronze, icon: '☀️',
+    title: 'Morning Energy', description: 'Measure between 6:00 and 8:00 in the morning.',
+    progress: d => {
+      const pred = r => { const h = new Date(r.created_at).getHours(); return h >= 6 && h < 8; };
+      const hit = d.results.some(pred);
+      return { current: hit ? 1 : 0, target: 1, unlockedAt: hit ? firstAt(d.resultsAsc, pred) : null };
+    }},
+  { id: 'night-owl', category: 'discovery', tier: T.bronze, icon: '🌙',
+    title: 'Night Owl', description: 'Measure after 10 PM.',
+    progress: d => {
+      const pred = r => new Date(r.created_at).getHours() >= 22;
+      const hit = d.results.some(pred);
+      return { current: hit ? 1 : 0, target: 1, unlockedAt: hit ? firstAt(d.resultsAsc, pred) : null };
+    }},
+  { id: 'around-the-clock', category: 'discovery', tier: T.silver, icon: '🕰️',
+    title: 'Around the Clock', description: 'Measure morning, midday, and evening — all on the same day.',
+    progress: d => {
+      const byDate = new Map();
+      for(const r of d.results){
+        const dt = new Date(r.created_at);
+        const key = dt.toLocaleDateString('en-CA');
+        const h = dt.getHours();
+        const seg = h >= 6 && h < 12 ? 'm' : h >= 12 && h < 18 ? 'n' : h >= 18 ? 'e' : null;
+        if(!seg) continue;
+        if(!byDate.has(key)) byDate.set(key, new Set());
+        byDate.get(key).add(seg);
+      }
+      const hit = [...byDate.values()].some(s => s.size === 3);
+      return { current: hit ? 1 : 0, target: 1 };
+    }},
+  { id: 'weekly-explorer', category: 'discovery', tier: T.gold, icon: '📅',
+    title: 'Weekly Explorer', description: 'Measure on every weekday — Monday through Sunday.',
+    progress: d => {
+      const days = new Set();
+      for(const r of d.results){ days.add(new Date(r.created_at).getDay()); }
+      return { current: days.size, target: 7 };
+    }},
+
+  // Personal Growth — improvement-driven badges
+  { id: 'personal-best', category: 'personal-growth', tier: T.bronze, icon: '📈',
+    title: 'New Personal Best', description: 'Beat your previous best average by 10% or more.',
+    progress: d => {
+      let best = 0, hit = null;
+      for(let i = 0; i < d.resultsAsc.length; i++){
+        const r = d.resultsAsc[i];
+        if(i >= 5 && best > 0 && (r.avg || 0) >= best * 1.1){ hit = r.created_at; break; }
+        if((r.avg || 0) > best) best = r.avg || 0;
+      }
+      return { current: hit ? 1 : 0, target: 1, unlockedAt: hit };
+    }},
+  { id: 'breakthrough', category: 'personal-growth', tier: T.silver, icon: '🚀',
+    title: 'Breakthrough', description: 'A single measurement 20% above your previous 10-average.',
+    progress: d => {
+      let hit = null;
+      for(let i = 10; i < d.resultsAsc.length; i++){
+        const prev10 = d.resultsAsc.slice(i - 10, i);
+        const mean = prev10.reduce((s, x) => s + (x.avg || 0), 0) / 10;
+        if(mean > 0 && (d.resultsAsc[i].avg || 0) >= 1.2 * mean){ hit = d.resultsAsc[i].created_at; break; }
+      }
+      return { current: hit ? 1 : 0, target: 1, unlockedAt: hit };
+    }},
+  { id: 'consistency-wins', category: 'personal-growth', tier: T.silver, icon: '🎯',
+    title: 'Consistency Wins', description: 'Last 5 measurements with very low variation.',
+    progress: d => {
+      if(d.resultsAsc.length < 5) return { current: 0, target: 1 };
+      const last5 = d.resultsAsc.slice(-5).map(r => r.avg || 0);
+      const mean = last5.reduce((s, v) => s + v, 0) / 5;
+      const std = Math.sqrt(last5.reduce((s, v) => s + (v - mean) ** 2, 0) / 5);
+      return { current: std < 1.5 ? 1 : 0, target: 1 };
+    }},
+  { id: 'trend-up', category: 'personal-growth', tier: T.silver, icon: '📊',
+    title: 'Trend Up', description: '5 consecutive measurements, each better than the last.',
+    progress: d => {
+      let cur = 1, best = 1;
+      for(let i = 1; i < d.resultsAsc.length; i++){
+        if((d.resultsAsc[i].avg || 0) > (d.resultsAsc[i - 1].avg || 0)){ cur++; if(cur > best) best = cur; }
+        else cur = 1;
+      }
+      return { current: best, target: 5 };
+    }},
+
+  // Social additions
+  { id: 'joined-25', category: 'social', tier: T.silver, icon: '🏕️',
+    title: 'Community Member', description: 'Take part in 25 group sessions.',
+    progress: d => ({ current: d.results.filter(r => r.session_id != null).length, target: 25 })},
+  { id: 'community-host', category: 'social', tier: T.silver, icon: '🎤',
+    title: 'Community Host', description: 'Host a session with 5+ participants.',
+    progress: d => ({ current: d.hostedParticipantsMax || 0, target: 5 })},
+  { id: 'crowd-leader', category: 'social', tier: T.gold, icon: '🏟️',
+    title: 'Crowd Leader', description: 'Host a session with 20+ participants.',
+    progress: d => ({ current: d.hostedParticipantsMax || 0, target: 20 })},
+
+  // Practitioner additions
+  { id: 'practitioner-mentor-3', category: 'practitioner', tier: T.silver, icon: '🌱',
+    title: 'Mentor', description: 'Three active client connections.',
+    progress: d => ({ current: d.clientsCount, target: 3 })},
+  { id: 'practitioner-circle', category: 'practitioner', tier: T.gold, icon: '🏛️',
+    title: 'Practitioner Circle', description: 'Five of your clients in the same session.',
+    progress: d => ({ current: d.practitionerCircleCount || 0, target: 5 })},
+
+  // Vitality additions (Egely-specific)
+  { id: 'balance', category: 'vitality', tier: T.bronze, icon: '⚖️',
+    title: 'Balance', description: 'Spend time in the red, yellow, and green zones in one measurement.',
+    progress: d => {
+      const pred = r => (r.zone_red || 0) > 0 && (r.zone_yellow || 0) > 0 && (r.zone_green || 0) > 0;
+      const hit = d.results.some(pred);
+      return { current: hit ? 1 : 0, target: 1, unlockedAt: hit ? firstAt(d.resultsAsc, pred) : null };
+    }},
+  { id: 'flow-state', category: 'vitality', tier: T.gold, icon: '🌊',
+    title: 'Flow State', description: '5+ continuous minutes in the green zone in one measurement.',
+    progress: d => {
+      const meets = r => {
+        if(!Array.isArray(r.curve) || r.curve.length < 2) return false;
+        const dt = (r.duration_seconds || 60) / r.curve.length;
+        let run = 0;
+        for(const v of r.curve){
+          if(v >= 13){ run++; if(run * dt >= 300) return true; }
+          else run = 0;
+        }
+        return false;
+      };
+      const hit = d.results.some(meets);
+      return { current: hit ? 1 : 0, target: 1, unlockedAt: hit ? firstAt(d.resultsAsc, meets) : null };
+    }},
+  { id: 'vitality-master', category: 'vitality', tier: T.silver, icon: '💚',
+    title: 'Vitality Master', description: 'Ten measurements with green-zone average.',
+    progress: d => ({ current: d.results.filter(r => (r.avg || 0) >= 13).length, target: 10 })},
 ];
 
 // Build the full state list from a data bundle.

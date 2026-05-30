@@ -1,7 +1,7 @@
 import { supabase } from './db.js';
 import * as auth from './auth.js';
 import { vitalityColor as vColor } from './analytics.js';
-import { CATEGORIES, computeAchievements, pickNextMilestones } from './achievements.js';
+import { CATEGORIES, LEVELS, computeAchievements, pickNextMilestones, computeLevelState } from './achievements.js';
 import { fetchUserAchievements, recordNewUnlocks, markSeen } from './achievements-store.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
@@ -51,7 +51,22 @@ export function mount(el){
     const hostedRows = hostedR.data || [];
     const hostedIds = hostedRows.map(s => s.id);
 
-    let clientsCount = 0, clientFirstMeasurementSeen = false, guidedSession = false;
+    // Participants in my hosted sessions — needed for Community Host / Crowd
+    // Leader / Practitioner Circle. Single query, useful for everyone.
+    let hostedParticipants = new Map();   // session_id -> Set of user_ids
+    if(hostedIds.length){
+      const { data: hostedRes } = await supabase.from('results')
+        .select('user_id, session_id').in('session_id', hostedIds);
+      for(const r of (hostedRes || [])){
+        if(!hostedParticipants.has(r.session_id)) hostedParticipants.set(r.session_id, new Set());
+        hostedParticipants.get(r.session_id).add(r.user_id);
+      }
+    }
+    const hostedParticipantsMax = hostedParticipants.size
+      ? Math.max(...[...hostedParticipants.values()].map(s => s.size))
+      : 0;
+
+    let clientsCount = 0, clientFirstMeasurementSeen = false, guidedSession = false, practitionerCircleCount = 0;
     if(a.isPractitioner){
       const { data: cli } = await supabase.from('practitioner_links')
         .select('client_id').eq('practitioner_id', userId).eq('status', 'active');
@@ -63,11 +78,13 @@ export function mount(el){
           .select('id').in('user_id', clientIds).limit(1);
         clientFirstMeasurementSeen = !!(anyRes && anyRes.length);
 
-        if(hostedIds.length){
-          const { data: hostedRes } = await supabase.from('results')
-            .select('user_id, session_id').in('session_id', hostedIds);
-          guidedSession = !!(hostedRes || []).some(r => clientIds.includes(r.user_id));
+        const clientSet = new Set(clientIds);
+        for(const set of hostedParticipants.values()){
+          let circle = 0;
+          for(const uid of set){ if(clientSet.has(uid)) circle++; }
+          if(circle > practitionerCircleCount) practitionerCircleCount = circle;
         }
+        guidedSession = practitionerCircleCount > 0;
       }
     }
 
@@ -77,6 +94,7 @@ export function mount(el){
       connectedPractitionersCount: (prRecvR.data || []).length,
       isPractitioner: !!a.isPractitioner,
       clientsCount, clientFirstMeasurementSeen, guidedSession,
+      hostedParticipantsMax, practitionerCircleCount,
     };
     const achievements = computeAchievements(data);
 
@@ -125,7 +143,34 @@ export function mount(el){
       : 0;
     const bestAvg = results.reduce((m, r) => Math.max(m, r.avg || 0), 0);
 
+    const levelState = computeLevelState(achievements);
+
+    // Persist the current level so the header pill can show it everywhere,
+    // and notify any listening UI to refresh.
+    try {
+      localStorage.setItem('ewr_level', JSON.stringify({
+        idx: levelState.level.idx, title: levelState.level.title,
+      }));
+      window.dispatchEvent(new CustomEvent('ewr-level-changed'));
+    } catch {}
+
+    // Level-up detection. Silent on first run so we don't celebrate a
+    // migration; otherwise show a celebration banner above the Level card.
+    const LEVEL_SEEN_KEY = 'ewr_level_seen';
+    let lastSeen = null;
+    try { const s = localStorage.getItem(LEVEL_SEEN_KEY); lastSeen = s ? parseInt(s, 10) : null; } catch {}
+    let levelUpFromTitle = null;
+    if(lastSeen == null){
+      try { localStorage.setItem(LEVEL_SEEN_KEY, String(levelState.level.idx)); } catch {}
+    } else if(levelState.level.idx > lastSeen){
+      const fromLvl = LEVELS.find(l => l.idx === lastSeen);
+      levelUpFromTitle = fromLvl ? fromLvl.title : '';
+      try { localStorage.setItem(LEVEL_SEEN_KEY, String(levelState.level.idx)); } catch {}
+    }
+
     el.querySelector('#homeBody').innerHTML = `
+      ${levelUpFromTitle != null ? renderLevelUp(levelUpFromTitle, levelState.level.title) : ''}
+      ${renderLevel(levelState)}
       ${renderStats({
         sessionCount, soloCount,
         clientsCount: a.isPractitioner ? clientsCount : null,
@@ -138,6 +183,40 @@ export function mount(el){
   })();
 
   return () => {};
+}
+
+// ---- Level-up celebration --------------------------------------------------
+function renderLevelUp(from, to){
+  return `
+    <div class="level-up-banner">
+      <span class="lub-sparkle">✨</span>
+      <div class="lub-text">
+        <div class="lub-eyebrow">Level Up</div>
+        <div class="lub-title">${from ? `From <b>${esc(from)}</b> to ` : 'You have reached '}<b>${esc(to)}</b></div>
+      </div>
+      <span class="lub-sparkle">✨</span>
+    </div>`;
+}
+
+// ---- Level card ------------------------------------------------------------
+function renderLevel(s){
+  const { level, nextLevel, isMax, totalXP, xpInLevel, xpForThis, xpToNext, pct } = s;
+  return `
+    <section class="level-card level-tier-${level.idx}">
+      <div class="lc-top">
+        <span class="lc-eyebrow">Level ${level.idx}</span>
+        <h2 class="lc-title">${esc(level.title)}</h2>
+      </div>
+      ${isMax
+        ? '<div class="lc-max">Max level reached ✨</div>'
+        : `<div class="lc-bar"><div class="lc-bar-fill" style="width:${pct}%"></div></div>
+           <div class="lc-meta">
+             <span class="lc-xp">${xpInLevel} / ${xpForThis} XP</span>
+             <span class="lc-next">${xpToNext} XP to ${esc(nextLevel.title)}</span>
+           </div>`
+      }
+      <div class="lc-total">Total · ${totalXP} XP</div>
+    </section>`;
 }
 
 // ---- Stats -----------------------------------------------------------------

@@ -164,25 +164,44 @@ bleBtn.addEventListener('click', () => {
 // ---- Auth header area -------------------------------------------------------
 const authArea = document.getElementById('authArea');
 const navClients = document.getElementById('navClients');
-auth.subscribeAuth(a => {
-  if(navClients) navClients.hidden = !(a.user && a.isPractitioner);
+
+function levelPillHtml(){
+  try {
+    const stored = localStorage.getItem('ewr_level');
+    if(!stored) return '';
+    const lv = JSON.parse(stored);
+    return `<a class="header-level lv-${lv.idx}" href="#/home" title="Level ${lv.idx} · ${esc(lv.title)}">
+      <span class="hl-num">L${lv.idx}</span><span class="hl-name">${esc(lv.title)}</span></a>`;
+  } catch { return ''; }
+}
+
+function renderAuthArea(){
+  const a = auth.getState();
   if(a.user){
     const name = a.displayName || a.email;
     const avatar = a.avatarUrl
       ? `<img class="auth-avatar" src="${esc(a.avatarUrl)}" alt="">`
       : `<span class="auth-avatar auth-avatar-initial">${esc((name || '?').charAt(0).toUpperCase())}</span>`;
-    authArea.innerHTML = `<a class="auth-user" href="#/profile" title="Profile">${avatar}<span class="auth-email">${esc(name)}</span></a><button class="auth-btn" id="logoutBtn">Log out</button>`;
+    authArea.innerHTML = `${levelPillHtml()}<a class="auth-user" href="#/profile" title="Profile">${avatar}<span class="auth-email">${esc(name)}</span></a><button class="auth-btn" id="logoutBtn">Log out</button>`;
     authArea.querySelector('#logoutBtn').addEventListener('click', () => auth.signOut());
-    if(location.hash === '#/login'){
-      let pending = null;
-      try { pending = localStorage.getItem('ewr_pending_connect'); } catch {}
-      location.hash = pending ? '#/connect/' + pending : '#/home';
-    }
   } else {
     authArea.innerHTML = '<a class="auth-btn" href="#/login">Log in</a>';
   }
   updateBleButton();
+}
+
+auth.subscribeAuth(a => {
+  if(navClients) navClients.hidden = !(a.user && a.isPractitioner);
+  if(a.user && location.hash === '#/login'){
+    let pending = null;
+    try { pending = localStorage.getItem('ewr_pending_connect'); } catch {}
+    location.hash = pending ? '#/connect/' + pending : '#/home';
+  }
+  renderAuthArea();
 });
+
+// Refresh the header pill the instant the dashboard recomputes the level.
+window.addEventListener('ewr-level-changed', renderAuthArea);
 
 // ---- Boot -------------------------------------------------------------------
 window.addEventListener('hashchange', router);

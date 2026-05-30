@@ -256,6 +256,63 @@
   .session-avg{font-size:13px;color:var(--muted);white-space:nowrap}
   .session-avg b{font-family:'Montserrat',sans-serif;color:var(--white);font-weight:600}
 
+  /* Level-up celebration banner */
+  .level-up-banner{
+    margin-bottom:18px;padding:20px 24px;border-radius:16px;
+    background:linear-gradient(135deg, #ffd479, #f5a623);color:#1a0e3a;
+    display:flex;align-items:center;gap:18px;justify-content:center;text-align:center;
+    box-shadow:0 12px 44px -14px rgba(255,180,80,0.75);
+    animation:level-up-pop .55s ease-out;
+  }
+  .lub-sparkle{font-size:32px;line-height:1;animation:lub-sparkle 1.6s ease-in-out infinite}
+  .lub-eyebrow{font-family:'Inter',sans-serif;font-size:11px;letter-spacing:0.22em;
+    text-transform:uppercase;opacity:0.78}
+  .lub-title{font-family:'Montserrat',sans-serif;font-size:22px;font-weight:500;margin-top:2px;line-height:1.2}
+  @keyframes level-up-pop{0%{transform:scale(.94);opacity:0}100%{transform:scale(1);opacity:1}}
+  @keyframes lub-sparkle{0%,100%{transform:scale(1);opacity:.9}50%{transform:scale(1.18);opacity:1}}
+
+  /* Header level pill (next to user identity) */
+  .header-level{display:inline-flex;align-items:center;gap:6px;
+    background:linear-gradient(135deg, rgba(82,48,218,0.35), rgba(155,109,255,0.35));
+    border:1px solid rgba(155,109,255,0.5);border-radius:99px;padding:5px 11px;
+    text-decoration:none;color:inherit;font-size:11px;letter-spacing:0.04em;
+    transition:border-color .2s,transform .2s}
+  .header-level:hover{border-color:rgba(155,109,255,0.85);transform:translateY(-1px)}
+  .header-level.lv-5{border-color:rgba(255,212,121,0.55)}
+  .header-level.lv-6{background:linear-gradient(135deg, rgba(255,212,121,0.4), rgba(245,166,35,0.35));
+    border-color:rgba(255,212,121,0.75)}
+  .hl-num{font-family:'Montserrat',sans-serif;font-weight:600}
+  .hl-name{font-family:'Inter',sans-serif;opacity:.9}
+
+  /* Home Dashboard — Level card */
+  .level-card{position:relative;overflow:hidden;margin-bottom:18px;padding:22px 24px;
+    border-radius:16px;border:1px solid rgba(155,109,255,0.4);
+    background:linear-gradient(135deg, rgba(82,48,218,0.32), rgba(0,51,255,0.12));
+    display:flex;flex-direction:column;gap:14px}
+  .level-card::before{content:'';position:absolute;inset:-40% -10% auto auto;
+    width:280px;height:280px;border-radius:50%;
+    background:radial-gradient(circle, rgba(155,109,255,0.35), transparent 70%);
+    pointer-events:none}
+  .level-card.level-tier-5{border-color:rgba(255,212,121,0.5)}
+  .level-card.level-tier-6{border-color:rgba(255,212,121,0.7);
+    background:linear-gradient(135deg, rgba(255,180,80,0.28), rgba(82,48,218,0.18))}
+  .level-card.level-tier-6::before{background:radial-gradient(circle, rgba(255,212,121,0.4), transparent 70%)}
+  .lc-top{display:flex;align-items:baseline;gap:14px;position:relative;flex-wrap:wrap}
+  .lc-eyebrow{font-family:'Inter',sans-serif;font-size:11px;letter-spacing:0.2em;
+    text-transform:uppercase;color:rgba(255,255,255,0.6)}
+  .lc-title{font-family:'Montserrat',sans-serif;font-size:30px;font-weight:500;line-height:1;margin:0}
+  .lc-bar{height:10px;background:rgba(255,255,255,0.08);border-radius:99px;overflow:hidden;position:relative}
+  .lc-bar-fill{height:100%;border-radius:99px;
+    background:linear-gradient(90deg, #5230da, #b18bff);transition:width .6s ease}
+  .level-card.level-tier-5 .lc-bar-fill,
+  .level-card.level-tier-6 .lc-bar-fill{background:linear-gradient(90deg, #ffd479, #f5a623)}
+  .lc-meta{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;
+    font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .lc-next{color:#cdbcff}
+  .level-card.level-tier-6 .lc-next{color:#ffd479}
+  .lc-max{font-family:'Montserrat',sans-serif;font-size:18px;color:#ffd479}
+  .lc-total{font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:var(--faint)}
+
   /* Home Dashboard */
   .dash-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:8px}
   .dash-stat{background:rgba(255,255,255,0.04);border:1px solid var(--panel-border);
@@ -481,6 +538,11 @@
     .dash-badges{grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px}
     .db-icon{font-size:28px}
     .db-title{font-size:12px;min-height:30px}
+    .hl-name{display:none}
+    .level-up-banner{padding:16px 18px;gap:10px}
+    .lub-sparkle{font-size:24px}
+    .lub-title{font-size:18px}
+    .lc-title{font-size:24px}
   }
 </style>
 </head>
