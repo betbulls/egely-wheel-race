@@ -169,7 +169,6 @@ bleBtn.addEventListener('click', () => {
 
 // ---- Auth header area -------------------------------------------------------
 const authArea = document.getElementById('authArea');
-const navClients = document.getElementById('navClients');
 
 function levelPillHtml(){
   try {
@@ -181,6 +180,13 @@ function levelPillHtml(){
   } catch { return ''; }
 }
 
+function closeAccountMenu(){
+  const m = document.getElementById('accountMenu');
+  const t = document.getElementById('accountTrigger');
+  if(m) m.hidden = true;
+  if(t) t.setAttribute('aria-expanded', 'false');
+}
+
 function renderAuthArea(){
   const a = auth.getState();
   if(a.user){
@@ -188,7 +194,34 @@ function renderAuthArea(){
     const avatar = a.avatarUrl
       ? `<img class="auth-avatar" src="${esc(a.avatarUrl)}" alt="">`
       : `<span class="auth-avatar auth-avatar-initial">${esc((name || '?').charAt(0).toUpperCase())}</span>`;
-    authArea.innerHTML = `${levelPillHtml()}<a class="auth-user" href="#/profile" title="Profile">${avatar}<span class="auth-email">${esc(name)}</span></a><button class="auth-btn" id="logoutBtn">Log out</button>`;
+    const clientsItem = a.isPractitioner
+      ? `<a href="#/clients" data-route="/clients">Clients</a>`
+      : '';
+    authArea.innerHTML = `
+      ${levelPillHtml()}
+      <button type="button" class="account-trigger" id="accountTrigger" aria-haspopup="true" aria-expanded="false">
+        ${avatar}
+        <span class="auth-email">${esc(name)}</span>
+        <span class="account-chevron">▾</span>
+      </button>
+      <div class="account-menu" id="accountMenu" hidden>
+        <a href="#/me" data-route="/me">My measurements</a>
+        ${clientsItem}
+        <a href="#/profile" data-route="/profile">Profile</a>
+        <hr>
+        <button type="button" id="logoutBtn">Log out</button>
+      </div>`;
+    const trigger = authArea.querySelector('#accountTrigger');
+    const menu = authArea.querySelector('#accountMenu');
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const willOpen = menu.hidden;
+      menu.hidden = !willOpen;
+      trigger.setAttribute('aria-expanded', String(willOpen));
+    });
+    menu.addEventListener('click', (e) => {
+      if(e.target.closest('a, button')) closeAccountMenu();
+    });
     authArea.querySelector('#logoutBtn').addEventListener('click', () => auth.signOut());
   } else {
     authArea.innerHTML = '<a class="auth-btn" href="#/login">Log in</a>';
@@ -197,13 +230,44 @@ function renderAuthArea(){
 }
 
 auth.subscribeAuth(a => {
-  if(navClients) navClients.hidden = !(a.user && a.isPractitioner);
   if(a.user && location.hash === '#/login'){
     let pending = null;
     try { pending = localStorage.getItem('ewr_pending_connect'); } catch {}
     location.hash = pending ? '#/connect/' + pending : '#/home';
   }
   renderAuthArea();
+});
+
+// ---- "More" nav menu (mobile only — surfaces Sessions + Global Ranking) -----
+const navMoreBtn = document.getElementById('navMore');
+const navMoreMenu = document.getElementById('navMoreMenu');
+function closeNavMore(){
+  if(navMoreMenu) navMoreMenu.hidden = true;
+  if(navMoreBtn) navMoreBtn.setAttribute('aria-expanded', 'false');
+}
+if(navMoreBtn && navMoreMenu){
+  navMoreBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const willOpen = navMoreMenu.hidden;
+    navMoreMenu.hidden = !willOpen;
+    navMoreBtn.setAttribute('aria-expanded', String(willOpen));
+    if(willOpen) closeAccountMenu();
+  });
+  navMoreMenu.addEventListener('click', (e) => {
+    if(e.target.closest('a')) closeNavMore();
+  });
+}
+
+// Outside-click / Escape close for both header dropdowns.
+document.addEventListener('click', (e) => {
+  if(navMoreMenu && !navMoreMenu.hidden &&
+     !e.target.closest('#navMore') && !e.target.closest('#navMoreMenu')) closeNavMore();
+  const accMenu = document.getElementById('accountMenu');
+  if(accMenu && !accMenu.hidden &&
+     !e.target.closest('#accountTrigger') && !e.target.closest('#accountMenu')) closeAccountMenu();
+});
+document.addEventListener('keydown', (e) => {
+  if(e.key === 'Escape'){ closeNavMore(); closeAccountMenu(); }
 });
 
 // Refresh the header pill the instant the dashboard recomputes the level.
