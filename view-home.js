@@ -1,10 +1,13 @@
 import { supabase } from './db.js';
 import * as auth from './auth.js';
 import { vitalityColor as vColor } from './analytics.js';
-import { CATEGORIES, LEVELS, computeAchievements, pickNextMilestones, computeLevelState } from './achievements.js';
+import { CATEGORIES, LEVELS, TIER_XP, computeAchievements, pickNextMilestones, computeLevelState } from './achievements.js';
 import { fetchUserAchievements, recordNewUnlocks, markSeen } from './achievements-store.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+// YYYY-MM-DD in local time, used for achievement unlock dates in the info popup.
+const shortDate = iso => iso ? new Date(iso).toLocaleDateString('en-CA') : '';
 
 // Migration helper: pre-hybrid dashboards used this flag to know they'd been
 // loaded before. We reuse it once to silently sync existing unlocks to the DB
@@ -192,7 +195,7 @@ export function mount(el){
       })}
       ${renderRecent(achievements, newIds, stored)}
       ${renderNext(achievements)}
-      ${renderCollection(achievements, newIds)}
+      ${renderCollection(achievements, newIds, stored)}
     `;
 
     // Mobile-friendly tap: the "i" button on each badge toggles the description.
@@ -257,6 +260,7 @@ function renderLevel(s){
           ? '<div class="lj-meta lj-max">Max level reached ✨</div>'
           : `<div class="lj-meta">${xpInLevel} / ${xpForThis} XP</div>
              <div class="lj-meta lj-to-next">${xpToNext} XP to ${esc(nextLevel.title)}</div>`}
+        <div class="lj-meta lj-total">Total XP · ${totalXP}</div>
       </div>
       <div class="lj-track">
         <div class="lj-bar"><div class="lj-bar-fill" style="width:${fillPct}%"></div></div>
@@ -264,8 +268,8 @@ function renderLevel(s){
       </div>
       <div class="lj-side lj-right">
         ${isMax
-          ? `<div class="lj-eyebrow">Total</div>
-             <div class="lj-title-sm">${totalXP} XP</div>`
+          ? `<div class="lj-eyebrow">Mastery</div>
+             <div class="lj-title-sm">Achieved ✨</div>`
           : `<div class="lj-eyebrow">Next</div>
              <div class="lj-title-sm">${esc(nextLevel.title)}</div>
              <div class="lj-meta">Unlocks at ${nextLevel.threshold} XP</div>`}
@@ -310,18 +314,36 @@ function renderRecent(achievements, newIds, stored){
   return `
     <h2 class="dash-h">Recent Achievements${newBadge}</h2>
     <div class="dash-recent">
-      ${top.map(a => recentCard(a, newIds.has(a.id))).join('')}
+      ${top.map(a => recentCard(a, newIds.has(a.id), stored)).join('')}
     </div>`;
 }
 
-function recentCard(a, isNew){
+function descBlock(a, stored){
+  const xp = TIER_XP[a.tier] || 0;
+  const storedEntry = stored ? stored.get(a.id) : null;
+  const unlockedAt = storedEntry && storedEntry.unlocked_at;
+  const metaParts = [];
+  metaParts.push(`<span class="db-desc-xp">+${xp} XP</span>`);
+  if(a.unlocked && unlockedAt){
+    metaParts.push(`<span class="db-desc-when">Unlocked ${esc(shortDate(unlockedAt))}</span>`);
+  } else if(a.unlocked){
+    metaParts.push('<span class="db-desc-when">Unlocked</span>');
+  }
+  return `
+    <div class="db-desc">
+      <p class="db-desc-text">${esc(a.description)}</p>
+      <div class="db-desc-meta">${metaParts.join(' · ')}</div>
+    </div>`;
+}
+
+function recentCard(a, isNew, stored){
   return `
     <div class="dash-recent-card tier-${a.tier}${isNew ? ' is-new' : ''}" title="${esc(a.description)}">
       ${isNew ? '<span class="dash-new-pill">NEW</span>' : ''}
       <button type="button" class="db-info" aria-label="Info">i</button>
       <div class="drc-icon">${a.icon}</div>
       <div class="drc-title">${esc(a.title)}</div>
-      <div class="db-desc">${esc(a.description)}</div>
+      ${descBlock(a, stored)}
     </div>`;
 }
 
@@ -350,7 +372,7 @@ function milestoneCard(a){
 }
 
 // ---- Achievement collection ------------------------------------------------
-function renderCollection(achievements, newIds){
+function renderCollection(achievements, newIds, stored){
   const groups = new Map();
   for(const a of achievements){
     if(!groups.has(a.category)) groups.set(a.category, []);
@@ -370,7 +392,7 @@ function renderCollection(achievements, newIds){
             <h3 class="dash-cat-title">${esc(c.title)}</h3>
             <span class="dash-cat-count">${unlocked} / ${items.length}</span>
           </div>
-          <div class="dash-badges">${items.map(a => badgeCard(a, newIds && newIds.has(a.id))).join('')}</div>
+          <div class="dash-badges">${items.map(a => badgeCard(a, newIds && newIds.has(a.id), stored)).join('')}</div>
         </section>`;
     });
 
@@ -379,7 +401,7 @@ function renderCollection(achievements, newIds){
     ${sections.join('')}`;
 }
 
-function badgeCard(a, isNew){
+function badgeCard(a, isNew, stored){
   const status = a.unlocked
     ? '<div class="db-status unlocked">✓ Unlocked</div>'
     : `<div class="db-status">${a.current} / ${a.target}</div>`;
@@ -394,6 +416,6 @@ function badgeCard(a, isNew){
       <div class="db-icon">${a.icon}</div>
       <div class="db-title">${esc(a.title)}</div>
       ${status}
-      <div class="db-desc">${esc(a.description)}</div>
+      ${descBlock(a, stored)}
     </div>`;
 }
