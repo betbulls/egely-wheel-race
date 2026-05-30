@@ -142,6 +142,14 @@ function statusText(s){
   return 'Egely Wheel not connected';
 }
 
+// Short form for the cramped mobile header — CSS swaps between the two.
+function shortStatusText(s){
+  if(s.status === 'connected') return 'Connected';
+  if(s.status === 'connecting') return 'Connecting…';
+  if(s.status === 'error') return 'Error';
+  return 'Not connected';
+}
+
 // The Connect button is the single gate for measuring (Solo + rooms both use
 // the connected wheel). Only logged-in active subscribers can connect.
 function updateBleButton(){
@@ -155,7 +163,9 @@ function updateBleButton(){
 
 ble.subscribeStatus(s => {
   bleBar.className = 'ble-bar ' + s.status;
-  bleText.textContent = statusText(s);
+  bleText.innerHTML =
+    `<span class="ble-full">${esc(statusText(s))}</span>` +
+    `<span class="ble-short">${esc(shortStatusText(s))}</span>`;
   updateBleButton();
 });
 
@@ -187,6 +197,16 @@ function closeAccountMenu(){
   if(t) t.setAttribute('aria-expanded', 'false');
 }
 
+// Only one header/FAB overlay may be open at a time, so the screen always has a
+// single focus on mobile. Any open path calls this first, then opens its own.
+// (closeNavMore / closeFabMenu are function declarations below — hoisted, so
+// they're safe to reference here; this only ever runs on a user click.)
+function closeAllMenus(){
+  closeNavMore();
+  closeAccountMenu();
+  closeFabMenu();
+}
+
 function renderAuthArea(){
   const a = auth.getState();
   if(a.user){
@@ -216,8 +236,11 @@ function renderAuthArea(){
     trigger.addEventListener('click', (e) => {
       e.stopPropagation();
       const willOpen = menu.hidden;
-      menu.hidden = !willOpen;
-      trigger.setAttribute('aria-expanded', String(willOpen));
+      closeAllMenus();
+      if(willOpen){
+        menu.hidden = false;
+        trigger.setAttribute('aria-expanded', 'true');
+      }
     });
     menu.addEventListener('click', (e) => {
       if(e.target.closest('a, button')) closeAccountMenu();
@@ -249,9 +272,11 @@ if(navMoreBtn && navMoreMenu){
   navMoreBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     const willOpen = navMoreMenu.hidden;
-    navMoreMenu.hidden = !willOpen;
-    navMoreBtn.setAttribute('aria-expanded', String(willOpen));
-    if(willOpen) closeAccountMenu();
+    closeAllMenus();
+    if(willOpen){
+      navMoreMenu.hidden = false;
+      navMoreBtn.setAttribute('aria-expanded', 'true');
+    }
   });
   navMoreMenu.addEventListener('click', (e) => {
     if(e.target.closest('a')) closeNavMore();
@@ -290,7 +315,9 @@ function openFabMenu(){
 if(fab && fabMenu){
   fab.addEventListener('click', (e) => {
     e.stopPropagation();
-    if(fabMenu.hidden) openFabMenu(); else closeFabMenu();
+    const willOpen = fabMenu.hidden;
+    closeAllMenus();
+    if(willOpen) openFabMenu();
   });
   document.addEventListener('click', (e) => {
     if(fabMenu.hidden) return;

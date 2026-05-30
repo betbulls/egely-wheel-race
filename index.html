@@ -47,6 +47,28 @@
     .nav-more{display:inline-flex}
   }
 
+  /* ---- Compact mobile header --------------------------------------------- */
+  /* Tighten spacing, padding and control sizes so logo + Home + More + BLE +
+     Level + Avatar fit in as little vertical space as possible. No items are
+     removed — this is purely a density pass. */
+  @media (max-width:600px){
+    body{padding:16px}
+    .app-header{gap:8px 10px;padding-bottom:10px;margin-bottom:14px}
+    .wordmark{font-size:13px;letter-spacing:0.18em}
+    .nav{gap:4px}
+    .nav a{padding:6px 10px;font-size:12px}
+    .nav-more{width:32px;height:30px;font-size:16px}
+    .ble-bar{padding:4px 4px 4px 11px;font-size:11px;gap:7px}
+    .ble-bar button{padding:5px 11px;font-size:11px}
+    /* .ble-bar prefix keeps these ahead of the base `.ble-short{display:none}`
+       regardless of source order (this block precedes that rule in the file). */
+    .ble-bar .ble-full{display:none}
+    .ble-bar .ble-short{display:inline}
+    .header-level{padding:4px 9px}
+    .account-trigger{gap:6px;padding:3px 5px 3px 3px}
+    .auth-avatar{width:26px;height:26px}
+  }
+
   /* Global Egely Wheel connection status bar */
   .ble-bar{
     display:inline-flex;align-items:center;gap:10px;
@@ -64,6 +86,8 @@
   }
   .ble-bar button:hover:not(:disabled){background:#6a47f0}
   #bleText{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px}
+  /* The header shows the full status on desktop and a terse one on mobile. */
+  .ble-short{display:none}
 
   .placeholder{color:var(--muted);font-size:14px}
 
@@ -106,6 +130,33 @@
   @media (max-width:520px){
     .account-trigger .auth-email{display:none}
   }
+
+  /* On phones BOTH header menus (account + "More") become full-width bottom
+     sheets. They are pinned to left:0/right:0 so the panel is exactly the
+     viewport width at any size (320px and up) — a desktop-style dropdown with a
+     fixed width + right:0 anchoring is what let them spill off-screen before.
+     z-index sits above the FAB so the + button tucks behind the sheet. */
+  @media (max-width:600px){
+    .account-menu,
+    .nav-more-menu{
+      position:fixed;left:0;right:0;bottom:0;top:auto;
+      width:auto;min-width:0;max-width:100%;z-index:1100;
+      border:1px solid rgba(155,109,255,0.4);border-bottom:none;
+      border-radius:18px 18px 0 0;
+      background:linear-gradient(160deg, rgba(22,17,52,0.99), rgba(36,24,80,0.99));
+      padding:8px 14px calc(16px + env(safe-area-inset-bottom, 0px));
+      box-shadow:0 -18px 48px -12px rgba(0,0,0,0.7);
+      animation:sheet-up .2s ease-out}
+    .account-menu::before,
+    .nav-more-menu::before{content:'';display:block;width:36px;height:4px;border-radius:99px;
+      background:rgba(255,255,255,0.25);margin:6px auto 12px}
+    .account-menu a,
+    .account-menu button,
+    .nav-more-menu a{display:block;width:100%;text-align:left;box-sizing:border-box;
+      padding:14px 16px;font-size:15px;border-radius:8px}
+    .account-menu hr{margin:6px 0}
+  }
+  @keyframes sheet-up{from{transform:translateY(100%)}to{transform:translateY(0)}}
   .auth-avatar{width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0}
   .auth-avatar-initial{display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--blue),var(--accent));font-family:'Montserrat',sans-serif;font-weight:600;font-size:13px;color:#fff}
   .profile-row{display:flex;align-items:center;gap:18px}
@@ -858,6 +909,12 @@
     .lb-row-rare{display:none}
     .lb-row-xp{font-size:14px}
   }
+
+  /* Reserve space at the bottom of every page so the floating + button never
+     covers the last CTA / form action. The FAB sits ~84px up from the bottom
+     edge, so mobile keeps a roomier clearance than desktop. */
+  #view{padding-bottom:48px}
+  @media (max-width:600px){ #view{padding-bottom:104px} }
 
   /* Floating Action Button — primary "start" action, always one tap away.
      Fallbacks for older browsers; env(safe-area-inset-*) for notches / gesture bars. */
