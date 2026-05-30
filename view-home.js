@@ -58,11 +58,19 @@ export function mount(el){
 
   (async () => {
     // ---- One coordinated data fetch -----------------------------------------
-    const [resR, hostedR, prRecvR, stored] = await Promise.all([
+    // Sessions that started in the past 4 hours (still possibly live) or in the
+    // future — capped to ~10 for the small teaser block on the dashboard.
+    const sessionWindow = new Date(Date.now() - 4 * 3600 * 1000).toISOString();
+    const [resR, hostedR, prRecvR, stored, upcomingR] = await Promise.all([
       supabase.from('results').select('*').eq('user_id', userId),
       supabase.from('sessions').select('id').eq('created_by_user_id', userId),
       supabase.from('practitioner_links').select('practitioner_id').eq('client_id', userId).eq('status', 'active'),
       fetchUserAchievements(userId),
+      supabase.from('sessions')
+        .select('id, name, scheduled_start, duration_minutes, created_by_user_id, created_by, verified_only')
+        .gte('scheduled_start', sessionWindow)
+        .order('scheduled_start', { ascending: true })
+        .limit(10),
     ]);
     const results = resR.data || [];
     const hostedRows = hostedR.data || [];
@@ -114,6 +122,29 @@ export function mount(el){
       hostedParticipantsMax, practitionerCircleCount,
     };
     const achievements = computeAchievements(data);
+
+    // ---- Upcoming Sessions for the Home teaser -----------------------------
+    const tNow = Date.now();
+    const upcoming = (upcomingR.data || [])
+      .filter(s => {
+        const start = new Date(s.scheduled_start).getTime();
+        const end = start + (s.duration_minutes || 0) * 60000;
+        return tNow <= end;   // live OR future
+      })
+      .slice(0, 3);
+    // Participant count = distinct user_ids in `results` for that session.
+    // Live sessions can already have a few; future sessions sit at zero (no RSVP).
+    if(upcoming.length){
+      const ids = upcoming.map(s => s.id);
+      const { data: parts } = await supabase.from('results')
+        .select('session_id, user_id').in('session_id', ids);
+      const counts = new Map();
+      for(const r of (parts || [])){
+        if(!counts.has(r.session_id)) counts.set(r.session_id, new Set());
+        counts.get(r.session_id).add(r.user_id);
+      }
+      for(const s of upcoming) s._participants = (counts.get(s.id) || new Set()).size;
+    }
 
     // ---- "Once earned, always shown" ----------------------------------------
     // Stored unlocks are canonical. If the DB has a row but compute currently
@@ -193,6 +224,7 @@ export function mount(el){
         clientsCount: a.isPractitioner ? clientsCount : null,
         bestAvg, verifiedRatio, total: results.length,
       })}
+      ${renderUpcoming(upcoming)}
       ${renderRecent(achievements, newIds, stored)}
       ${renderNext(achievements)}
       ${renderCollection(achievements, newIds, stored)}
@@ -293,6 +325,46 @@ function renderStats(s){
         <div class="dash-stat-lbl">${esc(c.label)}</div>
       </div>`).join('')}
   </div>`;
+}
+
+// ---- Upcoming Sessions teaser ---------------------------------------------
+function formatUntil(ms){
+  if(ms <= 0) return 'now';
+  const totalSec = Math.floor(ms / 1000);
+  const days = Math.floor(totalSec / 86400);
+  const hours = Math.floor((totalSec % 86400) / 3600);
+  const mins  = Math.floor((totalSec % 3600) / 60);
+  if(days >= 1)  return `${days} day${days > 1 ? 's' : ''}`;
+  if(hours >= 1) return `${hours} hr${hours > 1 ? 's' : ''}`;
+  if(mins >= 1)  return `${mins} min`;
+  return 'less than a minute';
+}
+
+function renderUpcoming(sessions){
+  if(!sessions.length) return '';
+  const now = Date.now();
+  return `
+    <h2 class="dash-h">Upcoming Sessions</h2>
+    <div class="home-sess">
+      ${sessions.map(s => {
+        const start = new Date(s.scheduled_start).getTime();
+        const end   = start + (s.duration_minutes || 0) * 60000;
+        const isLive = now >= start && now <= end;
+        const time  = isLive ? '<span class="hs-live">● Live now</span>'
+                             : `in ${esc(formatUntil(start - now))}`;
+        const host  = s.created_by || 'Host';
+        const verified = s.verified_only ? ' <span class="sess-verified">✓ Verified</span>' : '';
+        const partsTxt = s._participants > 0 ? ` · ${s._participants} measuring` : '';
+        return `
+          <a class="home-sess-card${isLive ? ' live' : ''}" href="#/room/${s.id}">
+            <div class="hs-row">
+              <div class="hs-name">${esc(s.name || 'Untitled session')}${verified}</div>
+              <span class="hs-action">${isLive ? 'Join' : 'View'} →</span>
+            </div>
+            <div class="hs-meta">Hosted by ${esc(host)} · ${time}${partsTxt}</div>
+          </a>`;
+      }).join('')}
+    </div>`;
 }
 
 // ---- Recent achievements ---------------------------------------------------

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Egely Wheel Race</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -361,6 +361,22 @@
   .dash-h-sub{font-size:12px;color:var(--muted);text-transform:none;letter-spacing:0;font-weight:400}
   .dash-empty{color:var(--muted);font-size:14px;background:rgba(255,255,255,0.03);
     border:1px solid var(--panel-border);border-radius:12px;padding:16px;text-align:center}
+
+  /* Home — Upcoming Sessions teaser */
+  .home-sess{display:flex;flex-direction:column;gap:10px;margin-bottom:8px}
+  .home-sess-card{display:flex;flex-direction:column;gap:4px;
+    padding:14px 18px;border-radius:12px;text-decoration:none;color:inherit;
+    background:rgba(255,255,255,0.04);border:1px solid var(--panel-border);
+    transition:background .15s,border-color .15s,transform .15s}
+  .home-sess-card:hover{background:rgba(255,255,255,0.07);
+    border-color:rgba(155,109,255,0.45);transform:translateY(-1px)}
+  .home-sess-card.live{border-color:rgba(82,48,218,0.55);
+    background:linear-gradient(135deg, rgba(82,48,218,0.16), rgba(0,51,255,0.05))}
+  .hs-row{display:flex;align-items:center;gap:10px;justify-content:space-between}
+  .hs-name{font-family:'Montserrat',sans-serif;font-size:15px;font-weight:500;min-width:0}
+  .hs-action{font-size:12px;color:#cdbcff;letter-spacing:0.06em;font-weight:600;flex-shrink:0}
+  .hs-meta{font-size:12px;color:var(--muted)}
+  .hs-live{color:#cdbcff;font-weight:600;letter-spacing:0.04em}
 
   .dash-next{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
   .dash-milestone{background:linear-gradient(135deg, rgba(82,48,218,0.18), rgba(0,51,255,0.06));
@@ -791,8 +807,13 @@
     .lb-row-xp{font-size:14px}
   }
 
-  /* Floating Action Button — primary "start" action, always one tap away */
-  .fab{position:fixed;bottom:24px;right:24px;z-index:90;
+  /* Floating Action Button — primary "start" action, always one tap away.
+     env(safe-area-inset-*) lifts it above iOS notches and Android gesture bars
+     so the button stays fully visible regardless of the device chrome. */
+  .fab{position:fixed;
+    bottom:calc(24px + env(safe-area-inset-bottom, 0px));
+    right:calc(24px + env(safe-area-inset-right, 0px));
+    z-index:90;
     width:56px;height:56px;border-radius:50%;
     background:var(--accent);color:#fff;border:none;cursor:pointer;
     font-family:'Montserrat',sans-serif;font-size:30px;line-height:1;font-weight:300;
@@ -805,7 +826,10 @@
   .fab.open{transform:rotate(45deg)}
   .fab.open:hover{transform:rotate(45deg) translateY(-2px)}
 
-  .fab-menu{position:fixed;bottom:92px;right:24px;z-index:91;
+  .fab-menu{position:fixed;
+    bottom:calc(92px + env(safe-area-inset-bottom, 0px));
+    right:calc(24px + env(safe-area-inset-right, 0px));
+    z-index:91;
     background:linear-gradient(160deg, rgba(13,11,40,0.97), rgba(82,48,218,0.22));
     border:1px solid rgba(155,109,255,0.5);border-radius:14px;
     padding:8px;min-width:220px;
@@ -820,8 +844,14 @@
   .fab-icon{font-size:22px;line-height:1;flex-shrink:0}
 
   @media (max-width:600px){
-    .fab{bottom:16px;right:16px;width:52px;height:52px;font-size:28px}
-    .fab-menu{bottom:80px;right:16px;min-width:200px}
+    .fab{
+      bottom:calc(20px + env(safe-area-inset-bottom, 0px));
+      right:calc(16px + env(safe-area-inset-right, 0px));
+      width:56px;height:56px;font-size:28px}
+    .fab-menu{
+      bottom:calc(88px + env(safe-area-inset-bottom, 0px));
+      right:calc(16px + env(safe-area-inset-right, 0px));
+      min-width:200px}
   }
 </style>
 </head>
