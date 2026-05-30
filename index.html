@@ -73,6 +73,13 @@
   .form-msg{font-size:13px;color:var(--muted)}
   .form-msg.ok{color:#3ddc84}
   .form-msg.err{color:#ff7c7c}
+  .sess-section{margin-bottom:28px}
+  .sess-section-title{font-family:'Montserrat',sans-serif;font-size:14px;font-weight:600;
+    letter-spacing:0.16em;text-transform:uppercase;color:var(--muted);
+    margin:0 0 12px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .sess-section-sub{font-size:11px;letter-spacing:0.06em;text-transform:none;color:var(--faint);font-weight:400}
+  .badge-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#fff;
+    margin-right:5px;animation:blink 1.2s infinite;vertical-align:middle}
   .session-list{display:flex;flex-direction:column;gap:12px}
   .empty{color:var(--faint);font-size:14px;text-align:center;padding:24px 0}
   .session-card{
@@ -783,6 +790,39 @@
     .lb-row-rare{display:none}
     .lb-row-xp{font-size:14px}
   }
+
+  /* Floating Action Button — primary "start" action, always one tap away */
+  .fab{position:fixed;bottom:24px;right:24px;z-index:90;
+    width:56px;height:56px;border-radius:50%;
+    background:var(--accent);color:#fff;border:none;cursor:pointer;
+    font-family:'Montserrat',sans-serif;font-size:30px;line-height:1;font-weight:300;
+    padding:0;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 8px 24px -6px rgba(82,48,218,0.65), 0 4px 12px -2px rgba(0,0,0,0.4);
+    transition:transform .15s ease, box-shadow .15s ease, background .15s ease}
+  .fab:hover{transform:translateY(-2px);
+    box-shadow:0 12px 32px -8px rgba(82,48,218,0.8), 0 6px 16px -2px rgba(0,0,0,0.5)}
+  .fab:active{transform:translateY(0)}
+  .fab.open{transform:rotate(45deg)}
+  .fab.open:hover{transform:rotate(45deg) translateY(-2px)}
+
+  .fab-menu{position:fixed;bottom:92px;right:24px;z-index:91;
+    background:linear-gradient(160deg, rgba(13,11,40,0.97), rgba(82,48,218,0.22));
+    border:1px solid rgba(155,109,255,0.5);border-radius:14px;
+    padding:8px;min-width:220px;
+    box-shadow:0 24px 60px -16px rgba(0,0,0,0.7);
+    animation:fab-menu-in .16s ease-out}
+  @keyframes fab-menu-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  .fab-item{display:flex;align-items:center;gap:14px;
+    padding:12px 14px;border-radius:10px;
+    text-decoration:none;color:#fff;font-family:'Inter',sans-serif;font-size:14px;
+    transition:background .15s}
+  .fab-item:hover{background:rgba(155,109,255,0.18)}
+  .fab-icon{font-size:22px;line-height:1;flex-shrink:0}
+
+  @media (max-width:600px){
+    .fab{bottom:16px;right:16px;width:52px;height:52px;font-size:28px}
+    .fab-menu{bottom:80px;right:16px;min-width:200px}
+  }
 </style>
 </head>
 <body>
@@ -792,7 +832,6 @@
   <nav class="nav">
     <a href="#/home" data-route="/home">Home</a>
     <a href="#/sessions" data-route="/sessions">Sessions</a>
-    <a href="#/solo" data-route="/solo">Solo</a>
     <a href="#/me" data-route="/me">My measurements</a>
     <a href="#/clients" data-route="/clients" id="navClients" hidden>Clients</a>
     <a href="#/leaderboard" data-route="/leaderboard">Global Ranking</a>
@@ -806,6 +845,18 @@
 </header>
 
 <main id="view"></main>
+
+<button type="button" class="fab" id="fab" aria-label="Start a measurement" aria-haspopup="true" aria-expanded="false" hidden>+</button>
+<div class="fab-menu" id="fabMenu" hidden>
+  <a href="#/solo" class="fab-item" data-fab-item>
+    <span class="fab-icon">🎯</span>
+    <span class="fab-label">Solo Measurement</span>
+  </a>
+  <a href="#/sessions/new" class="fab-item" data-fab-item>
+    <span class="fab-icon">🤝</span>
+    <span class="fab-label">Group Session</span>
+  </a>
+</div>
 
 <script type="module" src="app.js"></script>
 

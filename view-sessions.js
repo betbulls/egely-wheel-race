@@ -12,48 +12,23 @@ function avatarHtml(url, name){
 export function mount(el){
   el.innerHTML = `
     <div class="view-head">
-      <h1 class="page-title">Group Sessions</h1>
-      <p class="page-sub">Schedule a session and measure together, live.</p>
+      <h1 class="page-title">Sessions</h1>
+      <p class="page-sub">Live and upcoming group measurements — and the journeys others have already taken.</p>
     </div>
 
-    <div class="panel">
-      <h2>Create a group session</h2>
-      <form id="createForm">
-        <div class="form-grid">
-          <div class="field full">
-            <label for="fName">Session name</label>
-            <input type="text" id="fName" placeholder="e.g. Sunday Morning Meditation" required maxlength="80">
-          </div>
-          <div class="field">
-            <label for="fDate">Date</label>
-            <input type="date" id="fDate" required>
-          </div>
-          <div class="field">
-            <label for="fTime">Start time</label>
-            <input type="time" id="fTime" required>
-          </div>
-          <div class="field">
-            <label for="fDuration">Duration (minutes)</label>
-            <input type="number" id="fDuration" min="1" max="240" value="10" required>
-          </div>
-          <div class="field full check-field">
-            <label class="check"><input type="checkbox" id="fVerified"> Verified session — only legitimate measurements count toward the results</label>
-          </div>
-        </div>
-        <div class="organizer-note" id="organizerNote"></div>
-        <div class="form-actions">
-          <button type="submit" id="btnCreate">Create session</button>
-          <span class="form-msg" id="formMsg"></span>
-        </div>
-      </form>
-    </div>
-
-    <div class="panel">
-      <h2>Sessions</h2>
-      <div class="session-list" id="sessionList">
+    <section class="sess-section">
+      <h2 class="sess-section-title">Upcoming <span class="sess-section-sub">live first</span></h2>
+      <div class="session-list" id="upcomingList">
         <div class="empty">Loading…</div>
       </div>
-    </div>
+    </section>
+
+    <section class="sess-section">
+      <h2 class="sess-section-title">Past</h2>
+      <div class="session-list" id="pastList">
+        <div class="empty">Loading…</div>
+      </div>
+    </section>
   `;
 
   const $ = id => el.querySelector('#' + id);
@@ -112,81 +87,99 @@ export function mount(el){
     return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${pad(m)}:${pad(sec)}`;
   }
 
+  function buildSessionCard(s, state, now){
+    const start = new Date(s.scheduled_start).getTime();
+    const card = document.createElement('div');
+    card.className = 'session-card ' + state;
+    card.dataset.start = start;
+    card.dataset.end = start + (s.duration_minutes || 0) * 60000;
+
+    const main = document.createElement('div');
+    main.className = 'session-main';
+    const name = document.createElement('div');
+    name.className = 'session-name';
+    name.textContent = s.name || 'Untitled session';
+    if(s.verified_only){
+      const vt = document.createElement('span');
+      vt.className = 'sess-verified';
+      vt.textContent = '✓ Verified';
+      name.appendChild(vt);
+    }
+    const prof = s.created_by_user_id ? organizersById.get(s.created_by_user_id) : null;
+    const organizerName = (prof && prof.display_name) || s.created_by || 'unknown';
+    const meta = document.createElement('div');
+    meta.className = 'session-meta';
+    meta.innerHTML = `${esc(formatStart(s.scheduled_start))} · ${s.duration_minutes} min`
+      + ` · <span class="session-organizer">${avatarHtml(prof && prof.avatar_url, organizerName)}`
+      + `<span class="organizer-name">${esc(organizerName)}</span></span>`;
+    main.append(name, meta);
+
+    const right = document.createElement('div');
+    right.className = 'session-right';
+    const badge = document.createElement('span');
+    badge.className = 'badge ' + state;
+    badge.innerHTML = state === 'live'     ? '<span class="badge-dot"></span>Live'
+                    : state === 'upcoming' ? 'Upcoming'
+                    :                         'Finished';
+    const cd = document.createElement('div');
+    cd.className = 'countdown' + (state === 'live' ? ' live' : '');
+    cd.dataset.role = 'countdown';
+    const join = document.createElement('a');
+    join.className = 'btn-join';
+    join.href = '#/room/' + s.id;
+    join.textContent = state === 'finished' ? 'View' : 'Join';
+    right.append(badge, cd);
+    if(state === 'finished'){
+      const rs = resultsBySession.get(s.id) || [];
+      const arr = (s.verified_only ? rs.filter(r => r.verified) : rs).map(r => r.avg);
+      if(arr.length){
+        const avg = arr.reduce((x, y) => x + y, 0) / arr.length;
+        const avgEl = document.createElement('div');
+        avgEl.className = 'session-avg';
+        avgEl.innerHTML = `Avg <b>${avg.toFixed(1)}</b>`;
+        right.append(avgEl);
+      }
+    }
+    right.append(join);
+
+    card.append(main, right);
+    return card;
+  }
+
   function renderSessions(){
-    const list = $('sessionList');
-    if(!list) return;   // view was unmounted before an async/realtime update resolved
-    if(sessions.length === 0){
-      list.innerHTML = '<div class="empty">No sessions yet. Create the first one above.</div>';
-      return;
-    }
+    const upcomingEl = $('upcomingList');
+    const pastEl = $('pastList');
+    if(!upcomingEl || !pastEl) return;   // view was unmounted before async resolution
+
     const now = Date.now();
-    const order = { live: 0, upcoming: 1, finished: 2 };
-    const sorted = [...sessions].sort((a, b) => {
-      const sa = sessionState(a, now), sb = sessionState(b, now);
-      if(order[sa] !== order[sb]) return order[sa] - order[sb];
-      const ta = new Date(a.scheduled_start).getTime();
-      const tb = new Date(b.scheduled_start).getTime();
-      return sa === 'finished' ? tb - ta : ta - tb;
-    });
-
-    list.innerHTML = '';
-    for(const s of sorted){
-      const state = sessionState(s, now);
-      const start = new Date(s.scheduled_start).getTime();
-      const card = document.createElement('div');
-      card.className = 'session-card ' + state;
-      card.dataset.start = start;
-      card.dataset.end = start + (s.duration_minutes || 0) * 60000;
-
-      const main = document.createElement('div');
-      main.className = 'session-main';
-      const name = document.createElement('div');
-      name.className = 'session-name';
-      name.textContent = s.name || 'Untitled session';
-      if(s.verified_only){
-        const vt = document.createElement('span');
-        vt.className = 'sess-verified';
-        vt.textContent = '✓ Verified';
-        name.appendChild(vt);
-      }
-      const prof = s.created_by_user_id ? organizersById.get(s.created_by_user_id) : null;
-      const organizerName = (prof && prof.display_name) || s.created_by || 'unknown';
-      const meta = document.createElement('div');
-      meta.className = 'session-meta';
-      meta.innerHTML = `${esc(formatStart(s.scheduled_start))} · ${s.duration_minutes} min`
-        + ` · <span class="session-organizer">${avatarHtml(prof && prof.avatar_url, organizerName)}`
-        + `<span class="organizer-name">${esc(organizerName)}</span></span>`;
-      main.append(name, meta);
-
-      const right = document.createElement('div');
-      right.className = 'session-right';
-      const badge = document.createElement('span');
-      badge.className = 'badge ' + state;
-      badge.textContent = state === 'live' ? 'Live' : state === 'upcoming' ? 'Upcoming' : 'Finished';
-      const cd = document.createElement('div');
-      cd.className = 'countdown' + (state === 'live' ? ' live' : '');
-      cd.dataset.role = 'countdown';
-      const join = document.createElement('a');
-      join.className = 'btn-join';
-      join.href = '#/room/' + s.id;
-      join.textContent = state === 'finished' ? 'View' : 'Join';
-      right.append(badge, cd);
-      if(state === 'finished'){
-        const rs = resultsBySession.get(s.id) || [];
-        const arr = (s.verified_only ? rs.filter(r => r.verified) : rs).map(r => r.avg);
-        if(arr.length){
-          const avg = arr.reduce((x, y) => x + y, 0) / arr.length;
-          const avgEl = document.createElement('div');
-          avgEl.className = 'session-avg';
-          avgEl.innerHTML = `Avg <b>${avg.toFixed(1)}</b>`;
-          right.append(avgEl);
-        }
-      }
-      right.append(join);
-
-      card.append(main, right);
-      list.appendChild(card);
+    const upcoming = [];
+    const past = [];
+    for(const s of sessions){
+      const st = sessionState(s, now);
+      if(st === 'finished') past.push({ s, st }); else upcoming.push({ s, st });
     }
+    // Upcoming: live first, then nearest start time.
+    upcoming.sort((a, b) => {
+      if(a.st !== b.st) return a.st === 'live' ? -1 : 1;
+      return new Date(a.s.scheduled_start) - new Date(b.s.scheduled_start);
+    });
+    // Past: most recent first.
+    past.sort((a, b) => new Date(b.s.scheduled_start) - new Date(a.s.scheduled_start));
+
+    upcomingEl.innerHTML = '';
+    if(!upcoming.length){
+      upcomingEl.innerHTML = '<div class="empty">No sessions on the horizon — start one from the + button.</div>';
+    } else {
+      for(const { s, st } of upcoming) upcomingEl.appendChild(buildSessionCard(s, st, now));
+    }
+
+    pastEl.innerHTML = '';
+    if(!past.length){
+      pastEl.innerHTML = '<div class="empty">No past sessions yet.</div>';
+    } else {
+      for(const { s, st } of past) pastEl.appendChild(buildSessionCard(s, st, now));
+    }
+
     tickCountdowns();
   }
 
@@ -213,70 +206,6 @@ export function mount(el){
     if(needsReorder) renderSessions();
   }
 
-  $('createForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const a = auth.getState();
-    if(!a.user){
-      setFormMsg('Log in to create a session.', 'err');
-      return;
-    }
-    const name = $('fName').value.trim();
-    const date = $('fDate').value;
-    const time = $('fTime').value;
-    const duration = parseInt($('fDuration').value, 10);
-
-    if(!name || !date || !time || !duration){
-      setFormMsg('Please fill in every field.', 'err');
-      return;
-    }
-    const start = new Date(`${date}T${time}`);
-    if(isNaN(start.getTime())){
-      setFormMsg('Invalid date or time.', 'err');
-      return;
-    }
-
-    $('btnCreate').disabled = true;
-    setFormMsg('Creating…', '');
-    const { error } = await supabase.from('sessions').insert({
-      name,
-      scheduled_start: start.toISOString(),
-      duration_minutes: duration,
-      status: 'scheduled',
-      created_by: a.displayName,
-      created_by_user_id: a.user.id,
-      verified_only: $('fVerified').checked
-    });
-    $('btnCreate').disabled = false;
-
-    if(error){
-      setFormMsg('Error: ' + error.message, 'err');
-      return;
-    }
-    setFormMsg('Session created.', 'ok');
-    $('fName').value = '';
-    loadSessions();
-  });
-
-  function setFormMsg(text, state){
-    const elMsg = $('formMsg');
-    elMsg.className = 'form-msg ' + (state || '');
-    elMsg.textContent = text;
-  }
-
-  $('fDate').value = new Date().toISOString().slice(0, 10);
-
-  const unsubAuth = auth.subscribeAuth(a => {
-    const note = $('organizerNote');
-    if(!note) return;
-    if(a.user){
-      note.innerHTML = `<span class="organizer-label">Organized by</span> ${avatarHtml(a.avatarUrl, a.displayName)} <b>${esc(a.displayName)}</b>`;
-      $('btnCreate').disabled = false;
-    } else {
-      note.innerHTML = `<a class="link" href="#/login">Log in</a> to create a session.`;
-      $('btnCreate').disabled = true;
-    }
-  });
-
   const channel = supabase.channel('sessions-changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, () => loadSessions())
     .subscribe();
@@ -287,7 +216,6 @@ export function mount(el){
 
   return () => {
     clearInterval(tickTimer);
-    unsubAuth();
     supabase.removeChannel(channel);
   };
 }

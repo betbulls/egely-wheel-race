@@ -10,6 +10,7 @@ import { mount as mountProfile } from './view-profile.js';
 import { mount as mountConnect } from './view-connect.js';
 import { mount as mountClients } from './view-clients.js';
 import { mount as mountLeaderboard } from './view-leaderboard.js';
+import { mount as mountSessionNew } from './view-session-new.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
@@ -45,7 +46,10 @@ function router(){
   else if(path === '/leaderboard') setView(mountLeaderboard);
   else if(path === '/connect') setView(mountConnect, param);
   else if(path === '/login') setView(mountLogin);
-  else if(path === '/sessions') setView(mountSessions);
+  else if(path === '/sessions'){
+    if(param === 'new') setView(mountSessionNew);
+    else setView(mountSessions);
+  }
   else setView(mountHome);
 }
 
@@ -204,6 +208,43 @@ auth.subscribeAuth(a => {
 
 // Refresh the header pill the instant the dashboard recomputes the level.
 window.addEventListener('ewr-level-changed', renderAuthArea);
+
+// ---- Floating Action Button (Start a measurement) ---------------------------
+const fab = document.getElementById('fab');
+const fabMenu = document.getElementById('fabMenu');
+function closeFabMenu(){
+  if(!fabMenu) return;
+  fabMenu.hidden = true;
+  if(fab){ fab.classList.remove('open'); fab.setAttribute('aria-expanded', 'false'); }
+}
+function openFabMenu(){
+  if(!fabMenu || !fab) return;
+  fabMenu.hidden = false;
+  fab.classList.add('open');
+  fab.setAttribute('aria-expanded', 'true');
+}
+if(fab && fabMenu){
+  fab.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if(fabMenu.hidden) openFabMenu(); else closeFabMenu();
+  });
+  document.addEventListener('click', (e) => {
+    if(fabMenu.hidden) return;
+    if(e.target.closest('#fab') || e.target.closest('#fabMenu')) return;
+    closeFabMenu();
+  });
+  fabMenu.addEventListener('click', (e) => {
+    if(e.target.closest('[data-fab-item]')) closeFabMenu();
+  });
+  document.addEventListener('keydown', (e) => {
+    if(e.key === 'Escape') closeFabMenu();
+  });
+  // Only show the FAB to logged-in users — measurement requires login anyway.
+  auth.subscribeAuth(a => {
+    fab.hidden = !a.user;
+    if(!a.user) closeFabMenu();
+  });
+}
 
 // ---- Boot -------------------------------------------------------------------
 window.addEventListener('hashchange', router);
