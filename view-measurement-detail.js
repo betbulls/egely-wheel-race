@@ -1,15 +1,22 @@
 import { supabase } from './db.js';
+import * as auth from './auth.js';
 import { vitalityLevel, vitalityColor as vColor, trendLabel } from './analytics.js';
 import { drawVitalityChart } from './chart.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
+function avatarHtml(url, name){
+  if(url) return `<img src="${esc(url)}" alt="">`;
+  return `<span class="avatar-initial">${esc((name || '?').charAt(0).toUpperCase())}</span>`;
+}
+
 // Read-only detail of a single stored measurement.
 export function mount(el, id){
   el.innerHTML = `
     <div class="view-head">
-      <p class="room-hint" style="text-align:left;margin:0 0 6px"><a href="#/me" class="link">← My measurements</a></p>
+      <p class="room-hint" style="text-align:left;margin:0 0 6px" id="dBack"></p>
       <h1 class="page-title" id="dTitle">Loading…</h1>
+      <div id="dClient"></div>
     </div>
     <div id="dBody"><div class="empty">Loading…</div></div>
   `;
@@ -19,6 +26,26 @@ export function mount(el, id){
   (async () => {
     const { data: r, error } = await supabase.from('results').select('*').eq('id', Number(id)).single();
     if(error || !r){ el.querySelector('#dBody').innerHTML = '<div class="empty">Measurement not found.</div>'; return; }
+
+    // Set the back link in context: own measurement → My measurements;
+    // a client's measurement (viewed by their practitioner) → that client.
+    const me = auth.getState();
+    const isClientView = !!(me.user && r.user_id && r.user_id !== me.user.id);
+    let clientProf = null;
+    if(isClientView){
+      const { data: prof } = await supabase.from('profiles')
+        .select('id, display_name, avatar_url').eq('id', r.user_id).maybeSingle();
+      clientProf = prof || null;
+      const cname = (clientProf && clientProf.display_name) || 'Client';
+      el.querySelector('#dBack').innerHTML = `<a href="#/clients/${esc(r.user_id)}" class="link">← ${esc(cname)}</a>`;
+      el.querySelector('#dClient').innerHTML = `
+        <div class="d-client-chip">
+          <span class="d-client-avatar">${avatarHtml(clientProf && clientProf.avatar_url, cname)}</span>
+          <span class="d-client-name">${esc(cname)}'s measurement</span>
+        </div>`;
+    } else {
+      el.querySelector('#dBack').innerHTML = `<a href="#/me" class="link">← My measurements</a>`;
+    }
 
     const solo = r.session_id == null;
     let title = 'Solo measurement';

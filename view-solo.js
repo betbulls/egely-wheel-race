@@ -155,6 +155,16 @@ export function mount(el){
     const prs = await auth.getMyPractitioners();
     for(const p of prs){
       const ch = supabase.channel('practitioner-' + p.id, { config: { presence: { key: me.user.id } } });
+      // A practitioner opening the live view asks for whatever we've already
+      // measured so they don't start watching mid-curve.
+      ch.on('broadcast', { event: 'request-history' }, ({ payload }) => {
+        if(!measuring) return;
+        if(payload && payload.clientId && payload.clientId !== me.user.id) return;
+        ch.send({ type: 'broadcast', event: 'history', payload: {
+          clientId: me.user.id, sampleMs: SAMPLE_MS, samples: samples.slice(-400),
+          verified: !cheatDetected, t: Math.max(0, Date.now() - startMs),
+        }});
+      });
       await new Promise(resolve => ch.subscribe(async (status) => {
         if(status === 'SUBSCRIBED'){
           try { await ch.track({ measuring: true, name: me.displayName, avatar: me.avatarUrl, ts: Date.now() }); } catch {}
@@ -171,7 +181,10 @@ export function mount(el){
     if(!me.user) return;
     const avg = samples.length ? samples.reduce((a, b) => a + b, 0) / samples.length : 0;
     const peak = samples.length ? Math.max(...samples) : 0;
-    const payload = { clientId: me.user.id, led: curLed, avg, peak, t: Math.max(0, Date.now() - startMs) };
+    const payload = {
+      clientId: me.user.id, led: curLed, avg, peak,
+      verified: !cheatDetected, t: Math.max(0, Date.now() - startMs),
+    };
     for(const ch of liveChannels){
       ch.send({ type: 'broadcast', event: 'tick', payload });
     }
