@@ -20,6 +20,7 @@ export function mount(el){
   let recentFrames = [], cheatDetected = false;
   let lastStats = null, saved = false;   // held until the user clicks Save
   let sampleTimer = null, uiTimer = null, unsubFrames = null, unsubStatus = null;
+  let liveChannels = [];   // realtime channels to my linked practitioners (live broadcast)
 
   el.innerHTML = `
     <div class="view-head">
@@ -138,9 +139,51 @@ export function mount(el){
         $('sAvg').style.color = vColor(avg);
       }
       updateVerify();
+      publishLiveTick();
       if(Date.now() >= endMs) stopMeasurement();
     }
     drawChart();
+  }
+
+  // ---- Live broadcast to linked practitioners ------------------------------
+  // While measuring, presence on `practitioner-<id>` signals "measuring",
+  // and broadcast `tick` events stream the live LED to each practitioner.
+  async function openLive(){
+    if(liveChannels.length) return;
+    const me = auth.getState();
+    if(!me.user) return;
+    const prs = await auth.getMyPractitioners();
+    for(const p of prs){
+      const ch = supabase.channel('practitioner-' + p.id, { config: { presence: { key: me.user.id } } });
+      await new Promise(resolve => ch.subscribe(async (status) => {
+        if(status === 'SUBSCRIBED'){
+          try { await ch.track({ measuring: true, name: me.displayName, avatar: me.avatarUrl, ts: Date.now() }); } catch {}
+          resolve();
+        }
+      }));
+      liveChannels.push(ch);
+    }
+  }
+
+  function publishLiveTick(){
+    if(!liveChannels.length) return;
+    const me = auth.getState();
+    if(!me.user) return;
+    const avg = samples.length ? samples.reduce((a, b) => a + b, 0) / samples.length : 0;
+    const peak = samples.length ? Math.max(...samples) : 0;
+    const payload = { clientId: me.user.id, led: curLed, avg, peak, t: Math.max(0, Date.now() - startMs) };
+    for(const ch of liveChannels){
+      ch.send({ type: 'broadcast', event: 'tick', payload });
+    }
+  }
+
+  async function closeLive(){
+    const channels = liveChannels;
+    liveChannels = [];
+    for(const ch of channels){
+      try { await ch.untrack(); } catch {}
+      try { supabase.removeChannel(ch); } catch {}
+    }
   }
 
   function updateVerify(){
@@ -161,6 +204,7 @@ export function mount(el){
     setMsg('Measuring…', '');
     updateVerify();
     sampleTimer = setInterval(() => samples.push(curLed), SAMPLE_MS);
+    openLive();   // fire and forget; channels become ready within ~1s
   }
 
   function stopMeasurement(){
@@ -174,6 +218,7 @@ export function mount(el){
     setMsg('', '');
     lastStats = computeStats(samples);
     if(lastStats) showEval(lastStats);
+    closeLive();
   }
 
   function showEval(stats){
@@ -252,6 +297,7 @@ export function mount(el){
     if(uiTimer) clearInterval(uiTimer);
     if(unsubFrames) unsubFrames();
     if(unsubStatus) unsubStatus();
+    closeLive();
     window.removeEventListener('resize', drawChart);
   };
 }

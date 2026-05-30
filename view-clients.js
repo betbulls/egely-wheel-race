@@ -61,6 +61,7 @@ function mountWall(el){
     <div id="clWall"><div class="empty">Loading…</div></div>`;
   const wall = el.querySelector('#clWall');
   let onResize = null;
+  let liveChannel = null;
 
   (async () => {
     const clients = await auth.getMyClients();
@@ -74,13 +75,14 @@ function mountWall(el){
       const last = c.last;
       const lvl = last ? vitalityLevel(last.avg || 0) : null;
       return `
-        <a class="client-card" href="#/clients/${esc(c.id)}">
+        <a class="client-card" href="#/clients/${esc(c.id)}" data-client-id="${esc(c.id)}">
           <div class="client-head">
             <div class="client-avatar">${avatarHtml(c.avatarUrl, c.displayName)}</div>
             <div class="client-id">
               <div class="client-name">${esc(c.displayName)}</div>
               <div class="client-sub">${last ? esc(whenStr(last.created_at)) : 'No measurements yet'}</div>
             </div>
+            <span class="live-pill-mini" hidden><span class="dot"></span><span class="live-pill-text">LIVE</span></span>
           </div>
           ${last ? `
             <canvas class="client-spark" data-curve='${esc(JSON.stringify(last.curve || []))}'></canvas>
@@ -100,9 +102,51 @@ function mountWall(el){
     draw();
     onResize = draw;
     window.addEventListener('resize', onResize);
+
+    // Live status: a presence/broadcast channel for my practitioner identity.
+    // Each measuring client tracks "measuring: true" + broadcasts live ticks.
+    const myId = auth.getState().user.id;
+    liveChannel = supabase.channel('practitioner-' + myId);
+
+    const applyPresence = () => {
+      const state = liveChannel.presenceState();
+      const measuring = new Set();
+      for(const key in state){
+        if(state[key].some(p => p.measuring)) measuring.add(key);
+      }
+      // Toggle pill + class; sort measuring clients to the top.
+      const cards = [...wall.querySelectorAll('.client-card')];
+      for(const card of cards){
+        const live = measuring.has(card.dataset.clientId);
+        card.classList.toggle('live', live);
+        const pill = card.querySelector('.live-pill-mini');
+        if(pill){
+          pill.hidden = !live;
+          if(!live) pill.querySelector('.live-pill-text').textContent = 'LIVE';
+        }
+      }
+      cards.sort((a, b) => {
+        const am = measuring.has(a.dataset.clientId) ? 0 : 1;
+        const bm = measuring.has(b.dataset.clientId) ? 0 : 1;
+        return am - bm;
+      });
+      cards.forEach(c => wall.appendChild(c));   // reorders, preserves canvases
+    };
+
+    liveChannel.on('presence', { event: 'sync' }, applyPresence);
+    liveChannel.on('broadcast', { event: 'tick' }, ({ payload }) => {
+      const card = wall.querySelector(`.client-card[data-client-id="${payload.clientId}"]`);
+      if(!card) return;
+      const t = card.querySelector('.live-pill-text');
+      if(t) t.textContent = 'LIVE · ' + payload.led;
+    });
+    liveChannel.subscribe();
   })();
 
-  return () => { if(onResize) window.removeEventListener('resize', onResize); };
+  return () => {
+    if(onResize) window.removeEventListener('resize', onResize);
+    if(liveChannel) supabase.removeChannel(liveChannel);
+  };
 }
 
 // ---- Single client detail --------------------------------------------------
@@ -112,7 +156,13 @@ function mountDetail(el, clientId){
       <p class="room-hint" style="text-align:left;margin:0 0 6px"><a href="#/clients" class="link">← Clients</a></p>
       <h1 class="page-title" id="clTitle">Loading…</h1>
     </div>
+    <div id="clLiveBanner" class="client-live-banner" hidden></div>
     <div id="clBody"><div class="empty">Loading…</div></div>`;
+
+  let liveChannel = null;
+  let liveCurve = [];
+  let liveActive = false;
+  let liveName = 'Client';
 
   (async () => {
     const { connected, profile, rows } = await auth.getClientMeasurements(clientId);
@@ -122,6 +172,7 @@ function mountDetail(el, clientId){
       return;
     }
     const name = (profile && profile.display_name) || 'Client';
+    liveName = name;
     el.querySelector('#clTitle').innerHTML =
       `<span class="client-title-avatar">${avatarHtml(profile && profile.avatar_url, name)}</span> ${esc(name)}`;
 
@@ -159,7 +210,78 @@ function mountDetail(el, clientId){
           </div>
         </a>`;
     }).join('');
+
+    // ---- Live banner: shown while the client is actively measuring ---------
+    const banner = el.querySelector('#clLiveBanner');
+
+    function showLive(){
+      if(liveActive) return;
+      liveActive = true; liveCurve = [];
+      banner.hidden = false;
+      banner.innerHTML = `
+        <div class="live-head">
+          <span class="live-pill-mini live"><span class="dot"></span><span>LIVE</span></span>
+          <span class="live-title">${esc(liveName)} is measuring now</span>
+        </div>
+        <div class="live-metrics">
+          <div class="lm"><div class="lm-val" id="lvLive">–</div><div class="lm-lbl">Live</div></div>
+          <div class="lm"><div class="lm-val" id="lvAvg">–</div><div class="lm-lbl">Avg</div></div>
+          <div class="lm"><div class="lm-val" id="lvPeak">–</div><div class="lm-lbl">Peak</div></div>
+        </div>
+        <canvas class="live-curve" id="lvCurve"></canvas>`;
+    }
+    function hideLive(){
+      if(!liveActive) return;
+      liveActive = false; liveCurve = [];
+      banner.hidden = true; banner.innerHTML = '';
+    }
+    function drawLive(){
+      const cv = el.querySelector('#lvCurve');
+      if(!cv) return;
+      const w = cv.clientWidth, h = cv.clientHeight;
+      if(!w || !h) return;
+      const dpr = window.devicePixelRatio || 1;
+      if(cv.width !== Math.round(w * dpr)){ cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+      const ctx = cv.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      if(liveCurve.length < 2) return;
+      const tMax = liveCurve[liveCurve.length - 1].t;
+      const tMin = Math.max(0, tMax - 60000);
+      const xOf = t => ((t - tMin) / Math.max(1, tMax - tMin)) * w;
+      const yOf = led => h - 4 - (led / 24) * (h - 8);
+      ctx.beginPath();
+      let started = false;
+      for(const pt of liveCurve){
+        if(pt.t < tMin) continue;
+        const x = xOf(pt.t), y = yOf(pt.led);
+        if(!started){ ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+      }
+      const lastAvg = liveCurve.reduce((s, p) => s + p.led, 0) / liveCurve.length;
+      ctx.strokeStyle = vColor(lastAvg); ctx.lineWidth = 2.5; ctx.lineJoin = 'round'; ctx.stroke();
+    }
+
+    const myId = auth.getState().user.id;
+    liveChannel = supabase.channel('practitioner-' + myId);
+    liveChannel.on('presence', { event: 'sync' }, () => {
+      const state = liveChannel.presenceState();
+      const ps = state[clientId];
+      const measuring = !!(ps && ps.some(x => x.measuring));
+      if(measuring) showLive(); else hideLive();
+    });
+    liveChannel.on('broadcast', { event: 'tick' }, ({ payload }) => {
+      if(payload.clientId !== clientId) return;
+      if(!liveActive) showLive();
+      liveCurve.push({ t: payload.t, led: payload.led });
+      if(liveCurve.length > 800) liveCurve.shift();
+      const $ = id => el.querySelector('#' + id);
+      if($('lvLive')){ $('lvLive').textContent = payload.led; $('lvLive').style.color = vColor(payload.led); }
+      if($('lvAvg')){ $('lvAvg').textContent = (payload.avg || 0).toFixed(1); $('lvAvg').style.color = vColor(payload.avg || 0); }
+      if($('lvPeak')){ $('lvPeak').textContent = payload.peak; }
+      drawLive();
+    });
+    liveChannel.subscribe();
   })();
 
-  return () => {};
+  return () => { if(liveChannel) supabase.removeChannel(liveChannel); };
 }
