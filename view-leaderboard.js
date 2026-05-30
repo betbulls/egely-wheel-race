@@ -85,19 +85,31 @@ function statusTitle(u){
   return 'New Explorer';
 }
 
-function positiveCopy(rank, total){
-  if(total === 1) return 'You are the journey so far. ✨';
-  if(rank === 1) return "You're leading the way. ✨";
-  if(rank <= 3) return "You're on the podium. ✨";
+// Tunable, never-toxic ranking copy. Returns { rankMeta, copy }.
+// - tiny community (≤5): no percentile shown.
+// - top half: "Top X%" + an encouraging line.
+// - bottom half: no percentile shown (no embarrassing "Top 100%"), just a
+//   neutral, forward-looking line.
+function buildStanding(rank, total){
+  if(total <= 5)  return { rankMeta: '',                 copy: 'Welcome to the journey.' };
+  if(rank === 1)  return { rankMeta: 'Leading',          copy: 'Leading the way. ✨' };
+  if(rank <= 3)  return { rankMeta: 'On the podium',     copy: "You're on the podium. ✨" };
   const pct = Math.max(1, Math.round((rank / total) * 100));
-  if(pct <= 10) return `Top ${pct}% — beautifully done.`;
-  if(pct <= 25) return `Top ${pct}% — your journey is showing.`;
-  if(pct <= 50) return 'You are climbing — keep going.';
-  return 'Every step is part of the journey.';
+  if(total >= 20 && pct <= 10) return { rankMeta: `Top ${pct}%`, copy: 'Beautifully done.' };
+  if(total >= 8  && pct <= 25) return { rankMeta: `Top ${pct}%`, copy: 'Your journey is showing.' };
+  if(pct <= 50)               return { rankMeta: `Top ${pct}%`, copy: 'Climbing well.' };
+  return { rankMeta: '', copy: 'Keep building your journey.' };
+}
+
+// Optional green pulse dot — shown only on tabs where weekly activity isn't
+// implicit (i.e., This Month and All Time), to make active people visible.
+function activeDot(u, showActivity){
+  if(!showActivity || !u.activeThisWeek) return '';
+  return '<span class="lb-active-dot" title="Earned XP this week"></span>';
 }
 
 // ---- Podium ---------------------------------------------------------------
-function renderPodium(podium, profMap){
+function renderPodium(podium, profMap, showActivity){
   if(!podium.length) return '';
   const medals = ['🥇', '🥈', '🥉'];
   return `
@@ -109,7 +121,7 @@ function renderPodium(podium, profMap){
           <div class="lb-podium-card place-${i + 1}" data-user-id="${esc(u.user_id)}">
             <div class="lb-medal">${medals[i]}</div>
             <div class="lb-avatar lg">${avatarHtml(p.avatar_url, p.display_name)}</div>
-            <div class="lb-name">${esc(p.display_name || 'Player')}${isP ? '<span class="lb-pract-pin" title="Practitioner">✓</span>' : ''}</div>
+            <div class="lb-name">${esc(p.display_name || 'Player')}${isP ? '<span class="lb-pract-pin" title="Practitioner">✓</span>' : ''}${activeDot(u, showActivity)}</div>
             <div class="lb-podium-status">${esc(statusTitle(u))}</div>
             <div class="lb-level">${levelPill(u.xpAll)}</div>
             <div class="lb-xp">${u.xpPeriod} <span class="lb-xp-label">XP</span></div>
@@ -141,9 +153,8 @@ function renderYourStanding(list, profMap, period, myId){
   }
   const rank = idx + 1;
   const total = list.length;
-  const pct = total > 1 ? Math.max(1, Math.round((rank / total) * 100)) : 100;
   const profile = profMap.get(myId) || {};
-  const copy = positiveCopy(rank, total);
+  const standing = buildStanding(rank, total);
 
   return `
     <div class="lb-mine" data-user-id="${esc(myId)}">
@@ -156,15 +167,15 @@ function renderYourStanding(list, profMap, period, myId){
         </div>
         <div class="lb-mine-rank">
           <div class="lb-rank-num">#${rank}</div>
-          <div class="lb-rank-meta">${total > 1 ? `Top ${pct}%` : '&nbsp;'}</div>
+          ${standing.rankMeta ? `<div class="lb-rank-meta">${esc(standing.rankMeta)}</div>` : ''}
         </div>
       </div>
-      <div class="lb-mine-copy">${esc(copy)}</div>
+      <div class="lb-mine-copy">${esc(standing.copy)}</div>
     </div>`;
 }
 
 // ---- List -----------------------------------------------------------------
-function renderList(rest, profMap, myId){
+function renderList(rest, profMap, myId, showActivity){
   if(!rest.length) return '';
   return `
     <div class="lb-list">
@@ -181,6 +192,7 @@ function renderList(rest, profMap, myId){
               <div class="lb-name-line">
                 <span class="lb-name">${esc(p.display_name || 'Player')}</span>
                 ${isP ? '<span class="lb-pract-tag" title="Practitioner">✓ Practitioner</span>' : ''}
+                ${activeDot(u, showActivity)}
               </div>
               <div class="lb-meta-line">
                 ${levelPill(u.xpAll)}
@@ -194,10 +206,27 @@ function renderList(rest, profMap, myId){
     </div>`;
 }
 
-function renderEmpty(period){
-  const msg = period === 'week'  ? 'Quiet week so far — be the first to earn XP.'
-            : period === 'month' ? 'New month — be the first to earn XP.'
-            :                       'No achievements yet. Be the first.';
+// ---- Community heartbeat --------------------------------------------------
+function plural(n, one, many){ return `${n} ${n === 1 ? one : many}`; }
+
+function renderHeartbeat(journeyCount, weekActiveCount){
+  if(journeyCount === 0) return '';
+  const left = `${plural(journeyCount, 'explorer', 'explorers')} on the journey`;
+  const right = `${weekActiveCount} earning XP this week`;
+  return `<div class="lb-heartbeat">${esc(left)} · ${esc(right)}</div>`;
+}
+
+function renderEmpty(period, journeyCount){
+  let msg;
+  if(period === 'week'){
+    msg = journeyCount > 0
+      ? `${plural(journeyCount, 'explorer', 'explorers')} on the journey — be the first to earn XP this week.`
+      : 'Quiet week so far — be the first to earn XP.';
+  } else if(period === 'month'){
+    msg = 'New month — be the first to earn XP.';
+  } else {
+    msg = 'No achievements yet. Be the first.';
+  }
   return `<div class="lb-empty"><p>${esc(msg)}</p></div>`;
 }
 
@@ -322,6 +351,7 @@ export function mount(el){
   async function render(){
     if(!allRows) return;
     const start = periodStart(state.period);
+    const weekStart = periodStart('week');     // for activeThisWeek flag
     const userMap = new Map();
     const ensure = (id) => {
       let u = userMap.get(id);
@@ -329,7 +359,7 @@ export function mount(el){
         u = { user_id: id, xpAll: 0, xpPeriod: 0, badgesAll: [],
               sessionCount: 0, hostedCount: 0,
               bestSessAvg: 0, bestSessPeak: 0, verifiedCount: 0,
-              isPractitioner: false };
+              isPractitioner: false, activeThisWeek: false };
         userMap.set(id, u);
       }
       return u;
@@ -340,11 +370,11 @@ export function mount(el){
       if(!cat) continue;
       const u = ensure(r.user_id);
       const xp = TIER_XP[cat.tier] || 0;
+      const ts = new Date(r.unlocked_at);
       u.xpAll += xp;
       u.badgesAll.push({ ...cat, id: r.achievement_id, unlocked_at: r.unlocked_at });
-      if(!start || new Date(r.unlocked_at) >= start){
-        u.xpPeriod += xp;
-      }
+      if(!start || ts >= start)     u.xpPeriod += xp;
+      if(weekStart && ts >= weekStart) u.activeThisWeek = true;
     }
     for(const r of allRows.sessRes){
       const u = ensure(r.user_id);
@@ -359,6 +389,12 @@ export function mount(el){
       }
     }
 
+    // Community heartbeat numbers — count users who've ever earned XP and
+    // those active this week. Same numbers across all tabs (stable signal).
+    const onJourney = [...userMap.values()].filter(u => u.xpAll > 0);
+    const journeyCount = onJourney.length;
+    const weekActiveCount = onJourney.filter(u => u.activeThisWeek).length;
+
     const list = [...userMap.values()]
       .filter(u => u.xpPeriod > 0)
       .sort((a, b) => b.xpPeriod - a.xpPeriod);
@@ -366,10 +402,15 @@ export function mount(el){
     const me = auth.getState();
     const myId = me.user?.id || null;
 
+    // The green active-dot is only useful when "active this week" isn't
+    // implicit. On the This Week tab everyone on the list is already active.
+    const showActivity = state.period !== 'week';
+
     if(!list.length){
       body.innerHTML = `
+        ${renderHeartbeat(journeyCount, weekActiveCount)}
         ${renderYourStanding(list, new Map(), state.period, myId)}
-        ${renderEmpty(state.period)}`;
+        ${renderEmpty(state.period, journeyCount)}`;
       body._users = userMap;
       body._profs = new Map();
       return;
@@ -381,7 +422,6 @@ export function mount(el){
     const { data: profs } = await supabase
       .from('profiles').select('id, display_name, avatar_url, is_practitioner').in('id', [...ids]);
     const profMap = new Map((profs || []).map(p => [p.id, p]));
-    // Attach isPractitioner to user entries (so statusTitle can use it)
     for(const u of userMap.values()){
       const p = profMap.get(u.user_id);
       u.isPractitioner = !!(p && p.is_practitioner);
@@ -391,11 +431,11 @@ export function mount(el){
     const rest = top.slice(3);
 
     body.innerHTML = `
-      ${renderPodium(podium, profMap)}
+      ${renderHeartbeat(journeyCount, weekActiveCount)}
+      ${renderPodium(podium, profMap, showActivity)}
       ${renderYourStanding(list, profMap, state.period, myId)}
-      ${renderList(rest, profMap, myId)}
+      ${renderList(rest, profMap, myId, showActivity)}
     `;
-    // Stash for the click-to-popup delegate.
     body._users = userMap;
     body._profs = profMap;
   }
