@@ -284,34 +284,57 @@
   .hl-num{font-family:'Montserrat',sans-serif;font-weight:600}
   .hl-name{font-family:'Inter',sans-serif;opacity:.9}
 
-  /* Home Dashboard — Level card */
-  .level-card{position:relative;overflow:hidden;margin-bottom:18px;padding:22px 24px;
-    border-radius:16px;border:1px solid rgba(155,109,255,0.4);
-    background:linear-gradient(135deg, rgba(82,48,218,0.32), rgba(0,51,255,0.12));
-    display:flex;flex-direction:column;gap:14px}
-  .level-card::before{content:'';position:absolute;inset:-40% -10% auto auto;
-    width:280px;height:280px;border-radius:50%;
-    background:radial-gradient(circle, rgba(155,109,255,0.35), transparent 70%);
-    pointer-events:none}
-  .level-card.level-tier-5{border-color:rgba(255,212,121,0.5)}
-  .level-card.level-tier-6{border-color:rgba(255,212,121,0.7);
-    background:linear-gradient(135deg, rgba(255,180,80,0.28), rgba(82,48,218,0.18))}
-  .level-card.level-tier-6::before{background:radial-gradient(circle, rgba(255,212,121,0.4), transparent 70%)}
-  .lc-top{display:flex;align-items:baseline;gap:14px;position:relative;flex-wrap:wrap}
-  .lc-eyebrow{font-family:'Inter',sans-serif;font-size:11px;letter-spacing:0.2em;
-    text-transform:uppercase;color:rgba(255,255,255,0.6)}
-  .lc-title{font-family:'Montserrat',sans-serif;font-size:30px;font-weight:500;line-height:1;margin:0}
-  .lc-bar{height:10px;background:rgba(255,255,255,0.08);border-radius:99px;overflow:hidden;position:relative}
-  .lc-bar-fill{height:100%;border-radius:99px;
-    background:linear-gradient(90deg, #5230da, #b18bff);transition:width .6s ease}
-  .level-card.level-tier-5 .lc-bar-fill,
-  .level-card.level-tier-6 .lc-bar-fill{background:linear-gradient(90deg, #ffd479, #f5a623)}
-  .lc-meta{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;
-    font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
-  .lc-next{color:#cdbcff}
-  .level-card.level-tier-6 .lc-next{color:#ffd479}
-  .lc-max{font-family:'Montserrat',sans-serif;font-size:18px;color:#ffd479}
-  .lc-total{font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:var(--faint)}
+  /* Home Dashboard — Level Journey (compact 3-col with full progression path) */
+  .level-journey{
+    position:relative;overflow:hidden;margin-bottom:18px;padding:16px 22px;
+    border-radius:16px;border:1px solid rgba(155,109,255,0.32);
+    background:linear-gradient(135deg, rgba(82,48,218,0.22), rgba(0,51,255,0.06));
+    display:grid;grid-template-columns:auto 1fr auto;gap:24px;align-items:center;
+    min-height:108px
+  }
+  .level-journey::before{content:'';position:absolute;inset:-30% -10% auto auto;
+    width:260px;height:260px;border-radius:50%;pointer-events:none;
+    background:radial-gradient(circle, rgba(155,109,255,0.22), transparent 70%)}
+  .level-journey.level-tier-5{border-color:rgba(255,212,121,0.4)}
+  .level-journey.level-tier-6{border-color:rgba(255,212,121,0.6);
+    background:linear-gradient(135deg, rgba(255,180,80,0.22), rgba(82,48,218,0.12))}
+  .level-journey.level-tier-6::before{background:radial-gradient(circle, rgba(255,212,121,0.32), transparent 70%)}
+
+  .lj-side{display:flex;flex-direction:column;gap:3px;min-width:0;position:relative;z-index:1}
+  .lj-right{text-align:right;align-items:flex-end}
+  .lj-eyebrow{font-family:'Inter',sans-serif;font-size:10px;letter-spacing:0.2em;
+    text-transform:uppercase;color:rgba(255,255,255,0.55)}
+  .lj-title{font-family:'Montserrat',sans-serif;font-size:24px;font-weight:500;line-height:1.05;margin:0}
+  .lj-title-sm{font-family:'Montserrat',sans-serif;font-size:18px;font-weight:500;line-height:1.05}
+  .lj-meta{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;line-height:1.4}
+  .lj-to-next{color:#cdbcff}
+  .lj-max{color:#ffd479}
+  .level-journey.level-tier-6 .lj-to-next{color:#ffd479}
+
+  .lj-track{position:relative;padding:14px 14px 26px;width:100%;z-index:1}
+  .lj-bar{height:8px;background:rgba(255,255,255,0.08);border-radius:99px;overflow:hidden;position:relative}
+  .lj-bar-fill{height:100%;border-radius:99px;
+    background:linear-gradient(90deg, #5230da, #b18bff);
+    box-shadow:0 0 14px rgba(155,109,255,0.6);
+    transition:width .6s ease}
+  .level-journey.level-tier-5 .lj-bar-fill,
+  .level-journey.level-tier-6 .lj-bar-fill{
+    background:linear-gradient(90deg, #ffd479, #f5a623);
+    box-shadow:0 0 14px rgba(255,212,121,0.7)}
+
+  .lj-marker{position:absolute;top:14px}
+  .lj-dot{width:10px;height:10px;border-radius:50%;
+    background:rgba(255,255,255,0.18);border:2px solid rgba(13,11,40,0.85);
+    transform:translate(-50%,-1px);transition:all .3s ease;position:relative;z-index:2}
+  .lj-marker.reached .lj-dot{background:#b18bff;box-shadow:0 0 8px rgba(177,139,255,0.7)}
+  .lj-marker.current .lj-dot{
+    background:#ffd479;border-color:#fff;width:14px;height:14px;
+    transform:translate(-50%,-3px);
+    box-shadow:0 0 16px rgba(255,212,121,0.9), 0 0 36px rgba(255,212,121,0.4)}
+  .lj-label{position:absolute;top:20px;transform:translateX(-50%);
+    font-size:10px;letter-spacing:0.04em;color:var(--faint);white-space:nowrap}
+  .lj-marker.reached .lj-label{color:rgba(255,255,255,0.7)}
+  .lj-marker.current .lj-label{color:#ffd479;font-weight:600}
 
   /* Home Dashboard */
   .dash-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:8px}
@@ -542,7 +565,13 @@
     .level-up-banner{padding:16px 18px;gap:10px}
     .lub-sparkle{font-size:24px}
     .lub-title{font-size:18px}
-    .lc-title{font-size:24px}
+    .level-journey{grid-template-columns:1fr;gap:10px;padding:14px 16px;min-height:0}
+    .lj-right{text-align:left;align-items:flex-start}
+    .lj-title{font-size:22px}
+    .lj-track{padding:14px 6px 22px}
+    .lj-label{font-size:9px}
+    .lj-marker .lj-label{display:none}
+    .lj-marker.current .lj-label{display:block}
   }
 </style>
 </head>

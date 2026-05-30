@@ -198,24 +198,56 @@ function renderLevelUp(from, to){
     </div>`;
 }
 
-// ---- Level card ------------------------------------------------------------
+// ---- Level Journey ---------------------------------------------------------
+// Compact 3-column "journey" view: where you are, the whole path with dots,
+// where you're heading. Dots are equidistant for readable labels; the bar's
+// fill is mapped piecewise so each level segment owns equal visual space.
 function renderLevel(s){
-  const { level, nextLevel, isMax, totalXP, xpInLevel, xpForThis, xpToNext, pct } = s;
+  const { level, nextLevel, isMax, totalXP, xpInLevel, xpForThis, xpToNext } = s;
+  const span = LEVELS.length - 1;
+
+  const fillPct = (() => {
+    if(isMax) return 100;
+    const from = (level.idx - 1) / span;
+    const to   = level.idx       / span;
+    const within = xpForThis > 0 ? (xpInLevel / xpForThis) : 0;
+    return Math.max(0, Math.min(100, (from + within * (to - from)) * 100));
+  })();
+
+  const markers = LEVELS.map(L => {
+    const pos = (L.idx - 1) / span * 100;
+    const reached = totalXP >= L.threshold;
+    const isCurrent = L.idx === level.idx;
+    const status = isCurrent ? 'current' : reached ? 'reached' : 'future';
+    return `
+      <div class="lj-marker ${status}" style="left:${pos}%">
+        <div class="lj-dot"></div>
+        <div class="lj-label">${esc(L.title)}</div>
+      </div>`;
+  }).join('');
+
   return `
-    <section class="level-card level-tier-${level.idx}">
-      <div class="lc-top">
-        <span class="lc-eyebrow">Level ${level.idx}</span>
-        <h2 class="lc-title">${esc(level.title)}</h2>
+    <section class="level-journey level-tier-${level.idx}">
+      <div class="lj-side lj-left">
+        <div class="lj-eyebrow">Level ${level.idx}</div>
+        <div class="lj-title">${esc(level.title)}</div>
+        ${isMax
+          ? '<div class="lj-meta lj-max">Max level reached ✨</div>'
+          : `<div class="lj-meta">${xpInLevel} / ${xpForThis} XP</div>
+             <div class="lj-meta lj-to-next">${xpToNext} XP to ${esc(nextLevel.title)}</div>`}
       </div>
-      ${isMax
-        ? '<div class="lc-max">Max level reached ✨</div>'
-        : `<div class="lc-bar"><div class="lc-bar-fill" style="width:${pct}%"></div></div>
-           <div class="lc-meta">
-             <span class="lc-xp">${xpInLevel} / ${xpForThis} XP</span>
-             <span class="lc-next">${xpToNext} XP to ${esc(nextLevel.title)}</span>
-           </div>`
-      }
-      <div class="lc-total">Total · ${totalXP} XP</div>
+      <div class="lj-track">
+        <div class="lj-bar"><div class="lj-bar-fill" style="width:${fillPct}%"></div></div>
+        ${markers}
+      </div>
+      <div class="lj-side lj-right">
+        ${isMax
+          ? `<div class="lj-eyebrow">Total</div>
+             <div class="lj-title-sm">${totalXP} XP</div>`
+          : `<div class="lj-eyebrow">Next</div>
+             <div class="lj-title-sm">${esc(nextLevel.title)}</div>
+             <div class="lj-meta">Unlocks at ${nextLevel.threshold} XP</div>`}
+      </div>
     </section>`;
 }
 

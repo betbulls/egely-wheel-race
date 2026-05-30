@@ -23,12 +23,12 @@ export const CATEGORIES = [
 // XP value per tier — used by the Level system.
 export const TIER_XP = { bronze: 10, silver: 25, gold: 50, special: 100 };
 export const LEVELS = [
-  { idx: 1, title: 'Explorer',   threshold: 0    },
-  { idx: 2, title: 'Adept',      threshold: 100  },
-  { idx: 3, title: 'Seeker',     threshold: 250  },
-  { idx: 4, title: 'Pathfinder', threshold: 500  },
-  { idx: 5, title: 'Guide',      threshold: 1000 },
-  { idx: 6, title: 'Master',     threshold: 1500 },
+  { idx: 1, title: 'Explorer', threshold: 0    },
+  { idx: 2, title: 'Adept',    threshold: 100  },
+  { idx: 3, title: 'Seeker',   threshold: 250  },
+  { idx: 4, title: 'Guide',    threshold: 500  },
+  { idx: 5, title: 'Master',   threshold: 900  },
+  { idx: 6, title: 'Luminary', threshold: 1500 },
 ];
 
 export function xpForAchievement(a){ return TIER_XP[a.tier] || 0; }
