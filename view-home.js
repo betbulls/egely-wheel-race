@@ -1,116 +1,262 @@
 import { supabase } from './db.js';
 import * as auth from './auth.js';
 import { vitalityColor as vColor } from './analytics.js';
+import { CATEGORIES, computeAchievements, pickNextMilestones } from './achievements.js';
+import { fetchUserAchievements, recordNewUnlocks, markSeen } from './achievements-store.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+// Migration helper: pre-hybrid dashboards used this flag to know they'd been
+// loaded before. We reuse it once to silently sync existing unlocks to the DB
+// without flooding the user with NEW pulses for past progress.
+const MIGRATION_FLAG = 'ewr_seen_init';
 
 export function mount(el){
   const a = auth.getState();
   const userId = a.user?.id || null;
-  const myName = a.displayName || '';
+
+  // Logged-out home: an invitation to log in, no leaderboards.
+  if(!userId){
+    el.innerHTML = `
+      <div class="view-head">
+        <h1 class="page-title">Egely Wheel Race</h1>
+        <p class="page-sub">Track your vitality, your way.</p>
+      </div>
+      <div class="panel">
+        <p class="placeholder">Log in to see your journey, achievements, and personal progress.</p>
+        <div class="form-actions" style="margin-top:14px;flex-wrap:wrap">
+          <a class="btn-join" href="#/login">Log in</a>
+          <a class="btn-secondary" href="https://egelywheel.com/products/ewr-subscription" target="_blank" rel="noopener">Subscribe to measure</a>
+        </div>
+      </div>`;
+    return () => {};
+  }
 
   el.innerHTML = `
     <div class="view-head">
-      <h1 class="page-title">Egely Wheel Race</h1>
-      <p class="page-sub">Your stats and the community leaderboard.</p>
+      <h1 class="page-title">Welcome${a.displayName ? ', ' + esc(a.displayName) : ''}</h1>
+      <p class="page-sub">Your journey at a glance.</p>
     </div>
-    <div id="homeBody"><div class="empty">Loading…</div></div>
-  `;
+    <div id="homeBody"><div class="empty">Loading…</div></div>`;
 
   (async () => {
-    const [mineRes, verifiedRes, verifiedSessRes] = await Promise.all([
-      userId ? supabase.from('results').select('*').eq('user_id', userId)
-            : Promise.resolve({ data: [] }),
-      supabase.from('results').select('*').eq('verified', true),
-      supabase.from('sessions').select('id,name,created_by,verified_only').eq('verified_only', true),
+    // ---- One coordinated data fetch -----------------------------------------
+    const [resR, hostedR, prRecvR, stored] = await Promise.all([
+      supabase.from('results').select('*').eq('user_id', userId),
+      supabase.from('sessions').select('id').eq('created_by_user_id', userId),
+      supabase.from('practitioner_links').select('practitioner_id').eq('client_id', userId).eq('status', 'active'),
+      fetchUserAchievements(userId),
     ]);
+    const results = resR.data || [];
+    const hostedRows = hostedR.data || [];
+    const hostedIds = hostedRows.map(s => s.id);
 
-    const mine = mineRes.data || [];
-    const verified = verifiedRes.data || [];
+    let clientsCount = 0, clientFirstMeasurementSeen = false, guidedSession = false;
+    if(a.isPractitioner){
+      const { data: cli } = await supabase.from('practitioner_links')
+        .select('client_id').eq('practitioner_id', userId).eq('status', 'active');
+      const clientIds = (cli || []).map(c => c.client_id);
+      clientsCount = clientIds.length;
 
-    // Top racers: verified SESSION measurements ranked by average (solo is personal, excluded from global).
-    const topRacers = verified.filter(r => r.session_id != null)
-      .sort((a, b) => (b.avg || 0) - (a.avg || 0)).slice(0, 10);
+      if(clientIds.length){
+        const { data: anyRes } = await supabase.from('results')
+          .select('id').in('user_id', clientIds).limit(1);
+        clientFirstMeasurementSeen = !!(anyRes && anyRes.length);
 
-    // Top sessions: average the verified results per verified session (no group_avg dependency).
-    const bySession = new Map();
-    for(const r of verified){
-      if(r.session_id == null) continue;
-      if(!bySession.has(r.session_id)) bySession.set(r.session_id, []);
-      bySession.get(r.session_id).push(r.avg || 0);
+        if(hostedIds.length){
+          const { data: hostedRes } = await supabase.from('results')
+            .select('user_id, session_id').in('session_id', hostedIds);
+          guidedSession = !!(hostedRes || []).some(r => clientIds.includes(r.user_id));
+        }
+      }
     }
-    const topSessions = (verifiedSessRes.data || [])
-      .map(s => {
-        const a = bySession.get(s.id) || [];
-        return { ...s, avg: a.length ? a.reduce((x, y) => x + y, 0) / a.length : null, count: a.length };
-      })
-      .filter(s => s.count > 0)
-      .sort((a, b) => b.avg - a.avg)
-      .slice(0, 10);
 
-    renderHome(el.querySelector('#homeBody'), { myName, mine, topRacers, topSessions });
+    const data = {
+      results,
+      hostedSessionsCount: hostedRows.length,
+      connectedPractitionersCount: (prRecvR.data || []).length,
+      isPractitioner: !!a.isPractitioner,
+      clientsCount, clientFirstMeasurementSeen, guidedSession,
+    };
+    const achievements = computeAchievements(data);
+
+    // ---- "Once earned, always shown" ----------------------------------------
+    // Stored unlocks are canonical. If the DB has a row but compute currently
+    // says false (e.g. test data was deleted), keep the badge unlocked.
+    for(const ach of achievements){
+      if(stored.has(ach.id) && !ach.unlocked){
+        ach.unlocked = true;
+        if(ach.current < ach.target) ach.current = ach.target;
+      }
+    }
+
+    // ---- Sync newly-earned unlocks to the DB --------------------------------
+    // First hybrid load for an existing user (DB empty but compute has unlocks
+    // and they've used the dashboard before) is a silent migration — no flood.
+    const unlockedNow = achievements.filter(a => a.unlocked);
+    const missing = unlockedNow.filter(a => !stored.has(a.id));
+    const hadPriorDashboardLoad = !!localStorage.getItem(MIGRATION_FLAG);
+    const silentMigration = stored.size === 0 && missing.length > 0 && hadPriorDashboardLoad;
+
+    // Optimistically update the local map so render reflects this state.
+    const nowIso = new Date().toISOString();
+    for(const a of missing){
+      stored.set(a.id, { achievement_id: a.id, unlocked_at: nowIso, seen_at: silentMigration ? nowIso : null });
+    }
+    // Persist in the background — best-effort, the UI doesn't wait.
+    if(missing.length) recordNewUnlocks(userId, missing.map(a => a.id), { silent: silentMigration });
+    try { localStorage.setItem(MIGRATION_FLAG, '1'); } catch {}
+
+    // NEW = unlocked AND not yet seen.
+    const newIds = new Set();
+    for(const a of unlockedNow){
+      const s = stored.get(a.id);
+      if(s && !s.seen_at) newIds.add(a.id);
+    }
+    // After render, mark them seen for next time.
+    if(newIds.size){
+      setTimeout(() => markSeen(userId, [...newIds]), 0);
+    }
+
+    const sessionCount = results.filter(r => r.session_id != null).length;
+    const soloCount = results.filter(r => r.session_id == null).length;
+    const verifiedRatio = results.length
+      ? Math.round(results.filter(r => r.verified).length / results.length * 100)
+      : 0;
+    const bestAvg = results.reduce((m, r) => Math.max(m, r.avg || 0), 0);
+
+    el.querySelector('#homeBody').innerHTML = `
+      ${renderStats({
+        sessionCount, soloCount,
+        clientsCount: a.isPractitioner ? clientsCount : null,
+        bestAvg, verifiedRatio, total: results.length,
+      })}
+      ${renderRecent(achievements, newIds, stored)}
+      ${renderNext(achievements)}
+      ${renderCollection(achievements, newIds)}
+    `;
   })();
 
   return () => {};
 }
 
-function renderHome(body, { myName, mine, topRacers, topSessions }){
-  body.innerHTML = `
-    ${renderPrivate(myName, mine)}
-    <h2 class="res-h">Top measurements <span class="res-h-sub">verified only</span></h2>
-    ${renderTopRacers(topRacers)}
-    <h2 class="res-h">Top sessions <span class="res-h-sub">verified only</span></h2>
-    ${renderTopSessions(topSessions)}
-  `;
+// ---- Stats -----------------------------------------------------------------
+function renderStats(s){
+  const cards = [
+    { label: 'Sessions', val: s.sessionCount, color: '#9db4ff' },
+    { label: 'Solo',     val: s.soloCount,    color: '#cdbcff' },
+    s.clientsCount != null ? { label: 'Clients', val: s.clientsCount, color: '#3ddc84' } : null,
+    { label: 'Best Avg', val: s.total ? s.bestAvg.toFixed(1) : '–', color: s.total ? vColor(s.bestAvg) : '#888' },
+    { label: 'Verified', val: s.total ? s.verifiedRatio + '%' : '–', color: '#f5a623' },
+  ].filter(Boolean);
+  return `<div class="dash-stats">
+    ${cards.map(c => `
+      <div class="dash-stat">
+        <div class="dash-stat-val" style="color:${c.color}">${c.val}</div>
+        <div class="dash-stat-lbl">${esc(c.label)}</div>
+      </div>`).join('')}
+  </div>`;
 }
 
-function renderPrivate(myName, mine){
-  if(!myName){
-    return `<div class="panel"><p class="placeholder">Log in to track your personal stats.</p></div>`;
-  }
-  if(mine.length === 0){
-    return `<div class="panel"><h2>Your stats — ${esc(myName)}</h2><p class="placeholder">No finished measurements yet. Your results will appear here.</p></div>`;
-  }
-  const bestAvg = Math.max(...mine.map(r => r.avg || 0));
-  const bestPeak = Math.max(...mine.map(r => r.peak || 0));
-  const verifiedCount = mine.filter(r => r.verified).length;
-  const verifiedRate = Math.round(verifiedCount / mine.length * 100);
+// ---- Recent achievements ---------------------------------------------------
+function renderRecent(achievements, newIds, stored){
+  const unlocked = achievements.filter(a => a.unlocked);
+  if(!unlocked.length) return '';
+  // Sort newest first by the DB-stored unlocked_at (precise audit-trail).
+  const tsOf = a => {
+    const s = stored.get(a.id);
+    return s && s.unlocked_at ? new Date(s.unlocked_at).getTime() : 0;
+  };
+  const sorted = [...unlocked].sort((a, b) => tsOf(b) - tsOf(a));
+  // Float NEW ones to the very front so the pulse is immediately visible.
+  sorted.sort((a, b) => (newIds.has(b.id) ? 1 : 0) - (newIds.has(a.id) ? 1 : 0));
+  const top = sorted.slice(0, 8);
+  const newBadge = newIds.size
+    ? ` <span class="dash-new-count">${newIds.size} new</span>`
+    : '';
   return `
-    <div class="panel">
-      <h2>Your stats — ${esc(myName)}</h2>
-      <div class="home-stats">
-        <div class="hstat"><div class="hstat-val">${mine.length}</div><div class="hstat-lbl">Sessions</div></div>
-        <div class="hstat"><div class="hstat-val" style="color:${vColor(bestAvg)}">${bestAvg.toFixed(1)}</div><div class="hstat-lbl">Best avg</div></div>
-        <div class="hstat"><div class="hstat-val" style="color:${vColor(bestPeak)}">${bestPeak}</div><div class="hstat-lbl">Best peak</div></div>
-        <div class="hstat"><div class="hstat-val">${verifiedRate}%</div><div class="hstat-lbl">Verified</div></div>
-      </div>
+    <h2 class="dash-h">Recent Achievements${newBadge}</h2>
+    <div class="dash-recent">
+      ${top.map(a => recentCard(a, newIds.has(a.id))).join('')}
     </div>`;
 }
 
-function renderTopRacers(rows){
-  if(rows.length === 0) return `<div class="panel"><p class="placeholder">No verified measurements yet.</p></div>`;
-  const items = rows.map((r, i) => `
-    <div class="top-row">
-      <div class="top-rank">${i + 1}</div>
-      <div class="top-name">${esc(r.racer_name || '—')}</div>
-      <div class="top-val" style="color:${vColor(r.avg)}">${(r.avg || 0).toFixed(1)}</div>
-    </div>`).join('');
-  return `<div class="panel top-table">
-    <div class="top-row top-head"><div class="top-rank">#</div><div class="top-name">Racer</div><div class="top-val">Avg</div></div>
-    ${items}
-  </div>`;
+function recentCard(a, isNew){
+  return `
+    <div class="dash-recent-card tier-${a.tier}${isNew ? ' is-new' : ''}" title="${esc(a.description)}">
+      ${isNew ? '<span class="dash-new-pill">NEW</span>' : ''}
+      <div class="drc-icon">${a.icon}</div>
+      <div class="drc-title">${esc(a.title)}</div>
+    </div>`;
 }
 
-function renderTopSessions(rows){
-  if(rows.length === 0) return `<div class="panel"><p class="placeholder">No verified sessions yet. Create a session with "Verified" enabled.</p></div>`;
-  const items = rows.map((s, i) => `
-    <div class="top-row">
-      <div class="top-rank">${i + 1}</div>
-      <div class="top-name">${esc(s.name || 'Session')}<span class="top-sub">by ${esc(s.created_by || '—')} · ${s.count} racer${s.count > 1 ? 's' : ''}</span></div>
-      <div class="top-val" style="color:${vColor(s.avg)}">${s.avg.toFixed(1)}</div>
-    </div>`).join('');
-  return `<div class="panel top-table">
-    <div class="top-row top-head"><div class="top-rank">#</div><div class="top-name">Session</div><div class="top-val">Avg</div></div>
-    ${items}
-  </div>`;
+// ---- Next milestones -------------------------------------------------------
+function renderNext(achievements){
+  const next = pickNextMilestones(achievements, 3);
+  if(!next.length){
+    return `<h2 class="dash-h">Next milestones</h2>
+      <div class="dash-empty">You've unlocked every milestone — beautifully done. ✨</div>`;
+  }
+  return `<h2 class="dash-h">Next milestones <span class="dash-h-sub">your closest unlocks</span></h2>
+    <div class="dash-next">${next.map(milestoneCard).join('')}</div>`;
+}
+
+function milestoneCard(a){
+  const pct = Math.min(100, Math.round((a.current / a.target) * 100));
+  return `
+    <div class="dash-milestone tier-${a.tier}">
+      <div class="dm-row">
+        <span class="dm-icon">${a.icon}</span>
+        <div class="dm-title">${esc(a.title)}</div>
+      </div>
+      <div class="dm-bar"><div class="dm-bar-fill" style="width:${pct}%"></div></div>
+      <div class="dm-progress">${a.current} / ${a.target}</div>
+    </div>`;
+}
+
+// ---- Achievement collection ------------------------------------------------
+function renderCollection(achievements, newIds){
+  const groups = new Map();
+  for(const a of achievements){
+    if(!groups.has(a.category)) groups.set(a.category, []);
+    groups.get(a.category).push(a);
+  }
+  const totalUnlocked = achievements.filter(a => a.unlocked).length;
+  const total = achievements.length;
+
+  const sections = CATEGORIES
+    .filter(c => groups.has(c.id))
+    .map(c => {
+      const items = groups.get(c.id);
+      const unlocked = items.filter(x => x.unlocked).length;
+      return `
+        <section class="dash-cat">
+          <div class="dash-cat-head">
+            <h3 class="dash-cat-title">${esc(c.title)}</h3>
+            <span class="dash-cat-count">${unlocked} / ${items.length}</span>
+          </div>
+          <div class="dash-badges">${items.map(a => badgeCard(a, newIds && newIds.has(a.id))).join('')}</div>
+        </section>`;
+    });
+
+  return `
+    <h2 class="dash-h">Achievement Collection <span class="dash-h-sub">${totalUnlocked} / ${total} unlocked</span></h2>
+    ${sections.join('')}`;
+}
+
+function badgeCard(a, isNew){
+  const status = a.unlocked
+    ? '<div class="db-status unlocked">✓ Unlocked</div>'
+    : `<div class="db-status">${a.current} / ${a.target}</div>`;
+  const cls = ['dash-badge'];
+  if(a.unlocked){ cls.push('unlocked', 'tier-' + a.tier); }
+  else { cls.push('locked'); }
+  if(isNew) cls.push('is-new');
+  return `
+    <div class="${cls.join(' ')}" title="${esc(a.description)}">
+      ${isNew ? '<span class="dash-new-pill">NEW</span>' : ''}
+      <div class="db-icon">${a.icon}</div>
+      <div class="db-title">${esc(a.title)}</div>
+      ${status}
+    </div>`;
 }

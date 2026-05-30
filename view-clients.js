@@ -239,15 +239,37 @@ function mountDetail(el, clientId){
       `<span class="client-title-avatar">${avatarHtml(profile && profile.avatar_url, name)}</span> ${esc(name)}`;
 
     const sessIds = [...new Set(rows.filter(r => r.session_id != null).map(r => r.session_id))];
-    const sessMap = new Map();
+    const sessMap = new Map();   // sessionId -> { name, created_by, created_by_user_id }
+    const hostsById = new Map(); // userId -> { display_name, avatar_url }
     if(sessIds.length){
-      const { data: sess } = await supabase.from('sessions').select('id, name').in('id', sessIds);
-      for(const s of (sess || [])) sessMap.set(s.id, s.name);
+      const { data: sess } = await supabase.from('sessions')
+        .select('id, name, created_by, created_by_user_id').in('id', sessIds);
+      for(const s of (sess || [])) sessMap.set(s.id, s);
+      const hostIds = [...new Set((sess || []).map(s => s.created_by_user_id).filter(Boolean))];
+      if(hostIds.length){
+        const { data: profs } = await supabase.from('profiles')
+          .select('id, display_name, avatar_url').in('id', hostIds);
+        for(const p of (profs || [])) hostsById.set(p.id, p);
+      }
     }
+    const hostFor = sess => {
+      if(!sess) return null;
+      const p = sess.created_by_user_id ? hostsById.get(sess.created_by_user_id) : null;
+      return { display_name: (p && p.display_name) || sess.created_by, avatar_url: p && p.avatar_url };
+    };
+    const hostChip = host => {
+      if(!host) return '';
+      const url = host.avatar_url;
+      const name = host.display_name || 'Host';
+      const av = url
+        ? `<img class="sess-avatar" src="${esc(url)}" alt="">`
+        : `<span class="sess-avatar sess-avatar-initial">${esc(name.charAt(0).toUpperCase())}</span>`;
+      return ` · hosted by <span class="me-host">${av}<span class="me-host-name">${esc(name)}</span></span>`;
+    };
 
     const body = el.querySelector('#clBody');
 
-    const rowCardHTML = (r, title) => {
+    const rowCardHTML = (r, title, host) => {
       const solo = r.session_id == null;
       const lvl = vitalityLevel(r.avg || 0);
       return `
@@ -258,7 +280,7 @@ function mountDetail(el, clientId){
               <span class="me-title">${esc(title)}</span>
               ${r.verified ? '<span class="v-badge verified">✓</span>' : '<span class="v-badge unverified">unverified</span>'}
             </div>
-            <div class="me-meta">${esc(whenStr(r.created_at))} · <span style="color:${lvl.color}">${esc(lvl.name)}</span></div>
+            <div class="me-meta">${esc(whenStr(r.created_at))} · <span style="color:${lvl.color}">${esc(lvl.name)}</span>${hostChip(host)}</div>
           </div>
           <div class="me-stats">
             <div class="rs"><div class="rs-val" style="color:${vColor(r.avg)}">${(r.avg || 0).toFixed(1)}</div><div class="rs-lbl">Avg</div></div>
@@ -268,12 +290,14 @@ function mountDetail(el, clientId){
         </a>`;
     };
 
-    const titleFor = (r) => r.session_id == null
-      ? (r.label || 'Solo measurement')
-      : (sessMap.get(r.session_id) || 'Session');
+    const sessionFor = (r) => r.session_id == null ? null : sessMap.get(r.session_id);
+    const titleFor = (r) => {
+      const s = sessionFor(r);
+      return r.session_id == null ? (r.label || 'Solo measurement') : ((s && s.name) || 'Session');
+    };
 
     body.innerHTML = rows.length
-      ? rows.map(r => rowCardHTML(r, titleFor(r))).join('')
+      ? rows.map(r => rowCardHTML(r, titleFor(r), hostFor(sessionFor(r)))).join('')
       : `<div class="panel"><p class="placeholder">${esc((profile && profile.display_name) || 'This client')} hasn't recorded any measurements yet.</p></div>`;
 
     // Auto-update: when the client saves a new measurement, prepend it instantly.
@@ -281,13 +305,21 @@ function mountDetail(el, clientId){
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'results', filter: `user_id=eq.${clientId}` }, async ({ new: r }) => {
         if(!r) return;
         if(r.session_id != null && !sessMap.has(r.session_id)){
-          const { data: s } = await supabase.from('sessions').select('name').eq('id', r.session_id).maybeSingle();
-          sessMap.set(r.session_id, (s && s.name) || 'Session');
+          const { data: s } = await supabase.from('sessions')
+            .select('id, name, created_by, created_by_user_id').eq('id', r.session_id).maybeSingle();
+          if(s){
+            sessMap.set(s.id, s);
+            if(s.created_by_user_id && !hostsById.has(s.created_by_user_id)){
+              const { data: p } = await supabase.from('profiles')
+                .select('id, display_name, avatar_url').eq('id', s.created_by_user_id).maybeSingle();
+              if(p) hostsById.set(p.id, p);
+            }
+          }
         }
         // Drop the "no measurements yet" placeholder if it's still there.
         const empty = body.querySelector('.placeholder');
         if(empty) body.innerHTML = '';
-        body.insertAdjacentHTML('afterbegin', rowCardHTML(r, titleFor(r)));
+        body.insertAdjacentHTML('afterbegin', rowCardHTML(r, titleFor(r), hostFor(sessionFor(r))));
       })
       .subscribe();
 
