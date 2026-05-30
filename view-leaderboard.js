@@ -212,8 +212,9 @@ function plural(n, one, many){ return `${n} ${n === 1 ? one : many}`; }
 function renderHeartbeat(journeyCount, weekActiveCount){
   if(journeyCount === 0) return '';
   const left = `${plural(journeyCount, 'explorer', 'explorers')} on the journey`;
-  const right = `${weekActiveCount} earning XP this week`;
-  return `<div class="lb-heartbeat">${esc(left)} · ${esc(right)}</div>`;
+  // The dot here is the same one shown next to active users on the rows —
+  // so the meaning ("● = active this week") becomes self-evident.
+  return `<div class="lb-heartbeat">${esc(left)} · <span class="lb-active-dot"></span> ${weekActiveCount} active this week</div>`;
 }
 
 function renderEmpty(period, journeyCount){
