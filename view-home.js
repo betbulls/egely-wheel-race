@@ -12,32 +12,46 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>
 const MIGRATION_FLAG = 'ewr_seen_init';
 
 export function mount(el){
-  const a = auth.getState();
-  const userId = a.user?.id || null;
+  // Auth state can resolve AFTER mount on a hard refresh (Supabase session
+  // restoration is async). Re-render whenever the state changes meaningfully
+  // so we don't get stuck on the logged-out screen.
+  let sig = null;
+  const unsubAuth = auth.subscribeAuth(() => {
+    const a = auth.getState();
+    const newSig = (a.user?.id || '') + '|' + (a.displayName || '') + '|' + (a.isPractitioner ? '1' : '0');
+    if(newSig === sig) return;
+    sig = newSig;
+    render();
+  });
+  return () => { unsubAuth(); };
 
-  // Logged-out home: an invitation to log in, no leaderboards.
-  if(!userId){
+  function render(){
+    const a = auth.getState();
+    const userId = a.user?.id || null;
+
+    // Logged-out home: an invitation to log in, no leaderboards.
+    if(!userId){
+      el.innerHTML = `
+        <div class="view-head">
+          <h1 class="page-title">Egely Wheel Race</h1>
+          <p class="page-sub">Track your vitality, your way.</p>
+        </div>
+        <div class="panel">
+          <p class="placeholder">Log in to see your journey, achievements, and personal progress.</p>
+          <div class="form-actions" style="margin-top:14px;flex-wrap:wrap">
+            <a class="btn-join" href="#/login">Log in</a>
+            <a class="btn-secondary" href="https://egelywheel.com/products/ewr-subscription" target="_blank" rel="noopener">Subscribe to measure</a>
+          </div>
+        </div>`;
+      return;
+    }
+
     el.innerHTML = `
       <div class="view-head">
-        <h1 class="page-title">Egely Wheel Race</h1>
-        <p class="page-sub">Track your vitality, your way.</p>
+        <h1 class="page-title">Welcome${a.displayName ? ', ' + esc(a.displayName) : ''}</h1>
+        <p class="page-sub">Your journey at a glance.</p>
       </div>
-      <div class="panel">
-        <p class="placeholder">Log in to see your journey, achievements, and personal progress.</p>
-        <div class="form-actions" style="margin-top:14px;flex-wrap:wrap">
-          <a class="btn-join" href="#/login">Log in</a>
-          <a class="btn-secondary" href="https://egelywheel.com/products/ewr-subscription" target="_blank" rel="noopener">Subscribe to measure</a>
-        </div>
-      </div>`;
-    return () => {};
-  }
-
-  el.innerHTML = `
-    <div class="view-head">
-      <h1 class="page-title">Welcome${a.displayName ? ', ' + esc(a.displayName) : ''}</h1>
-      <p class="page-sub">Your journey at a glance.</p>
-    </div>
-    <div id="homeBody"><div class="empty">Loading…</div></div>`;
+      <div id="homeBody"><div class="empty">Loading…</div></div>`;
 
   (async () => {
     // ---- One coordinated data fetch -----------------------------------------
@@ -190,8 +204,7 @@ export function mount(el){
       if(card) card.classList.toggle('expanded');
     });
   })();
-
-  return () => {};
+  }
 }
 
 // ---- Level-up celebration --------------------------------------------------
