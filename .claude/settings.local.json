@@ -7,7 +7,8 @@
       "Bash(python -m pip install --quiet pymupdf)",
       "Bash(python -c \"import fitz; print\\('pymupdf', fitz.__doc__[:40] if fitz.__doc__ else 'OK'\\)\")",
       "Bash(python -c ' *)",
-      "mcp__Claude_Preview__preview_start"
+      "mcp__Claude_Preview__preview_start",
+      "mcp__f4d5007b-023f-47c1-8b48-7dd5718656a4__search_products"
     ]
   }
 }

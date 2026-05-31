@@ -245,6 +245,104 @@
   .connect-note{color:var(--muted);font-size:14px}
   .connect-note.ok{color:#3ddc84}
 
+  /* ---- Connect landing (Spiritual Maker mini page) ----------------------- */
+  .cn-wrap{max-width:600px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+  .cn-card{background:linear-gradient(160deg, rgba(255,255,255,0.05), rgba(82,48,218,0.06));
+    border:1px solid var(--panel-border);border-radius:18px;padding:22px}
+  .cn-h{font-family:'Montserrat',sans-serif;font-size:15px;font-weight:600;letter-spacing:0.03em;margin-bottom:14px}
+
+  .cn-hero{position:relative;overflow:hidden;text-align:center;
+    background:linear-gradient(160deg, rgba(82,48,218,0.28), rgba(0,51,255,0.08));
+    border:1px solid rgba(155,109,255,0.4);border-radius:22px;padding:32px 24px 26px}
+  .cn-hero::before{content:'';position:absolute;inset:-40% -20% auto auto;width:280px;height:280px;border-radius:50%;
+    background:radial-gradient(circle, rgba(155,109,255,0.28), transparent 70%);pointer-events:none}
+  .cn-hero-avatar{width:104px;height:104px;border-radius:50%;overflow:hidden;margin:0 auto 14px;position:relative;z-index:1;
+    display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--blue),var(--accent));
+    box-shadow:0 8px 30px -8px rgba(82,48,218,0.7)}
+  .cn-hero-avatar img{width:100%;height:100%;object-fit:cover}
+  .cn-hero-avatar .avatar-initial{font-family:'Montserrat',sans-serif;font-weight:600;font-size:42px;color:#fff}
+  .cn-badge{display:inline-block;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;font-weight:600;
+    color:#cdbcff;background:rgba(155,109,255,0.18);border:1px solid rgba(155,109,255,0.45);
+    border-radius:99px;padding:4px 12px;position:relative;z-index:1}
+  .cn-name{font-family:'Montserrat',sans-serif;font-size:30px;font-weight:500;margin:10px 0 0;position:relative;z-index:1}
+  .cn-intro{color:var(--muted);font-size:15px;line-height:1.55;margin:10px auto 0;max-width:440px;position:relative;z-index:1}
+  .cn-socials{display:flex;gap:10px;justify-content:center;margin-top:16px;position:relative;z-index:1;flex-wrap:wrap}
+  .cn-social{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    background:rgba(255,255,255,0.08);border:1px solid var(--panel-border);color:#fff;transition:all .15s}
+  .cn-social:hover{background:rgba(155,109,255,0.25);border-color:rgba(155,109,255,0.6);transform:translateY(-2px)}
+  .cn-social svg{width:20px;height:20px;display:block}
+
+  .cn-cta{display:inline-block;font-family:'Inter',sans-serif;font-size:15px;font-weight:600;text-decoration:none;
+    background:var(--accent);color:#fff;border:none;cursor:pointer;padding:13px 26px;border-radius:11px;
+    box-shadow:0 10px 26px -8px rgba(82,48,218,0.75);transition:transform .15s, background .15s}
+  .cn-cta:hover{background:#6a47f0;transform:translateY(-2px)}
+  .cn-cta:disabled{opacity:.6;cursor:default;transform:none}
+  .cn-cta-slot{margin-top:20px;position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:10px}
+  .cn-note{font-size:14px;color:var(--muted)}
+  .cn-note.ok{color:#3ddc84}
+
+  .cn-check{list-style:none;display:flex;flex-direction:column;gap:11px}
+  .cn-check li{display:flex;align-items:flex-start;gap:10px;font-size:14px;color:var(--white);line-height:1.45}
+  .cn-tick{color:#3ddc84;font-weight:700;flex-shrink:0}
+
+  .cn-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+  .cn-stat{background:rgba(255,255,255,0.04);border:1px solid var(--panel-border);border-radius:12px;padding:14px 8px;text-align:center}
+  .cn-stat-val{font-family:'Montserrat',sans-serif;font-size:22px;font-weight:600;line-height:1.1;font-variant-numeric:tabular-nums}
+  .cn-stat-lbl{font-size:10px;letter-spacing:0.07em;text-transform:uppercase;color:var(--muted);margin-top:6px}
+
+  .cn-sessions{display:flex;flex-direction:column;gap:10px}
+  .cn-session{display:flex;align-items:center;justify-content:space-between;gap:12px;text-decoration:none;color:inherit;
+    background:rgba(255,255,255,0.04);border:1px solid var(--panel-border);border-radius:12px;padding:14px 16px;transition:all .15s}
+  .cn-session:hover{border-color:rgba(155,109,255,0.5);transform:translateY(-1px)}
+  .cn-session-name{font-family:'Montserrat',sans-serif;font-size:15px;font-weight:500}
+  .cn-session-meta{font-size:12px;color:var(--muted);margin-top:3px}
+  .cn-session-cta{font-size:13px;color:#cdbcff;font-weight:600;flex-shrink:0}
+
+  .cn-offer-body{display:flex;gap:18px;align-items:flex-start}
+  .cn-offer-img{width:130px;height:130px;border-radius:14px;object-fit:cover;flex-shrink:0;background:rgba(0,0,0,0.25)}
+  .cn-offer-img-ph{display:flex;align-items:center;justify-content:center;color:var(--faint);
+    font-family:'Montserrat',sans-serif;font-size:12px;line-height:1.4;text-align:center;border:1px dashed var(--panel-border)}
+  .cn-offer-info{flex:1;min-width:0}
+  .cn-offer-name{font-family:'Montserrat',sans-serif;font-size:18px;font-weight:500;margin-bottom:10px}
+  .cn-offer-feats{margin-bottom:12px}
+  .cn-price{display:flex;flex-direction:column;gap:2px;margin-bottom:8px}
+  .cn-price-reg{font-size:13px;color:var(--muted)}
+  .cn-price-your{font-size:15px}
+  .cn-price-your b{font-family:'Montserrat',sans-serif;font-size:20px;color:#3ddc84}
+  .cn-coupon{font-size:13px;color:var(--muted);margin-bottom:14px}
+  .cn-coupon-code{font-family:'Montserrat',sans-serif;font-weight:600;color:#ffd479;letter-spacing:0.06em;
+    background:rgba(255,212,121,0.12);border:1px dashed rgba(255,212,121,0.5);border-radius:6px;padding:2px 8px}
+  .cn-offer-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+
+  .cn-final{text-align:center;padding:8px 0 6px}
+  .cn-final-h{font-family:'Montserrat',sans-serif;font-size:22px;font-weight:500;margin-bottom:2px}
+
+  .cn-modal-backdrop{position:fixed;inset:0;z-index:1200;display:flex;align-items:center;justify-content:center;padding:18px;
+    background:rgba(8,5,30,0.72);backdrop-filter:blur(6px);opacity:0;transition:opacity .18s}
+  .cn-modal-backdrop.open{opacity:1}
+  .cn-modal{width:100%;max-width:400px;text-align:center;
+    background:linear-gradient(160deg, rgba(82,48,218,0.32), rgba(13,11,40,0.96));
+    border:1px solid rgba(155,109,255,0.45);border-radius:18px;padding:26px 22px;
+    box-shadow:0 24px 60px -16px rgba(0,0,0,0.7);transform:translateY(10px);transition:transform .2s}
+  .cn-modal-backdrop.open .cn-modal{transform:translateY(0)}
+  .cn-modal-avatar{width:64px;height:64px;border-radius:50%;overflow:hidden;margin:0 auto 12px;
+    display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--blue),var(--accent))}
+  .cn-modal-avatar img{width:100%;height:100%;object-fit:cover}
+  .cn-modal-avatar .avatar-initial{font-family:'Montserrat',sans-serif;font-weight:600;font-size:26px;color:#fff}
+  .cn-modal-title{font-family:'Montserrat',sans-serif;font-size:20px;font-weight:500}
+  .cn-modal-text{font-size:14px;color:var(--muted);line-height:1.55;margin:10px 0 18px}
+  .cn-modal-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+  .cn-modal-actions .cn-cta,.cn-modal-actions .btn-secondary{padding:11px 22px}
+
+  @media (max-width:600px){
+    .cn-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .cn-offer-body{flex-direction:column;align-items:center;text-align:center}
+    .cn-offer-img{width:100%;height:auto;aspect-ratio:1/1;max-width:200px}
+    .cn-offer-feats{text-align:left}
+    .cn-offer-actions{justify-content:center}
+    .cn-name{font-size:26px}
+  }
+
   /* Profile: connection link + following list */
   .link-row{display:flex;gap:10px;align-items:center}
   .link-input{flex:1;font-size:13px;color:var(--muted)}

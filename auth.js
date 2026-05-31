@@ -104,8 +104,10 @@ export async function saveProfile(fields){
 
 // ---- Practitioner links ----------------------------------------------------
 export async function getPractitionerByHandle(handle){
+  // select('*') so the public connect landing also gets the social + affiliate
+  // fields. Safe even before those columns exist — '*' just returns what's there.
   const { data } = await supabase.from('profiles')
-    .select('id, display_name, avatar_url, bio, is_practitioner, practitioner_handle')
+    .select('*')
     .eq('practitioner_handle', handle).maybeSingle();
   return data || null;
 }
