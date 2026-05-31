@@ -55,20 +55,46 @@ export async function connect(){
   }
   try {
     status = 'connecting'; errorMsg = null; emitStatus();
+    // Why acceptAllDevices instead of filters:
+    // The Egely Wheel (Microchip Transparent UART module) does NOT put its
+    // 128-bit service UUID in the advertising packet, so a `{ services: [...] }`
+    // filter never matches it on scan. Desktop Chrome found it only via the
+    // `namePrefix: 'Egely'` filter — but iOS/Bluefy doesn't return the device
+    // name during scan, so BOTH filter branches missed and the picker came up
+    // empty. Showing all devices is the only approach that works cross-platform
+    // (it mirrors the Google Web Bluetooth sample, which did see the wheel on
+    // iPhone). The user picks the wheel; we still verify by fetching the UART
+    // service after connecting, so a wrong pick simply fails fast below.
     device = await navigator.bluetooth.requestDevice({
-      filters: [{ namePrefix: 'Egely' }, { services: [SERVICE_UUID] }],
+      acceptAllDevices: true,
       optionalServices: [SERVICE_UUID],
     });
     device.addEventListener('gattserverdisconnected', onDisconnect);
     const server = await device.gatt.connect();
-    const service = await server.getPrimaryService(SERVICE_UUID);
+    let service;
+    try {
+      service = await server.getPrimaryService(SERVICE_UUID);
+    } catch {
+      // Picked a device that isn't an Egely Wheel (possible now that the picker
+      // lists everything). Disconnect and guide the user back to the right one.
+      try { server.disconnect(); } catch {}
+      device = null;
+      throw new Error('That device is not an Egely Wheel. Turn the wheel ON and pick it from the list.');
+    }
     txChar = await service.getCharacteristic(TX_CHAR_UUID);
     await txChar.startNotifications();
     txChar.addEventListener('characteristicvaluechanged', onData);
     buffer = '';
     status = 'connected'; emitStatus();
   } catch(err){
-    status = 'error'; errorMsg = err.message; emitStatus();
+    // Cancelling the device picker (or no device chosen) isn't an error — just
+    // return to idle without a scary banner.
+    if(err && err.name === 'NotFoundError'){
+      status = 'idle'; errorMsg = null;
+    } else {
+      status = 'error'; errorMsg = err.message;
+    }
+    emitStatus();
   }
 }
 
