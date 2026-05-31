@@ -18,6 +18,16 @@ function state(){
     isPractitioner: !!profile?.is_practitioner,
     bio: profile?.bio || '',
     practitionerHandle: profile?.practitioner_handle || null,
+    // Spiritual Maker public profile + promotion fields. Loaded via select('*'),
+    // exposed here so future consumers (connect page, leaderboard mini-profile,
+    // recommended makers) can read them without another query.
+    website: profile?.website || '',
+    instagram: profile?.instagram_url || '',
+    youtube: profile?.youtube_url || '',
+    tiktok: profile?.tiktok_url || '',
+    facebook: profile?.facebook_url || '',
+    affiliateLink: profile?.affiliate_link || '',
+    couponCode: profile?.coupon_code || '',
   };
 }
 function emit(){ const s = state(); listeners.forEach(cb => cb(s)); }
