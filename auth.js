@@ -67,7 +67,7 @@ export function signOut(){ return supabase.auth.signOut(); }
 // ---- Profile ---------------------------------------------------------------
 const slugify = s => String(s || '').toLowerCase().trim()
   .normalize('NFD').replace(/[̀-ͯ]/g, '')   // strip accents
-  .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'practitioner';
+  .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'spiritual-maker';
 
 // A practitioner needs a shareable handle for their connection link.
 async function ensureHandle(displayName){
@@ -109,7 +109,7 @@ export async function connectToPractitioner(practitionerId){
     const { data: existing } = await supabase.from('profiles')
       .select('display_name').eq('id', user.id).maybeSingle();
     if(!existing || !existing.display_name){
-      const fallback = (user.email || '').split('@')[0] || 'Client';
+      const fallback = (user.email || '').split('@')[0] || 'Member';
       await supabase.from('profiles').upsert({ id: user.id, display_name: fallback });
       await refreshProfile(); emit();
     }
@@ -167,7 +167,7 @@ export async function getMyClients(){
     const s = stats.get(id);
     return {
       id,
-      displayName: p.display_name || 'Client',
+      displayName: p.display_name || 'Member',
       avatarUrl: p.avatar_url || null,
       connectedAt: connectedAt.get(id),
       count: s ? s.count : 0,

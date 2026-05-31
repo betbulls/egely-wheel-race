@@ -48,7 +48,7 @@ export function mount(el){
       </div>
       <label class="check" style="margin-top:16px;display:flex;align-items:center;gap:9px;cursor:pointer">
         <input type="checkbox" id="pfPract" ${s.isPractitioner ? 'checked' : ''}>
-        I'm a practitioner (monitor clients' measurements)
+        I'm a Spiritual Maker (follow your members' measurements)
       </label>
       <div class="form-actions">
         <button id="pfSave">Save profile</button>
@@ -97,7 +97,7 @@ export function mount(el){
     panel.innerHTML = `
       <div class="panel">
         <h2>Your connection link</h2>
-        <p class="page-sub" style="margin:2px 0 12px">Share this with your clients — by email, QR code, or social media. When they open it, they can connect with you.</p>
+        <p class="page-sub" style="margin:2px 0 12px">Share this with your members — by email, QR code, or social media. When they open it, they can connect with you.</p>
         <div class="link-row">
           <input id="pfLink" class="link-input" readonly value="${esc(url)}">
           <button class="btn-secondary" id="pfCopy">Copy</button>
@@ -119,12 +119,12 @@ export function mount(el){
     panel.innerHTML = `
       <div class="panel">
         <h2>Following your journey</h2>
-        <p class="page-sub" style="margin:2px 0 12px">These practitioners can see your measurements. You're in control — end any connection anytime.</p>
+        <p class="page-sub" style="margin:2px 0 12px">These Spiritual Makers can see your measurements. You're in control — end any connection anytime.</p>
         <div class="following-list">
           ${list.map(p => `
             <div class="following-row" data-id="${esc(p.id)}">
               <div class="following-avatar">${avatarHtml(p.avatar_url, p.display_name)}</div>
-              <div class="following-name">${esc(p.display_name || 'Practitioner')}</div>
+              <div class="following-name">${esc(p.display_name || 'Spiritual Maker')}</div>
               <button class="btn-secondary following-end" data-id="${esc(p.id)}">End connection</button>
             </div>`).join('')}
         </div>

@@ -38,7 +38,7 @@ export function mount(el, id){
       const { data: prof } = await supabase.from('profiles')
         .select('id, display_name, avatar_url').eq('id', r.user_id).maybeSingle();
       clientProf = prof || null;
-      const cname = (clientProf && clientProf.display_name) || 'Client';
+      const cname = (clientProf && clientProf.display_name) || 'Member';
       el.querySelector('#dBack').innerHTML = `<a href="#/clients/${esc(r.user_id)}" class="link">← ${esc(cname)}</a>`;
       el.querySelector('#dClient').innerHTML = `
         <div class="d-client-chip">

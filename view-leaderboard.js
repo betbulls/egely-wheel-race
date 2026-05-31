@@ -64,10 +64,10 @@ function statusTitle(u){
 
   if(u.isPractitioner){
     if(has('practitioner-clients-10')) return 'Senior Guide';
-    if(has('practitioner-clients-5'))  return 'Practitioner Guide';
-    if(has('practitioner-mentor-3'))   return 'Verified Practitioner';
-    if(has('practitioner-first-client'))return 'Verified Practitioner';
-    return 'Practitioner';
+    if(has('practitioner-clients-5'))  return 'Spiritual Maker Guide';
+    if(has('practitioner-mentor-3'))   return 'Verified Spiritual Maker';
+    if(has('practitioner-first-client'))return 'Verified Spiritual Maker';
+    return 'Spiritual Maker';
   }
   if(has('crowd-leader'))             return 'Community Leader';
   if(has('hosted-10'))                return 'Community Champion';
@@ -121,7 +121,7 @@ function renderPodium(podium, profMap, showActivity){
           <div class="lb-podium-card place-${i + 1}" data-user-id="${esc(u.user_id)}">
             <div class="lb-medal">${medals[i]}</div>
             <div class="lb-avatar lg">${avatarHtml(p.avatar_url, p.display_name)}</div>
-            <div class="lb-name">${esc(p.display_name || 'Player')}${isP ? '<span class="lb-pract-pin" title="Practitioner">✓</span>' : ''}${activeDot(u, showActivity)}</div>
+            <div class="lb-name">${esc(p.display_name || 'Player')}${isP ? '<span class="lb-pract-pin" title="Spiritual Maker">✓</span>' : ''}${activeDot(u, showActivity)}</div>
             <div class="lb-podium-status">${esc(statusTitle(u))}</div>
             <div class="lb-level">${levelPill(u.xpAll)}</div>
             <div class="lb-xp">${u.xpPeriod} <span class="lb-xp-label">XP</span></div>
@@ -191,7 +191,7 @@ function renderList(rest, profMap, myId, showActivity){
             <div class="lb-row-info">
               <div class="lb-name-line">
                 <span class="lb-name">${esc(p.display_name || 'Player')}</span>
-                ${isP ? '<span class="lb-pract-tag" title="Practitioner">✓ Practitioner</span>' : ''}
+                ${isP ? '<span class="lb-pract-tag" title="Spiritual Maker">✓ Spiritual Maker</span>' : ''}
                 ${activeDot(u, showActivity)}
               </div>
               <div class="lb-meta-line">
@@ -258,7 +258,7 @@ function openMiniProfile(u, profile){
       <div class="lb-modal-head">
         <div class="lb-avatar xl">${avatarHtml(profile && profile.avatar_url, name)}</div>
         <div class="lb-modal-name">${esc(name)}</div>
-        ${isP ? '<div class="lb-modal-pract">✓ Verified Practitioner</div>' : ''}
+        ${isP ? '<div class="lb-modal-pract">✓ Verified Spiritual Maker</div>' : ''}
         <div class="lb-modal-status">${esc(statusTitle(u))}</div>
       </div>
       <div class="lb-modal-level">

@@ -24,7 +24,7 @@ export function mount(el, handle){
       return;
     }
 
-    const name = pr.display_name || 'A practitioner';
+    const name = pr.display_name || 'A Spiritual Maker';
     body.innerHTML = `
       <div class="connect-card">
         <div class="connect-avatar">${avatarHtml(pr.avatar_url, name)}</div>
@@ -57,7 +57,7 @@ export function mount(el, handle){
         return;
       }
       if(a.user.id === pr.id){
-        action.innerHTML = `<p class="connect-note">This is your own connection link. Share it with your clients.</p>`;
+        action.innerHTML = `<p class="connect-note">This is your own connection link. Share it with your members.</p>`;
         return;
       }
       action.innerHTML = `<div class="empty">Checking…</div>`;

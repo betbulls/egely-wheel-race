@@ -16,7 +16,7 @@ export const CATEGORIES = [
   { id: 'endurance',       title: 'Endurance' },
   { id: 'personal-growth', title: 'Personal Growth' },
   { id: 'social',          title: 'Social & Community' },
-  { id: 'practitioner',    title: 'Practitioner Path', practitionerOnly: true },
+  { id: 'practitioner',    title: 'Spiritual Maker Path', practitionerOnly: true },
   { id: 'special',         title: 'Rare & Special' },
 ];
 
@@ -95,10 +95,10 @@ export const ACHIEVEMENTS = [
         unlockedAt: hit ? firstAt(d.resultsAsc, r => r.verified) : null };
     }},
   { id: 'first-connected-practitioner', category: 'getting-started', tier: T.bronze, icon: '🔗',
-    title: 'First Connected Practitioner', description: 'Connect to your first practitioner.',
+    title: 'First Connected Spiritual Maker', description: 'Connect to your first Spiritual Maker.',
     progress: d => ({ current: d.connectedPractitionersCount > 0 ? 1 : 0, target: 1 })},
   { id: 'first-connected-client', category: 'getting-started', tier: T.bronze, icon: '👥',
-    title: 'First Connected Client', description: 'Welcome your first client.',
+    title: 'First Connected Member', description: 'Welcome your first member.',
     progress: d => ({ current: d.clientsCount > 0 ? 1 : 0, target: 1 })},
 
   // Consistency — counts
@@ -200,19 +200,19 @@ export const ACHIEVEMENTS = [
 
   // Practitioner Path (hidden unless is_practitioner)
   { id: 'practitioner-first-client', category: 'practitioner', tier: T.bronze, icon: '🪞',
-    title: 'First Client Connected', description: 'Welcome your first client.',
+    title: 'First Member Connected', description: 'Welcome your first member.',
     progress: d => ({ current: Math.min(d.clientsCount, 1), target: 1 })},
   { id: 'practitioner-clients-5', category: 'practitioner', tier: T.silver, icon: '🌐',
-    title: '5 Clients Connected', description: 'Five active client connections.',
+    title: '5 Members Connected', description: 'Five active member connections.',
     progress: d => ({ current: d.clientsCount, target: 5 })},
   { id: 'practitioner-clients-10', category: 'practitioner', tier: T.gold, icon: '🌍',
-    title: '10 Clients Connected', description: 'Ten active client connections.',
+    title: '10 Members Connected', description: 'Ten active member connections.',
     progress: d => ({ current: d.clientsCount, target: 10 })},
   { id: 'practitioner-first-client-measurement', category: 'practitioner', tier: T.bronze, icon: '📡',
-    title: 'First Client Measurement', description: 'See your first client save a measurement.',
+    title: 'First Member Measurement', description: 'See your first member save a measurement.',
     progress: d => ({ current: d.clientFirstMeasurementSeen ? 1 : 0, target: 1 })},
   { id: 'practitioner-guided-session', category: 'practitioner', tier: T.silver, icon: '🧭',
-    title: 'Guided First Session', description: 'Host a session where one of your clients joined.',
+    title: 'Guided First Session', description: 'Host a session where one of your members joined.',
     progress: d => ({ current: d.guidedSession ? 1 : 0, target: 1 })},
 
   // Rare & Special
@@ -326,10 +326,10 @@ export const ACHIEVEMENTS = [
 
   // Practitioner additions
   { id: 'practitioner-mentor-3', category: 'practitioner', tier: T.silver, icon: '🌱',
-    title: 'Mentor', description: 'Three active client connections.',
+    title: 'Mentor', description: 'Three active member connections.',
     progress: d => ({ current: d.clientsCount, target: 3 })},
   { id: 'practitioner-circle', category: 'practitioner', tier: T.gold, icon: '🏛️',
-    title: 'Practitioner Circle', description: 'Five of your clients in the same session.',
+    title: 'Spiritual Maker Circle', description: 'Five of your members in the same session.',
     progress: d => ({ current: d.practitionerCircleCount || 0, target: 5 })},
 
   // Vitality additions (Egely-specific)

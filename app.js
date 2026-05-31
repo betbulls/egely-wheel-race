@@ -215,7 +215,7 @@ function renderAuthArea(){
       ? `<img class="auth-avatar" src="${esc(a.avatarUrl)}" alt="">`
       : `<span class="auth-avatar auth-avatar-initial">${esc((name || '?').charAt(0).toUpperCase())}</span>`;
     const clientsItem = a.isPractitioner
-      ? `<a href="#/clients" data-route="/clients">Clients</a>`
+      ? `<a href="#/clients" data-route="/clients">Members</a>`
       : '';
     authArea.innerHTML = `
       ${levelPillHtml()}

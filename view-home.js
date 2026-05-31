@@ -314,7 +314,7 @@ function renderStats(s){
   const cards = [
     { label: 'Sessions', val: s.sessionCount, color: '#9db4ff' },
     { label: 'Solo',     val: s.soloCount,    color: '#cdbcff' },
-    s.clientsCount != null ? { label: 'Clients', val: s.clientsCount, color: '#3ddc84' } : null,
+    s.clientsCount != null ? { label: 'Members', val: s.clientsCount, color: '#3ddc84' } : null,
     { label: 'Best Avg', val: s.total ? s.bestAvg.toFixed(1) : '–', color: s.total ? vColor(s.bestAvg) : '#888' },
     { label: 'Verified', val: s.total ? s.verifiedRatio + '%' : '–', color: '#f5a623' },
   ].filter(Boolean);

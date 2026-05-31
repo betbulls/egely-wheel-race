@@ -37,15 +37,15 @@ export function mount(el, clientId){
   const a = auth.getState();
   if(!a.user){
     el.innerHTML = `
-      <div class="view-head"><h1 class="page-title">Clients</h1></div>
-      <div class="panel"><p class="placeholder">Log in to view your clients.</p>
+      <div class="view-head"><h1 class="page-title">Members</h1></div>
+      <div class="panel"><p class="placeholder">Log in to view your members.</p>
         <div class="form-actions"><a class="btn-join" href="#/login">Log in</a></div></div>`;
     return () => {};
   }
   if(!a.isPractitioner){
     el.innerHTML = `
-      <div class="view-head"><h1 class="page-title">Clients</h1></div>
-      <div class="panel"><p class="placeholder">This space is for practitioners. Enable "I'm a practitioner" in your profile to share a connection link.</p>
+      <div class="view-head"><h1 class="page-title">Members</h1></div>
+      <div class="panel"><p class="placeholder">This space is for Spiritual Makers. Enable "I'm a Spiritual Maker" in your profile to share a connection link.</p>
         <div class="form-actions"><a class="btn-join" href="#/profile">Go to profile</a></div></div>`;
     return () => {};
   }
@@ -57,7 +57,7 @@ export function mount(el, clientId){
 function mountWall(el){
   el.innerHTML = `
     <div class="view-head">
-      <h1 class="page-title">Clients</h1>
+      <h1 class="page-title">Members</h1>
       <p class="page-sub">The people whose journey you're accompanying.</p>
     </div>
     <div id="clWall"><div class="empty">Loading…</div></div>`;
@@ -68,7 +68,7 @@ function mountWall(el){
   (async () => {
     const clients = await auth.getMyClients();
     if(!clients.length){
-      wall.innerHTML = `<div class="panel"><p class="placeholder">No clients yet. Share your connection link from your <a class="link" href="#/profile">profile</a> — when someone connects, they'll appear here.</p></div>`;
+      wall.innerHTML = `<div class="panel"><p class="placeholder">No members yet. Share your connection link from your <a class="link" href="#/profile">profile</a> — when someone connects, they'll appear here.</p></div>`;
       return;
     }
 
@@ -213,7 +213,7 @@ function mountWall(el){
 function mountDetail(el, clientId){
   el.innerHTML = `
     <div class="view-head">
-      <p class="room-hint" style="text-align:left;margin:0 0 6px"><a href="#/clients" class="link">← Clients</a></p>
+      <p class="room-hint" style="text-align:left;margin:0 0 6px"><a href="#/clients" class="link">← Members</a></p>
       <h1 class="page-title" id="clTitle">Loading…</h1>
     </div>
     <div id="clLiveBanner" class="client-live-banner" hidden></div>
@@ -223,17 +223,17 @@ function mountDetail(el, clientId){
   let updateChannel = null;
   let liveCurve = [];
   let liveActive = false;
-  let liveName = 'Client';
+  let liveName = 'Member';
   let liveVerified = true;
 
   (async () => {
     const { connected, profile, rows } = await auth.getClientMeasurements(clientId);
     if(!connected){
       el.querySelector('#clTitle').textContent = 'Not connected';
-      el.querySelector('#clBody').innerHTML = '<div class="empty">This client isn\'t connected to you.</div>';
+      el.querySelector('#clBody').innerHTML = '<div class="empty">This member isn\'t connected to you.</div>';
       return;
     }
-    const name = (profile && profile.display_name) || 'Client';
+    const name = (profile && profile.display_name) || 'Member';
     liveName = name;
     el.querySelector('#clTitle').innerHTML =
       `<span class="client-title-avatar">${avatarHtml(profile && profile.avatar_url, name)}</span> ${esc(name)}`;
@@ -298,7 +298,7 @@ function mountDetail(el, clientId){
 
     body.innerHTML = rows.length
       ? rows.map(r => rowCardHTML(r, titleFor(r), hostFor(sessionFor(r)))).join('')
-      : `<div class="panel"><p class="placeholder">${esc((profile && profile.display_name) || 'This client')} hasn't recorded any measurements yet.</p></div>`;
+      : `<div class="panel"><p class="placeholder">${esc((profile && profile.display_name) || 'This member')} hasn't recorded any measurements yet.</p></div>`;
 
     // Auto-update: when the client saves a new measurement, prepend it instantly.
     updateChannel = supabase.channel('client-updates-' + clientId)
