@@ -459,7 +459,7 @@ export function mount(el, sessionId){
     const now = Date.now();
     const livePill = $('livePill');
     let left = 0, label = '--:--';
-    if(now < startMs){ left = startMs - now; label = 'in ' + fmt(left); livePill.hidden = true; }
+    if(now < startMs){ left = startMs - now; label = 'in ' + formatUntil(left); livePill.hidden = true; }
     else if(now <= endMs){ left = endMs - now; label = fmt(left); livePill.hidden = false; }
     else { label = 'Finished'; livePill.hidden = true; }
     $('gTime').textContent = label;
@@ -478,9 +478,30 @@ export function mount(el, sessionId){
     }
   }
 
+  // Precise time-left while a session is LIVE (adds hours when needed).
   function fmt(ms){
     const s = Math.max(0, Math.floor(ms / 1000));
-    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    const pad = n => String(n).padStart(2, '0');
+    return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
+  }
+
+  // Adaptive "time until start" — readable at any distance (mirrors view-sessions).
+  // Without this, an upcoming session showed raw minutes like "50303:32".
+  function formatUntil(ms){
+    if(ms <= 0) return 'now';
+    const sec   = Math.floor(ms / 1000);
+    const mins  = Math.floor(sec / 60);
+    const hours = Math.floor(sec / 3600);
+    const days  = Math.floor(sec / 86400);
+    if(days >= 60)  return `${Math.floor(days / 30)} months`;
+    if(days >= 14)  return `${Math.floor(days / 7)} weeks`;
+    if(days >= 1)   return `${days} ${days === 1 ? 'day' : 'days'}`;
+    if(hours >= 1)  return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+    if(mins  >= 1)  return `${mins} min`;
+    return 'less than a minute';
   }
 
   // ---- Results screen (finished session) ------------------------------------

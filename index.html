@@ -295,10 +295,12 @@
   .lb-chart-wrap{margin-top:14px}
   .lb-chart{width:100%;height:170px;display:block;background:rgba(0,0,0,0.22);border-radius:8px}
 
-  .group-bar{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:18px 0}
-  .gstat{background:var(--panel);border:1px solid var(--panel-border);border-radius:12px;padding:14px 16px;text-align:center}
+  /* minmax(0,1fr) (not 1fr) lets each column shrink below its content width, so
+     a long value like the countdown can never push the grid past the viewport. */
+  .group-bar{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:18px 0}
+  .gstat{background:var(--panel);border:1px solid var(--panel-border);border-radius:12px;padding:14px 16px;text-align:center;min-width:0}
   .gstat.time{background:rgba(82,48,218,0.14);border-color:rgba(82,48,218,0.5)}
-  .gval{font-family:'Montserrat',sans-serif;font-size:32px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
+  .gval{font-family:'Montserrat',sans-serif;font-size:clamp(22px,6.5vw,32px);font-weight:600;line-height:1.1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
   .glbl{font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:var(--muted);margin-top:7px}
 
   .scale{margin:18px 0 22px}
