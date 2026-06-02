@@ -410,16 +410,28 @@ export function computeAchievements(data){
 export function pickNextMilestones(achievements, n = 3){
   const locked = achievements.filter(a => !a.unlocked);
   if(!locked.length) return [];
-  const withProgress = locked.filter(a => a.current > 0)
-    .sort((a, b) => (b.current / b.target) - (a.current / a.target));
-  if(withProgress.length >= n) return withProgress.slice(0, n);
-  const seen = new Set(withProgress.map(a => a.id));
-  const fallback = locked.filter(a => !seen.has(a.id))
-    .sort((a, b) => {
-      const ag = a.category === 'getting-started' ? 0 : 1;
-      const bg = b.category === 'getting-started' ? 0 : 1;
-      if(ag !== bg) return ag - bg;
-      return a.target - b.target;
-    });
-  return [...withProgress, ...fallback].slice(0, n);
+  const ratio = a => a.current / a.target;
+  const withProgress = locked.filter(a => a.current > 0).sort((a, b) => ratio(b) - ratio(a));
+  let picked;
+  if(withProgress.length >= n){
+    picked = withProgress.slice(0, n);
+  } else {
+    const seen = new Set(withProgress.map(a => a.id));
+    const fallback = locked.filter(a => !seen.has(a.id))
+      .sort((a, b) => {
+        const ag = a.category === 'getting-started' ? 0 : 1;
+        const bg = b.category === 'getting-started' ? 0 : 1;
+        if(ag !== bg) return ag - bg;
+        return a.target - b.target;
+      });
+    picked = [...withProgress, ...fallback].slice(0, n);
+  }
+  // Always feature the nearest Experiments milestone (a gentle nudge toward the
+  // new feature). If none is already in the list, give it the last slot.
+  if(n > 0 && !picked.some(a => a.category === 'experiments')){
+    const exp = locked.filter(a => a.category === 'experiments')
+      .sort((a, b) => (ratio(b) - ratio(a)) || (a.target - b.target))[0];
+    if(exp) picked = [...picked.slice(0, n - 1), exp];
+  }
+  return picked.slice(0, n);
 }

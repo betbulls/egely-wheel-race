@@ -347,10 +347,10 @@ function renderContinueExperiment(exp, progByExp){
   const st = experimentState(exp, progByExp.get(exp.id));
   const topic = getTopic(exp.topic);
   return `
+    <h2 class="dash-h">Continue Experiment</h2>
     <a class="home-continue" href="#/experiment/${esc(exp.id)}">
       <span class="hc-icon">${topic ? topic.icon : '🧪'}</span>
       <div class="hc-info">
-        <div class="hc-eyebrow">Continue experiment</div>
         <div class="hc-title">${esc(exp.title)}</div>
         <div class="hc-meta">Day ${st.currentNumber} of ${st.total}</div>
       </div>
