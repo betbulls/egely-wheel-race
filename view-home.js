@@ -15,6 +15,20 @@ const shortDate = iso => iso ? new Date(iso).toLocaleDateString('en-CA') : '';
 const MIGRATION_FLAG = 'ewr_seen_init';
 
 export function mount(el){
+  // One delegated handler for the badge "i" buttons, bound for the whole
+  // lifetime of the view. It MUST live here (not inside render/async): the
+  // dashboard re-renders on every auth change, and overlapping async renders
+  // used to bind this twice to the same #homeBody — so a tap toggled
+  // `.expanded` an even number of times and appeared to do nothing.
+  const onInfoClick = (e) => {
+    const btn = e.target.closest('.db-info');
+    if(!btn) return;
+    e.preventDefault();
+    const card = btn.closest('.dash-badge, .dash-recent-card');
+    if(card) card.classList.toggle('expanded');
+  };
+  el.addEventListener('click', onInfoClick);
+
   // Auth state can resolve AFTER mount on a hard refresh (Supabase session
   // restoration is async). Re-render whenever the state changes meaningfully
   // so we don't get stuck on the logged-out screen.
@@ -26,7 +40,7 @@ export function mount(el){
     sig = newSig;
     render();
   });
-  return () => { unsubAuth(); };
+  return () => { unsubAuth(); el.removeEventListener('click', onInfoClick); };
 
   function render(){
     const a = auth.getState();
@@ -230,14 +244,6 @@ export function mount(el){
       ${renderCollection(achievements, newIds, stored)}
     `;
 
-    // Mobile-friendly tap: the "i" button on each badge toggles the description.
-    el.querySelector('#homeBody').addEventListener('click', (e) => {
-      const btn = e.target.closest('.db-info');
-      if(!btn) return;
-      e.preventDefault();
-      const card = btn.closest('.dash-badge, .dash-recent-card');
-      if(card) card.classList.toggle('expanded');
-    });
   })();
   }
 }
