@@ -343,6 +343,92 @@
     .cn-name{font-size:26px}
   }
 
+  /* ---- Experiments ------------------------------------------------------- */
+  .xp-cover{position:relative;overflow:hidden;border-radius:12px;flex-shrink:0;
+    background:linear-gradient(140deg, rgba(82,48,218,0.55), rgba(0,51,255,0.25));
+    display:flex;align-items:center;justify-content:center}
+  .xp-cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .xp-cover-icon{font-size:26px;position:relative;z-index:1;opacity:.92}
+
+  .xp-hero{display:flex;align-items:center;gap:16px;text-decoration:none;color:inherit;
+    background:linear-gradient(160deg, rgba(82,48,218,0.28), rgba(0,51,255,0.08));
+    border:1px solid rgba(155,109,255,0.4);border-radius:18px;padding:16px 18px;margin-bottom:8px;
+    transition:transform .15s, border-color .15s}
+  .xp-hero:hover{transform:translateY(-2px);border-color:rgba(155,109,255,0.7)}
+  .xp-hero-cover{width:76px;height:76px}.xp-hero-cover .xp-cover-icon{font-size:34px}
+  .xp-hero-info{flex:1;min-width:0}
+  .xp-hero-eyebrow{font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#cdbcff}
+  .xp-hero-title{font-family:'Montserrat',sans-serif;font-size:20px;font-weight:500;margin-top:2px}
+  .xp-hero-meta{font-size:13px;color:var(--muted);margin-top:2px}
+  .xp-hero-cta{font-size:14px;font-weight:600;color:#cdbcff;flex-shrink:0;white-space:nowrap}
+
+  .xp-section-h{font-family:'Montserrat',sans-serif;font-size:13px;font-weight:600;
+    letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);margin:22px 0 12px}
+
+  .xp-topics{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+  .xp-topic{display:flex;align-items:center;gap:14px;text-decoration:none;color:inherit;
+    background:rgba(255,255,255,0.04);border:1px solid var(--panel-border);border-radius:14px;padding:14px;
+    transition:transform .15s, border-color .15s}
+  a.xp-topic:hover{transform:translateY(-2px);border-color:rgba(155,109,255,0.5)}
+  .xp-topic.is-empty{opacity:.5}
+  .xp-topic-cover{width:54px;height:54px}
+  .xp-topic-info{flex:1;min-width:0}
+  .xp-topic-title{font-family:'Montserrat',sans-serif;font-size:16px;font-weight:500}
+  .xp-topic-count{font-size:12px;color:var(--muted);margin-top:3px}
+
+  .xp-bar{height:5px;background:rgba(255,255,255,0.08);border-radius:99px;overflow:hidden;margin-top:8px}
+  .xp-bar-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,#5230da,#b18bff)}
+
+  .xp-exps{display:flex;flex-direction:column;gap:12px}
+  .xp-exp{display:flex;align-items:center;gap:16px;text-decoration:none;color:inherit;
+    background:linear-gradient(160deg, rgba(255,255,255,0.05), rgba(82,48,218,0.06));
+    border:1px solid var(--panel-border);border-radius:16px;padding:16px;transition:transform .15s, border-color .15s}
+  .xp-exp:hover{transform:translateY(-2px);border-color:rgba(155,109,255,0.5)}
+  .xp-exp-cover{width:64px;height:64px}.xp-exp-cover .xp-cover-icon{font-size:30px}
+  .xp-exp-info{flex:1;min-width:0}
+  .xp-exp-title{font-family:'Montserrat',sans-serif;font-size:17px;font-weight:500}
+  .xp-exp-sum{font-size:13px;color:var(--muted);margin:3px 0 7px;line-height:1.45}
+  .xp-status{display:inline-block;font-size:11px;letter-spacing:0.04em;color:var(--faint);
+    text-transform:uppercase;font-weight:600}
+  .xp-status.going{color:#cdbcff}
+  .xp-status.done{color:#3ddc84}
+  .xp-exp-cta{font-size:14px;font-weight:600;color:#cdbcff;flex-shrink:0;white-space:nowrap}
+
+  .xp-day-strip{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .xp-day-dot{width:38px;height:38px;border-radius:10px;border:1px solid var(--panel-border);
+    background:rgba(255,255,255,0.04);color:var(--muted);font-family:'Montserrat',sans-serif;
+    font-size:14px;font-weight:600;cursor:pointer;transition:all .15s;padding:0}
+  .xp-day-dot.open:hover{border-color:rgba(155,109,255,0.5);color:#fff}
+  .xp-day-dot.current{border-color:#ffd479;color:#ffd479;box-shadow:0 0 0 1px rgba(255,212,121,0.4)}
+  .xp-day-dot.done{background:rgba(61,220,132,0.14);border-color:rgba(61,220,132,0.5);color:#3ddc84}
+  .xp-day-dot.locked{opacity:.4;cursor:not-allowed}
+
+  .xp-day-eyebrow{font-family:'Montserrat',sans-serif;font-size:12px;letter-spacing:0.12em;
+    text-transform:uppercase;color:#cdbcff;margin-bottom:10px}
+  .xp-day-text{font-size:15px;line-height:1.6;color:var(--white);margin-bottom:14px}
+  .xp-day-block{margin-bottom:12px}
+  .xp-day-label{display:inline-block;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;
+    color:var(--faint);margin-bottom:4px}
+  .xp-day-block p{font-size:14px;line-height:1.55;color:var(--muted)}
+
+  .xp-done-note{margin-top:8px;padding:14px 16px;border-radius:12px;text-align:center;
+    background:rgba(61,220,132,0.1);border:1px solid rgba(61,220,132,0.35);color:#3ddc84;font-size:14px}
+
+  .xp-measure{margin-top:16px;padding:16px;border-radius:14px;text-align:center;
+    background:rgba(82,48,218,0.12);border:1px solid rgba(155,109,255,0.35)}
+  .xp-measure-head{font-family:'Montserrat',sans-serif;font-size:14px;font-weight:500;margin-bottom:12px}
+  .xp-measure-hint{font-size:13px;color:var(--muted);margin:4px 0}
+  .xp-live-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px}
+  .xp-live-cell{background:rgba(0,0,0,0.2);border-radius:10px;padding:10px 6px}
+  .xp-live-val{font-family:'Montserrat',sans-serif;font-size:26px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
+  .xp-live-lbl{font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);margin-top:6px}
+  .xp-verify{font-size:12px;font-weight:600;margin-bottom:12px}
+  .xp-verify.good{color:#3ddc84}
+  .xp-verify.bad{color:#e0a23c}
+  .xp-review-row{display:flex;gap:18px;justify-content:center;align-items:center;font-size:13px;color:var(--muted);margin-bottom:6px;flex-wrap:wrap}
+  .xp-review-row b{font-family:'Montserrat',sans-serif;font-size:20px}
+  .xp-review-level{font-family:'Montserrat',sans-serif;font-size:22px;font-weight:600}
+
   /* Profile: connection link + following list */
   .link-row{display:flex;gap:10px;align-items:center}
   .link-input{flex:1;font-size:13px;color:var(--muted)}
@@ -1073,6 +1159,7 @@
   <div class="wordmark">egely wheel</div>
   <nav class="nav">
     <a href="#/home" data-route="/home">Home</a>
+    <a href="#/experiments" data-route="/experiments">Experiments</a>
     <a href="#/sessions" data-route="/sessions" class="nav-secondary">Sessions</a>
     <a href="#/leaderboard" data-route="/leaderboard" class="nav-secondary">Global Ranking</a>
     <button type="button" class="nav-more" id="navMore" aria-label="More" aria-haspopup="true" aria-expanded="false">⋯</button>
