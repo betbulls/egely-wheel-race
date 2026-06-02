@@ -16,6 +16,7 @@ export const CATEGORIES = [
   { id: 'endurance',       title: 'Endurance' },
   { id: 'personal-growth', title: 'Personal Growth' },
   { id: 'social',          title: 'Social & Community' },
+  { id: 'experiments',     title: 'Experiments' },
   { id: 'practitioner',    title: 'Spiritual Maker Path', practitionerOnly: true },
   { id: 'special',         title: 'Rare & Special' },
 ];
@@ -359,6 +360,21 @@ export const ACHIEVEMENTS = [
   { id: 'vitality-master', category: 'vitality', tier: T.silver, icon: '💚',
     title: 'Vitality Master', description: 'Ten measurements with green-zone average.',
     progress: d => ({ current: d.results.filter(r => (r.avg || 0) >= 13).length, target: 10 })},
+
+  // Experiments — milestones for finishing whole experiments (not per-topic, so
+  // adding new experiments never spawns new badges). Fed by d.experimentsCompleted.
+  { id: 'experiment-first', category: 'experiments', tier: T.bronze, icon: '🧪',
+    title: 'First Experiment', description: 'Complete your first experiment.',
+    progress: d => ({ current: Math.min(d.experimentsCompleted || 0, 1), target: 1 })},
+  { id: 'experiment-5', category: 'experiments', tier: T.silver, icon: '⚗️',
+    title: '5 Experiments', description: 'Complete five experiments.',
+    progress: d => ({ current: d.experimentsCompleted || 0, target: 5 })},
+  { id: 'experiment-10', category: 'experiments', tier: T.gold, icon: '🔬',
+    title: '10 Experiments', description: 'Complete ten experiments.',
+    progress: d => ({ current: d.experimentsCompleted || 0, target: 10 })},
+  { id: 'experiment-25', category: 'experiments', tier: T.special, icon: '🧭',
+    title: '25 Experiments', description: 'Complete twenty-five experiments.',
+    progress: d => ({ current: d.experimentsCompleted || 0, target: 25 })},
 ];
 
 // Build the full state list from a data bundle.

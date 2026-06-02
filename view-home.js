@@ -3,6 +3,8 @@ import * as auth from './auth.js';
 import { vitalityColor as vColor } from './analytics.js';
 import { CATEGORIES, LEVELS, TIER_XP, computeAchievements, pickNextMilestones, computeLevelState } from './achievements.js';
 import { fetchUserAchievements, recordNewUnlocks, markSeen } from './achievements-store.js';
+import { fetchProgress } from './experiments-store.js';
+import { completedExperimentCount, pickContinue, experimentState, getTopic } from './experiments.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
@@ -75,7 +77,7 @@ export function mount(el){
     // Sessions that started in the past 4 hours (still possibly live) or in the
     // future — capped to ~10 for the small teaser block on the dashboard.
     const sessionWindow = new Date(Date.now() - 4 * 3600 * 1000).toISOString();
-    const [resR, hostedR, prRecvR, stored, upcomingR] = await Promise.all([
+    const [resR, hostedR, prRecvR, stored, upcomingR, progByExp] = await Promise.all([
       supabase.from('results').select('*').eq('user_id', userId),
       supabase.from('sessions').select('id').eq('created_by_user_id', userId),
       supabase.from('practitioner_links').select('practitioner_id').eq('client_id', userId).eq('status', 'active'),
@@ -85,8 +87,11 @@ export function mount(el){
         .gte('scheduled_start', sessionWindow)
         .order('scheduled_start', { ascending: true })
         .limit(10),
+      fetchProgress(userId),
     ]);
     const results = resR.data || [];
+    const experimentsCompleted = completedExperimentCount(progByExp);
+    const continueExp = pickContinue(progByExp);
     const hostedRows = hostedR.data || [];
     const hostedIds = hostedRows.map(s => s.id);
 
@@ -134,6 +139,7 @@ export function mount(el){
       isPractitioner: !!a.isPractitioner,
       clientsCount, clientFirstMeasurementSeen, guidedSession,
       hostedParticipantsMax, practitionerCircleCount,
+      experimentsCompleted,
     };
     const achievements = computeAchievements(data);
 
@@ -199,7 +205,7 @@ export function mount(el){
     }
 
     const sessionCount = results.filter(r => r.session_id != null).length;
-    const soloCount = results.filter(r => r.session_id == null).length;
+    const soloCount = results.filter(r => r.session_id == null && r.experiment_id == null).length;
     const verifiedRatio = results.length
       ? Math.round(results.filter(r => r.verified).length / results.length * 100)
       : 0;
@@ -234,10 +240,11 @@ export function mount(el){
       ${levelUpFromTitle != null ? renderLevelUp(levelUpFromTitle, levelState.level.title) : ''}
       ${renderLevel(levelState)}
       ${renderStats({
-        sessionCount, soloCount,
+        sessionCount, soloCount, experimentsCompleted,
         clientsCount: a.isPractitioner ? clientsCount : null,
         bestAvg, verifiedRatio, total: results.length,
       })}
+      ${renderContinueExperiment(continueExp, progByExp)}
       ${renderUpcoming(upcoming)}
       ${renderRecent(achievements, newIds, stored)}
       ${renderNext(achievements)}
@@ -320,6 +327,7 @@ function renderStats(s){
   const cards = [
     { label: 'Sessions', val: s.sessionCount, color: '#9db4ff' },
     { label: 'Solo',     val: s.soloCount,    color: '#cdbcff' },
+    { label: 'Experiments', val: s.experimentsCompleted || 0, color: '#9b6dff' },
     s.clientsCount != null ? { label: 'Members', val: s.clientsCount, color: '#3ddc84' } : null,
     { label: 'Best Avg', val: s.total ? s.bestAvg.toFixed(1) : '–', color: s.total ? vColor(s.bestAvg) : '#888' },
     { label: 'Verified', val: s.total ? s.verifiedRatio + '%' : '–', color: '#f5a623' },
@@ -331,6 +339,23 @@ function renderStats(s){
         <div class="dash-stat-lbl">${esc(c.label)}</div>
       </div>`).join('')}
   </div>`;
+}
+
+// ---- Continue Experiment ---------------------------------------------------
+function renderContinueExperiment(exp, progByExp){
+  if(!exp) return '';
+  const st = experimentState(exp, progByExp.get(exp.id));
+  const topic = getTopic(exp.topic);
+  return `
+    <a class="home-continue" href="#/experiment/${esc(exp.id)}">
+      <span class="hc-icon">${topic ? topic.icon : '🧪'}</span>
+      <div class="hc-info">
+        <div class="hc-eyebrow">Continue experiment</div>
+        <div class="hc-title">${esc(exp.title)}</div>
+        <div class="hc-meta">Day ${st.currentNumber} of ${st.total}</div>
+      </div>
+      <span class="hc-cta">Continue →</span>
+    </a>`;
 }
 
 // ---- Upcoming Sessions teaser ---------------------------------------------

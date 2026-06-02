@@ -674,6 +674,20 @@
   .hs-meta{font-size:12px;color:var(--muted)}
   .hs-live{color:#cdbcff;font-weight:600;letter-spacing:0.04em}
 
+  /* Home — Continue Experiment block */
+  .home-continue{display:flex;align-items:center;gap:14px;text-decoration:none;color:inherit;
+    background:linear-gradient(160deg, rgba(82,48,218,0.22), rgba(0,51,255,0.06));
+    border:1px solid rgba(155,109,255,0.4);border-radius:14px;padding:14px 16px;margin:8px 0;
+    transition:transform .15s,border-color .15s}
+  .home-continue:hover{transform:translateY(-1px);border-color:rgba(155,109,255,0.65)}
+  .hc-icon{font-size:30px;line-height:1;flex-shrink:0}
+  .hc-info{flex:1;min-width:0}
+  .hc-eyebrow{font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:#cdbcff}
+  .hc-title{font-family:'Montserrat',sans-serif;font-size:16px;font-weight:500;margin-top:2px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hc-meta{font-size:12px;color:var(--muted);margin-top:2px}
+  .hc-cta{font-size:13px;color:#cdbcff;font-weight:600;flex-shrink:0;white-space:nowrap}
+
   .dash-next{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
   .dash-milestone{background:linear-gradient(135deg, rgba(82,48,218,0.18), rgba(0,51,255,0.06));
     border:1px solid var(--panel-border);border-radius:12px;padding:14px 16px}
@@ -972,6 +986,7 @@
   .me-kind{font-size:9px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;padding:2px 8px;border-radius:20px;flex-shrink:0}
   .me-kind.solo{background:rgba(0,51,255,0.2);color:#9db4ff}
   .me-kind.session{background:rgba(82,48,218,0.25);color:#cdbcff}
+  .me-kind.experiment{background:rgba(155,109,255,0.22);color:#b18bff}
   .me-title{font-family:'Montserrat',sans-serif;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .me-meta{font-size:12px;color:var(--muted);margin-top:4px}
   .me-host{display:inline-flex;align-items:center;gap:5px;vertical-align:middle}

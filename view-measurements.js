@@ -20,7 +20,7 @@ export function mount(el){
   el.innerHTML = `
     <div class="view-head">
       <h1 class="page-title">My Measurements</h1>
-      <p class="page-sub">Your stored measurements — solo and group sessions.</p>
+      <p class="page-sub">Your stored measurements — solo, sessions and experiments.</p>
     </div>
     <div id="meList"><div class="empty">Loading…</div></div>
   `;
@@ -64,19 +64,24 @@ export function mount(el){
     };
 
     list.innerHTML = rows.map(r => {
-      const solo = r.session_id == null;
+      // Three kinds: experiment (experiment_id set) / session (session_id set) / solo.
+      const isExperiment = r.experiment_id != null;
+      const isSession = !isExperiment && r.session_id != null;
+      const isSolo = !isExperiment && !isSession;
+      const kind = isExperiment ? 'experiment' : isSession ? 'session' : 'solo';
+      const kindLabel = isExperiment ? 'Experiment' : isSession ? 'Session' : 'Solo';
       const lvl = vitalityLevel(r.avg || 0);
       const when = new Date(r.created_at).toLocaleString('en-US', {
         month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
       });
-      const sess = solo ? null : sessMap.get(r.session_id);
-      const title = solo ? (r.label || 'Solo measurement') : ((sess && sess.name) || 'Session');
-      const host = solo ? null : hostFor(sess);
+      const sess = isSession ? sessMap.get(r.session_id) : null;
+      const title = isSession ? ((sess && sess.name) || 'Session') : (r.label || (isExperiment ? 'Experiment' : 'Solo measurement'));
+      const host = isSession ? hostFor(sess) : null;
       return `
         <a class="me-card" href="#/m/${r.id}">
           <div class="me-main">
             <div class="me-title-row">
-              <span class="me-kind ${solo ? 'solo' : 'session'}">${solo ? 'Solo' : 'Session'}</span>
+              <span class="me-kind ${kind}">${kindLabel}</span>
               <span class="me-title">${esc(title)}</span>
               ${r.verified ? '<span class="v-badge verified">✓</span>' : '<span class="v-badge unverified">unverified</span>'}
             </div>
