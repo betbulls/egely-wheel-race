@@ -23,6 +23,24 @@ export async function fetchProgress(userId){
   return map;
 }
 
+// Returns Map: dayId -> { id, avg, verified, createdAt } for this user's saved
+// experiment measurements (latest per day), so completed days can show the
+// result and link to its detail page.
+export async function fetchExperimentResults(userId, experimentId){
+  const map = new Map();
+  if(!userId) return map;
+  const { data } = await supabase.from('results')
+    .select('id, experiment_day, avg, verified, created_at')
+    .eq('user_id', userId).eq('experiment_id', experimentId)
+    .order('created_at', { ascending: false });
+  for(const r of (data || [])){
+    if(r.experiment_day && !map.has(r.experiment_day)){
+      map.set(r.experiment_day, { id: r.id, avg: Number(r.avg), verified: !!r.verified, createdAt: r.created_at });
+    }
+  }
+  return map;
+}
+
 // Mark that the experiment has been opened/started (so it shows up in "Continue"
 // even before the first day is completed). Safe to call repeatedly.
 export async function ensureStarted(userId, experimentId){

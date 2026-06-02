@@ -4,9 +4,15 @@ import * as wakeLock from './wake-lock.js';
 import { computeStats, vitalityLevel, vitalityColor as vColor, downsample } from './analytics.js';
 import {
   TOPICS, EXPERIMENTS, topicsOrdered, getTopic, getExperiment, experimentsByTopic,
-  experimentState, isDayUnlocked, topicProgress, pickContinue, dayNumber,
+  experimentState, isDayUnlocked, topicProgress, pickContinue, dayNumber, completedExperimentCount,
 } from './experiments.js';
-import { fetchProgress, ensureStarted, markDayComplete, saveExperimentMeasurement } from './experiments-store.js';
+import { fetchProgress, fetchExperimentResults, ensureStarted, markDayComplete, saveExperimentMeasurement } from './experiments-store.js';
+
+// First experiment (in catalog order) the user hasn't completed — the "try next".
+function firstUnfinished(progByExp){
+  for(const exp of EXPERIMENTS){ const p = progByExp.get(exp.id); if(!p || !p.completed) return exp; }
+  return null;
+}
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
@@ -46,10 +52,10 @@ export function mountExperiments(el, topicId){
 
 function renderMain(body, a, progByExp){
   const cont = a.user ? pickContinue(progByExp) : null;
-  let hero;
+  let hero = '';
   if(cont){
+    // Something in progress → pick up where you left off.
     const st = experimentState(cont, progByExp.get(cont.id));
-    const cta = st.completedCount > 0 ? `Continue` : `Start`;
     hero = `
       <a class="xp-hero" href="#/experiment/${esc(cont.id)}">
         ${coverHtml(cont, 'xp-hero-cover')}
@@ -58,21 +64,34 @@ function renderMain(body, a, progByExp){
           <div class="xp-hero-title">${esc(cont.title)}</div>
           <div class="xp-hero-meta">Day ${st.currentNumber} of ${st.total}</div>
         </div>
-        <span class="xp-hero-cta">${cta} →</span>
+        <span class="xp-hero-cta">Continue →</span>
       </a>`;
   } else {
-    // New visitor / nobody in progress → one clear "Start here".
-    const rec = EXPERIMENTS[0];
-    hero = rec ? `
-      <a class="xp-hero xp-hero-new" href="#/experiment/${esc(rec.id)}">
-        ${coverHtml(rec, 'xp-hero-cover')}
-        <div class="xp-hero-info">
-          <div class="xp-hero-eyebrow">Start your first experiment</div>
-          <div class="xp-hero-title">${esc(rec.title)}</div>
-          <div class="xp-hero-meta">${rec.days.length} days · ${esc(rec.level)}</div>
-        </div>
-        <span class="xp-hero-cta">Start →</span>
-      </a>` : '';
+    // Nothing in progress → recommend the next experiment they HAVEN'T finished.
+    const rec = firstUnfinished(progByExp);
+    if(rec){
+      const eyebrow = (a.user && completedExperimentCount(progByExp) > 0) ? 'Try this next' : 'Start your first experiment';
+      hero = `
+        <a class="xp-hero xp-hero-new" href="#/experiment/${esc(rec.id)}">
+          ${coverHtml(rec, 'xp-hero-cover')}
+          <div class="xp-hero-info">
+            <div class="xp-hero-eyebrow">${eyebrow}</div>
+            <div class="xp-hero-title">${esc(rec.title)}</div>
+            <div class="xp-hero-meta">${rec.days.length} days · ${esc(rec.level)}</div>
+          </div>
+          <span class="xp-hero-cta">Start →</span>
+        </a>`;
+    } else if(a.user){
+      // Everything completed.
+      hero = `
+        <div class="xp-hero xp-hero-done">
+          <div class="xp-hero-info">
+            <div class="xp-hero-eyebrow">Nicely done</div>
+            <div class="xp-hero-title">You've explored every experiment so far ✨</div>
+            <div class="xp-hero-meta">New ones are on the way.</div>
+          </div>
+        </div>`;
+    }
   }
 
   const topics = topicsOrdered().map(t => {
@@ -155,7 +174,11 @@ export function mountExperimentDetail(el, experimentId){
   async function render(){
     if(teardownMeasure){ teardownMeasure(); teardownMeasure = null; }
     const a = auth.getState();
-    const progByExp = await fetchProgress(a.user?.id || null);
+    const uid = a.user?.id || null;
+    const [progByExp, resultsByDay] = await Promise.all([
+      fetchProgress(uid),
+      fetchExperimentResults(uid, exp.id),
+    ]);
     const prog = progByExp.get(exp.id);
     if(a.user) ensureStarted(a.user.id, exp.id);   // fire-and-forget: shows in Continue
     const st = experimentState(exp, prog);
@@ -205,7 +228,14 @@ export function mountExperimentDetail(el, experimentId){
 
     const host = body.querySelector('#xpMeasureHost');
     if(isDone){
-      host.innerHTML = `<div class="xp-done-note">✓ Day ${dayNumber(exp, day)} completed.${st.completed ? ' You finished this experiment — beautifully done. ✨' : ''}</div>`;
+      const res = resultsByDay.get(day.id);
+      const finishedNote = st.completed ? `<div class="xp-done-note">You finished this experiment — beautifully done. ✨</div>` : '';
+      host.innerHTML = res
+        ? `<a class="xp-done-card" href="#/m/${esc(String(res.id))}">
+             <span class="xp-done-main">✓ Day ${dayNumber(exp, day)} · <b style="color:${vColor(res.avg)}">${res.avg.toFixed(1)}</b> avg ${res.verified ? '<span class="v-badge verified">✓ Verified</span>' : '<span class="warn">Not verified</span>'}</span>
+             <span class="xp-done-cta">View measurement →</span>
+           </a>${finishedNote}`
+        : `<div class="xp-done-note">✓ Day ${dayNumber(exp, day)} completed.</div>${finishedNote}`;
     } else {
       teardownMeasure = setupMeasure(host, exp, day, () => { viewDayId = null; render(); });
     }
