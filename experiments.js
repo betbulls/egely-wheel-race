@@ -1,101 +1,72 @@
-// Experiments content catalog — pure data, authored by hand. Adding new topics
-// or experiments here requires NO other code changes.
+// ============================================================================
+//  EXPERIMENTS CONTENT — this is the only file you edit to add/change content.
+// ============================================================================
+//  See EXPERIMENTS-GUIDE.md for a full, step-by-step authoring guide.
 //
-// IMPORTANT invariants (keep these to avoid breaking user progress):
-//  - Every experiment `id` is stable and UNIQUE and is NEVER reused.
-//  - Every day has a stable `id` (e.g. 'd1') that is NEVER reused or repurposed.
-//    Progress is keyed on these day ids — so you can insert/reorder days later
-//    without corrupting anyone's progress. (Display order = array order.)
-//  - `measureSeconds` is the required measurement length to complete that day.
-//  - Cover images are static files in the repo, e.g. assets/experiments/<file>.
+//  Voice: an intelligent friend guiding an interesting experiment — National
+//  Geographic + exploration, never guru/teacher/scientist. Each day:
+//    intro = a curious observation (the hook) that opens a question,
+//    task  = exactly what to do ("Try this"),
+//    practice = what to carry into the measurement, ending with a "Notice ..."
+//               cue, and reflectionPrompt asks back about exactly that cue.
+//  Telekinesis as a word only appears later in the topic — early experiments
+//  build focus, attention, intention, presence first.
+//
+//  Quick rules:
+//   • Wrap every sentence/title in BACKTICKS  ` ... `  (not ' or ").
+//   • Each experiment `id` and each day `id` is permanent — never reuse/rename.
+//   • Keep every comma and every { } [ ] exactly where it is.
+//   • Cover images are square files in  assets/experiments/  (see the guide).
+// ============================================================================
 
 export const TOPICS = [
-  { id: 'telekinesis',  title: 'Telekinesis',     icon: '🧠', cover: 'assets/experiments/telekinesis.jpg',  order: 1 },
-  { id: 'meditation',   title: 'Meditation',      icon: '🧘', cover: 'assets/experiments/meditation.jpg',   order: 2 },
-  { id: 'breathwork',   title: 'Breathwork',      icon: '🌬️', cover: 'assets/experiments/breathwork.jpg',   order: 3 },
-  { id: 'energy-focus', title: 'Energy & Focus',  icon: '⚡', cover: 'assets/experiments/energy-focus.jpg', order: 4 },
+  { id: 'telekinesis',  title: `Telekinesis`,    icon: '🧠', cover: 'assets/experiments/telekinesis.jpg',  order: 1 },
+  { id: 'meditation',   title: `Meditation`,     icon: '🧘', cover: 'assets/experiments/meditation.jpg',   order: 2 },
+  { id: 'breathwork',   title: `Breathwork`,     icon: '🌬️', cover: 'assets/experiments/breathwork.jpg',   order: 3 },
+  { id: 'energy-focus', title: `Energy & Focus`, icon: '⚡', cover: 'assets/experiments/energy-focus.jpg', order: 4 },
 ];
 
 export const EXPERIMENTS = [
   {
-    id: 'telekinesis-fundamentals',
+    id: 'focus-intention',
     topic: 'telekinesis',
-    title: 'Telekinesis Fundamentals',
+    title: `Focus & Intention`,
     level: 'Beginner',
-    cover: 'assets/experiments/telekinesis-fundamentals.jpg',
+    cover: 'assets/experiments/focus-intention.jpg',
     order: 1,
-    summary: 'Five gentle days to learn the basics of focused intention with your Egely Wheel.',
+    summary: `Four short days exploring how steady your attention really is — and what a focused, intentional mind looks like on the wheel.`,
     days: [
-      { id: 'd1', title: 'Getting Grounded',
-        intro: 'Before influencing anything outside you, settle what is inside you. Today is about arriving — calm body, quiet mind, steady breath.',
-        task: 'Sit comfortably for two minutes. Let your shoulders drop and your breathing slow. Notice the wheel in front of you without trying to move it.',
-        practice: 'Rest your attention lightly on the wheel. No effort, no force — just presence.',
-        reflectionPrompt: 'How did your body feel before the measurement?',
+      { id: 'd1', title: `One-Pointed Attention`,
+        intro: `Your attention almost never sits still. Right now, without trying, it has probably already jumped a few times — to a sound, a thought, this very sentence. We rarely notice how restless the mind is until we ask it to stay in one place. Today you find out how long yours can hold.`,
+        task: `Pick one small point on the Egely Wheel — a single light, an edge, anything tiny. Rest your eyes and your attention there. Each time you notice your mind has slipped away, gently bring it back to that one point — no effort, no frustration, just return.`,
+        practice: `Keep that single point as your anchor for the whole measurement. Don't try to make anything happen — just hold your attention there. Notice how often your mind wanders off before you catch it.`,
+        reflectionPrompt: `How many times did your attention slip away before you noticed?`,
         measureSeconds: 120 },
-      { id: 'd2', title: 'Finding Your Focus',
-        intro: 'Energy follows attention. Today you practise pointing a single, soft beam of focus at one spot.',
-        task: 'Pick one point on the wheel. Keep returning your gaze and intention to it whenever the mind wanders.',
-        practice: 'Hold a calm, unbroken focus for the full measurement. Soft, not strained.',
-        reflectionPrompt: 'Where did your attention drift, and how did you bring it back?',
-        measureSeconds: 150 },
-      { id: 'd3', title: 'Intention Without Force',
-        intro: 'The paradox of energy work: the harder you push, the less happens. Today is about willing without straining.',
-        task: 'Imagine the wheel already moving the way you wish. Hold the feeling of it, not the effort of it.',
-        practice: 'Measure while keeping a relaxed, confident intention — as if the outcome is already true.',
-        reflectionPrompt: 'Did relaxing your effort change anything you noticed?',
-        measureSeconds: 150 },
-      { id: 'd4', title: 'Breath as a Lever',
-        intro: 'The breath is the simplest tool to raise and steady your energy. Today you pair breath with intention.',
-        task: 'Breathe slowly: four counts in, six counts out. On each exhale, send calm attention toward the wheel.',
-        practice: 'Keep the slow breath going through the whole measurement.',
-        reflectionPrompt: 'How did the slow breathing affect your reading?',
-        measureSeconds: 180 },
-      { id: 'd5', title: 'Putting It Together',
-        intro: 'Grounding, focus, relaxed intention, breath — today you bring all four into one calm session.',
-        task: 'Run through each skill briefly, then settle into a single steady state of focused calm.',
-        practice: 'Measure in that combined state and simply observe what your energy does today.',
-        reflectionPrompt: 'What felt different from Day 1?',
-        measureSeconds: 180 },
-    ],
-  },
-  {
-    id: 'telekinesis-focus-intention',
-    topic: 'telekinesis',
-    title: 'Focus & Intention',
-    level: 'Beginner',
-    cover: 'assets/experiments/telekinesis-focus-intention.jpg',
-    order: 2,
-    summary: 'Four days sharpening the quality of your attention and the clarity of your intent.',
-    days: [
-      { id: 'd1', title: 'One-Pointed Attention',
-        intro: 'A scattered mind spreads energy thin. Today you gather it into a single point.',
-        task: 'Choose one LED light on the wheel and keep your attention there, returning gently each time it slips.',
-        practice: 'Hold the single point for the whole measurement.',
-        reflectionPrompt: 'How long could you hold focus before drifting?',
+      { id: 'd2', title: `Clarity of Intention`,
+        intro: `Yesterday you felt how easily attention drifts. Part of the reason is that the mind needs something clear to hold on to. A vague aim — "focus" — slips away almost at once; a specific one gives attention a place to land. Today you give it one.`,
+        task: `Before you begin, decide on one simple, clear intention and say it once in your mind — for example, "I will keep my attention on this one light." Don't repeat it or push it. Just set it, then let it quietly guide you.`,
+        practice: `Hold that single intention through the measurement, coming back to it whenever you drift. Notice whether a clear aim makes it easier to stay than yesterday's open focus did.`,
+        reflectionPrompt: `Did a clear intention make it easier to stay than open focus did yesterday?`,
         measureSeconds: 120 },
-      { id: 'd2', title: 'Clarity of Intent',
-        intro: 'Vague wishes produce vague results. Today you make your intention crisp and specific.',
-        task: 'Decide exactly what you intend before you start — say it once, clearly, in your mind.',
-        practice: 'Measure while holding that one clear intention.',
-        reflectionPrompt: 'Was your intention clearer than yesterday?',
+      { id: 'd3', title: `Holding a Single Thought`,
+        intro: `A clear aim is easy to set and surprisingly hard to keep. Within seconds the mind offers replacements — a better idea, a small worry, a plan for later. Holding a single thought isn't about force; it's about noticing the swap and choosing to stay. Today you practise the staying.`,
+        task: `Choose one quiet anchor tied to your focus — a word like "steady" or "here", or simply the image of the wheel. Keep returning to it. When another thought arrives, let it pass without following it, and come back.`,
+        practice: `Stay with your one anchor for the whole session, as unbroken as you can. Notice how long you can hold it before the first replacement thought sneaks in.`,
+        reflectionPrompt: `How long could you hold your single thought before another one took over?`,
         measureSeconds: 150 },
-      { id: 'd3', title: 'Holding Steady',
-        intro: 'Consistency beats intensity. Today is about a calm, unwavering hold.',
-        task: 'Keep the same calm intention from start to finish, resisting the urge to "try harder".',
-        practice: 'Steady, even attention for the full session.',
-        reflectionPrompt: 'Where did you feel the urge to push, and what happened when you let it go?',
+      { id: 'd4', title: `Intention Measurement`,
+        intro: `You've practised landing your attention, setting a clear intention, and holding it steady. Today you simply put them together and watch what happens — no goal, no straining, just a clean read of a calm, intentional mind. Think of this as the baseline you'll return to as the journey continues.`,
+        task: `Settle for a moment, set one clear intention, and rest your attention on the wheel the way you've practised. Keep it relaxed and steady — engaged, but never forcing.`,
+        practice: `Hold focus and intention together for the full measurement. Notice whether this combined state feels steadier than focus or intention did on their own.`,
+        reflectionPrompt: `Did focus and intention together feel steadier than either one alone?`,
         measureSeconds: 150 },
-      { id: 'd4', title: 'Effortless Effort',
-        intro: 'The goal state: fully engaged, completely relaxed. Today you aim for that balance.',
-        task: 'Engage your focus and intention, then soften everything around it.',
-        practice: 'Measure in that engaged-yet-relaxed state.',
-        reflectionPrompt: 'Did effortless focus feel different in your body?',
-        measureSeconds: 180 },
     ],
   },
 ];
 
-// ---- Pure helpers over content (+ optional progress) -------------------------
+// ============================================================================
+//  Below this line is logic — DO NOT EDIT unless you know what you're doing.
+// ============================================================================
 
 export function topicsOrdered(){ return [...TOPICS].sort((a, b) => a.order - b.order); }
 export function getTopic(id){ return TOPICS.find(t => t.id === id) || null; }
@@ -144,7 +115,7 @@ export function pickContinue(progByExp){
   return best;
 }
 
-// Count of fully-completed experiments — fed to the achievement engine later.
+// Count of fully-completed experiments — fed to the achievement engine.
 export function completedExperimentCount(progByExp){
   let n = 0;
   for(const p of progByExp.values()){ if(p && p.completed) n++; }
