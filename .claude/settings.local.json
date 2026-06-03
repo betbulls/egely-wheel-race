@@ -9,7 +9,8 @@
       "Bash(python -c ' *)",
       "mcp__Claude_Preview__preview_start",
       "mcp__f4d5007b-023f-47c1-8b48-7dd5718656a4__search_products",
-      "WebSearch"
+      "WebSearch",
+      "Bash(node --input-type=module -e ' *)"
     ]
   }
 }
