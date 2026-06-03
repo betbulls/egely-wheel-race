@@ -436,6 +436,16 @@
   .xp-review-row b{font-family:'Montserrat',sans-serif;font-size:20px}
   .xp-review-level{font-family:'Montserrat',sans-serif;font-size:22px;font-weight:600}
 
+  /* Experiment rating (shown only when the whole experiment is complete) */
+  .xp-rating{text-align:center}
+  .xp-rating-q{font-family:'Montserrat',sans-serif;font-size:15px;font-weight:500;margin-bottom:10px}
+  .xp-stars{display:inline-flex;gap:4px}
+  .xp-star{background:none;border:none;cursor:pointer;font-size:30px;line-height:1;padding:2px 4px;
+    color:rgba(255,255,255,0.22);transition:color .12s, transform .12s}
+  .xp-star:hover{transform:scale(1.15)}
+  .xp-star.on{color:#ffd479}
+  .xp-rating-thanks{font-size:14px;color:#3ddc84}
+
   /* Profile: connection link + following list */
   .link-row{display:flex;gap:10px;align-items:center}
   .link-input{flex:1;font-size:13px;color:var(--muted)}

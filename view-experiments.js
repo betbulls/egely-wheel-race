@@ -6,7 +6,7 @@ import {
   TOPICS, EXPERIMENTS, topicsOrdered, getTopic, getExperiment, experimentsByTopic,
   experimentState, isDayUnlocked, topicProgress, pickContinue, dayNumber, completedExperimentCount,
 } from './experiments.js';
-import { fetchProgress, fetchExperimentResults, ensureStarted, markDayComplete, saveExperimentMeasurement } from './experiments-store.js';
+import { fetchProgress, fetchExperimentResults, ensureStarted, markDayComplete, saveExperimentMeasurement, rateExperiment } from './experiments-store.js';
 
 // First experiment (in catalog order) the user hasn't completed — the "try next".
 function firstUnfinished(progByExp){
@@ -215,7 +215,11 @@ export function mountExperimentDetail(el, experimentId){
         ${day.task ? `<div class="xp-day-block"><span class="xp-day-label">Try this</span><p>${esc(day.task)}</p></div>` : ''}
         ${day.practice ? `<div class="xp-day-block"><span class="xp-day-label">While you measure</span><p>${esc(day.practice)}</p></div>` : ''}
         <div id="xpMeasureHost"></div>
-      </div>`;
+      </div>
+      ${st.completed ? `<div class="panel xp-rating" id="xpRating">
+        <div class="xp-rating-q">Was this experiment useful?</div>
+        <div class="xp-stars">${[1, 2, 3, 4, 5].map(n => `<button class="xp-star" type="button" data-star="${n}" aria-label="${n} of 5 stars">★</button>`).join('')}</div>
+      </div>` : ''}`;
 
     // Day strip navigation
     body.querySelectorAll('.xp-day-dot').forEach(btn => {
@@ -238,6 +242,23 @@ export function mountExperimentDetail(el, experimentId){
         : `<div class="xp-done-note">✓ Day ${dayNumber(exp, day)} completed.</div>${finishedNote}`;
     } else {
       teardownMeasure = setupMeasure(host, exp, day, () => { viewDayId = null; render(); });
+    }
+
+    // Rating — only on a fully completed experiment. Private analytics for the
+    // admin; aggregates are never shown back to the user.
+    if(st.completed){
+      const rHost = body.querySelector('#xpRating');
+      const stars = [...rHost.querySelectorAll('.xp-star')];
+      const paint = n => stars.forEach((s, i) => s.classList.toggle('on', i < n));
+      stars.forEach((s, i) => {
+        s.addEventListener('mouseenter', () => paint(i + 1));
+        s.addEventListener('click', async () => {
+          paint(i + 1);
+          await rateExperiment(uid, exp.id, i + 1);
+          rHost.innerHTML = `<div class="xp-rating-thanks">✓ Thanks — your feedback helps shape future experiments.</div>`;
+        });
+      });
+      rHost.querySelector('.xp-stars').addEventListener('mouseleave', () => paint(0));
     }
   }
 
