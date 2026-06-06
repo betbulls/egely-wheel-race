@@ -38,6 +38,7 @@ export const TOPICS = [
   { id: 'human-connection', title: `Human Connection`, icon: '🤝', cover: 'assets/experiments/human-connection.jpg', order: 4 },
   { id: 'crystal-healing', title: `Crystal Healing`, icon: '💎', cover: 'assets/experiments/crystal-healing.jpg', order: 5 },
   { id: 'kundalini-energy', title: `Kundalini Energy`, icon: '🌀', cover: 'assets/experiments/kundalini-energy.jpg', order: 6 },
+  { id: 'psi-research', title: `Psi Research`, icon: '🔬', cover: 'assets/experiments/psi-research.jpg', order: 7 },
 ];
 
 export const EXPERIMENTS = [
@@ -1431,6 +1432,245 @@ export const EXPERIMENTS = [
         task: `With the wheel running, bring everything together: steady posture, slow breath, attention turned fully inward, open and curious. Then explore your inner experience freely, as your own quiet investigator.`,
         practice: `Measure from that full, inward, exploring state. Notice what feels most different now about your inner world — and whether the richest part lives in any tradition, or simply in your own attention — and whether your prediction held.`,
         reflectionPrompt: `After this whole journey inward, what feels most different about your own inner world?`,
+        measureSeconds: 240 },
+    ],
+  },
+
+  // ##########################################################################
+  //  PSI RESEARCH TOPIC
+  //  Frame: the most STORYTELLING topic — about people, researchers, labs and
+  //  strange experiments, NOT a "paranormal course". Big question: why did
+  //  scientists, engineers, military researchers and universities spend decades
+  //  studying phenomena most people call impossible? We do NOT prove psi /
+  //  telepathy / remote viewing — we look at what was actually researched. The
+  //  six earlier roles: Telekinesis = explorer, Meditation = observer, Energy
+  //  Healing = connector, Crystal Healing = meaning-seeker, Kundalini = inner
+  //  experiencer, Psi Research = THE RESEARCHER. The wheel is almost a lab
+  //  instrument; the mood is "today YOU are a researcher", never "today you
+  //  develop powers". NO propaganda in either direction — not "look, it works!"
+  //  and not "look, it's nonsense!", but "this happened, this is what they
+  //  studied, what do you think?". Real names & places encouraged (the topic is
+  //  historical): William James, J.B. Rhine, Karl Zener, Robert Jahn, Brenda
+  //  Dunne, Russell Targ, Harold Puthoff, Ingo Swann, Joseph McMoneagle.
+  //  >=2 real "I can't believe this actually happened" moments per experiment.
+  //  Experiment 5 stays OPEN — never a verdict; the story isn't over.
+  // ##########################################################################
+
+  // ==========================================================================
+  //  1 — The First Researchers  (how curiosity became a science)
+  // ==========================================================================
+  {
+    id: 'the-first-researchers',
+    topic: 'psi-research',
+    title: `The First Researchers`,
+    level: 'Beginner',
+    cover: 'assets/experiments/the-first-researchers.jpg',
+    order: 1,
+    summary: `Four short days at the strange birth of a science — when Victorian scholars, and even Nobel-winning scientists, decided to study the impossible properly. Today you take the researcher's seat.`,
+    days: [
+      { id: 'd1', title: `Taking the Researcher's Seat`,
+        intro: `There are three things you can do with an extraordinary claim: believe it, dismiss it, or investigate it. Most people pick one of the first two; a researcher picks the third. This whole topic invites you into that third stance — curious, careful, and slow to conclude. Today you simply take the researcher's seat at the wheel.`,
+        task: `Set up the wheel as if it were an instrument in your own small laboratory. Before you measure, decide one thing to observe carefully today — not to prove, just to watch — and approach it like a scientist taking notes.`,
+        practice: `Measure as a neutral observer, gathering impressions without deciding what they mean. Notice how it feels to investigate something rather than to believe or dismiss it.`,
+        reflectionPrompt: `How did it feel to investigate, rather than believe or dismiss, what you observed?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `The Society for Psychical Research`,
+        intro: `In 1882, a group of Cambridge scholars did something nobody had quite done before: they founded a society to study reports of the unexplained using the tools of science. The Society for Psychical Research, led by the philosopher Henry Sidgwick, set out to examine such claims without prejudice and in a scientific spirit. Not to believe — to investigate. Today you borrow their motto.`,
+        task: `Choose one ordinary thing about your measurement to study without prejudice — your focus, your breathing, the wheel's motion — and observe it as carefully as those first researchers tried to. No conclusions, just careful attention.`,
+        practice: `Measure in that scientific spirit, examining one chosen thing closely and honestly. Notice what careful, unbiased observation reveals that ordinary glancing would miss.`,
+        reflectionPrompt: `What did careful, unprejudiced observation reveal that you'd normally overlook?`,
+        measureSeconds: 120 },
+      { id: 'd3', title: `Scientists, Not Just Spiritualists`,
+        intro: `It's easy to imagine only the gullible took these questions seriously — but the list of investigators is startling. A Nobel-winning physiologist, Charles Richet; a Nobel-winning physicist, Lord Rayleigh; the chemist William Crookes, who discovered the element thallium — all spent real time on this. Whatever they concluded, the curiosity of such serious minds is itself worth noticing. Today you bring that same rigour.`,
+        task: `Approach the wheel the way a working scientist approaches a puzzling result: interested, exacting, unwilling to fool yourself. Set one careful question and observe toward it.`,
+        practice: `Measure with a scientist's mix of open curiosity and hard honesty. Notice whether holding both at once — open yet rigorous — changes how you observe.`,
+        reflectionPrompt: `Could you hold open curiosity and strict honesty at the same time — and what did that feel like?`,
+        measureSeconds: 150 },
+      { id: 'd4', title: `The White Crow`,
+        intro: `The great psychologist William James, who investigated these matters for years, put it memorably: to disprove the rule that all crows are black, you don't need to check every crow — one white crow is enough. He thought a single well-documented exception deserved real study, not dismissal. That open, evidence-first mind is the researcher's gift. Before you start, predict: will observing like a scientist feel different from how you began on Day 1?`,
+        task: `Take everything from these four days — the neutral seat, the careful eye, the rigorous curiosity — and run one clean observation at the wheel, hunting honestly for anything worth a second look. Make your prediction first, then measure.`,
+        practice: `Measure as a true investigator, neither hoping nor doubting, just watching for your white crow. Notice how the researcher's stance compares with how you observed on Day 1 — and whether your prediction held.`,
+        reflectionPrompt: `How did observing like a researcher compare with Day 1 — and was your prediction right?`,
+        measureSeconds: 150 },
+    ],
+  },
+
+  // ==========================================================================
+  //  2 — Testing the Impossible  (turning anecdote into a countable experiment)
+  // ==========================================================================
+  {
+    id: 'testing-the-impossible',
+    topic: 'psi-research',
+    title: `Testing the Impossible`,
+    level: 'Beginner',
+    cover: 'assets/experiments/testing-the-impossible.jpg',
+    order: 2,
+    summary: `Five days on a quiet revolution: how researchers turned vague claims into something you could actually test, count and argue about — with cards, statistics, and a great many trials.`,
+    days: [
+      { id: 'd1', title: `From Story to Experiment`,
+        intro: `"My grandmother knew the phone would ring." It's a good story — but a story isn't evidence. The leap that built a science was turning such anecdotes into something testable: a setup with clear rules, a known chance of guessing right, and a way to count the results. Today you make that leap with the wheel.`,
+        task: `Turn your session into a tiny experiment: before you begin, decide exactly what you'll observe and what you'd expect by pure chance. Then measure, keeping honest notes as you go.`,
+        practice: `Measure as a controlled little test rather than a free experience, tracking what actually happens against what you expected. Notice the difference between having a story and having a result.`,
+        reflectionPrompt: `What changed when you treated your session as a test with clear rules, not just an experience?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `The Cards That Made a Science`,
+        intro: `In the 1930s a Duke University psychologist named Karl Zener designed a simple deck for testing hunches: five symbols — circle, square, cross, wavy lines, and a star — twenty-five cards in all. With five choices, pure guessing should hit one in five. That clean, countable baseline is what let researchers ask: does anyone beat chance? Today you set your own clear baseline.`,
+        task: `Before measuring, define your "chance" line as plainly as the Zener deck did — what would an ordinary, unremarkable session look like? Then measure, watching for anything that clearly departs from that baseline.`,
+        practice: `Measure against your clear baseline, noting whether anything stands out from the ordinary. Notice how having a known chance level sharpens what counts as surprising.`,
+        reflectionPrompt: `Did having a clear baseline make it easier to spot what was genuinely surprising?`,
+        measureSeconds: 150 },
+      { id: 'd3', title: `Counting Past Luck`,
+        intro: `Joseph Banks Rhine ran the numbers obsessively: in 1931 alone, at his Duke laboratory, he and his students completed ten thousand card-guessing trials. Why so many? Because anyone can be lucky a few times — only large numbers can reveal whether a real pattern hides under the noise. Statistics, not single hits, was his true instrument. Today you respect the numbers.`,
+        task: `Measure with the patience of someone gathering data, not chasing a dramatic moment. Treat this as one data point among many you might collect over days, worth recording honestly whatever it shows.`,
+        practice: `Measure calmly, valuing an honest record over an exciting result. Notice how it feels to care about the long pattern rather than this single session.`,
+        reflectionPrompt: `Did caring about the long-run pattern, not one session, change how you measured?`,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Why One Hit Means Nothing`,
+        intro: `Here's the trap every researcher learns to dodge: a single striking coincidence feels like proof, but it isn't. Flip enough coins and someone gets ten heads in a row by pure chance. The honest question is never "did something amazing happen once?" but "does it keep happening, more than luck allows?". Today you practise that discipline.`,
+        task: `If something surprising shows up in your measurement, notice your urge to make it mean something — then gently set that urge aside. Record it as one event, no more, and keep observing.`,
+        practice: `Measure while resisting the pull to over-read any single moment. Notice how strong the temptation is to turn one coincidence into a conclusion.`,
+        reflectionPrompt: `How strong was the urge to turn a single surprising moment into proof?`,
+        measureSeconds: 150 },
+      { id: 'd5', title: `Be the Experimenter`,
+        intro: `You've turned a story into a test, set a baseline, valued the numbers, and resisted reading too much into one hit. That is, in miniature, how an entire field tried to study the impossible. Before you begin, predict: after a week of thinking like an experimenter, will you observe more carefully than on Day 1?`,
+        task: `Run one last clean experiment: a clear prediction, a fair baseline, honest notes, and no leaping to conclusions. Be your own careful experimenter from start to finish.`,
+        practice: `Measure as the disciplined experimenter you've become this week. Notice how this compares with the looser way you observed on Day 1 — and whether your prediction held.`,
+        reflectionPrompt: `How did measuring as a disciplined experimenter compare with Day 1 — and was your prediction right?`,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  3 — Remote Viewing  (the real, decades-long secret government program)
+  // ==========================================================================
+  {
+    id: 'remote-viewing',
+    topic: 'psi-research',
+    title: `Remote Viewing`,
+    level: 'Intermediate',
+    cover: 'assets/experiments/remote-viewing.jpg',
+    order: 3,
+    summary: `Five days inside one of the strangest true stories in modern science: a secret, decades-long government program that paid people to describe places they'd never seen. You can't spy — but you can think like its researchers.`,
+    days: [
+      { id: 'd1', title: `A Secret the Government Kept`,
+        intro: `This part sounds invented, but it's documented: for more than twenty years, the U.S. government quietly funded research into whether people could describe distant, hidden places using the mind alone. The program — eventually code-named Star Gate — cost around twenty million dollars and was only made public in 1995. Whatever you make of it, it really happened. Today you step into the researchers' shoes.`,
+        task: `Set up the wheel as your instrument and adopt the calm, classified-lab mindset: serious, methodical, quietly astonished to be here at all. Before measuring, note one thing you intend to observe.`,
+        practice: `Measure with that careful, almost official seriousness, as if keeping a research log. Notice how treating the session as real research changes your attention.`,
+        reflectionPrompt: `Did approaching the session as genuine research change how you paid attention?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `The Physicists at SRI`,
+        intro: `The work was led not by mystics but by two laser physicists, Russell Targ and Harold Puthoff, at the Stanford Research Institute, starting in 1972. They built careful protocols: a viewer would try to describe a location while a researcher, far away, was actually there. Real scientists, real controls, a genuinely odd question. Today you borrow their care.`,
+        task: `Before you begin, make one specific prediction about your session — a number, a feeling, how steady you'll be — and write it down, the way a viewer recorded impressions before the target was revealed.`,
+        practice: `Measure, then compare what happened against your written prediction. Notice how it feels to commit to a guess in advance and check it honestly afterward.`,
+        reflectionPrompt: `How close was your written prediction to what actually happened?`,
+        measureSeconds: 150 },
+      { id: 'd3', title: `Describing the Unseen`,
+        intro: `A New York artist named Ingo Swann helped shape the method: rather than naming a target outright, viewers sketched and described raw impressions — shapes, textures, feelings — which were only later checked against the real place. The discipline was to report what you sensed without guessing what it should be. Today you practise that pure, unfiltered noticing.`,
+        task: `As you measure, gather raw impressions — sensations, images, hunches — without rushing to interpret or name them. Jot them down plainly, like a viewer's notes, before judging any of it.`,
+        practice: `Measure while collecting unfiltered impressions and resisting interpretation. Notice how hard it is to simply report what you sense without your mind tidying it into a story.`,
+        reflectionPrompt: `Was it hard to report raw impressions without your mind turning them into a story?`,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Remote Viewer 001`,
+        intro: `The Army's first official remote viewer, known simply as Remote Viewer 001, was a soldier named Joseph McMoneagle, working out of Fort Meade from 1978. His results were genuinely mixed — sometimes uncanny, often vague — and he said so himself. That honesty about hits and misses is exactly what separates a researcher from a believer. Before you start, predict how your session will go.`,
+        task: `Make a clear prediction, measure, then judge the outcome with total honesty — counting the misses as carefully as the hits, the way a good researcher logs everything.`,
+        practice: `Measure and then assess yourself with unsparing fairness, hits and misses alike. Notice whether you're tempted to remember the hits and quietly forget the misses.`,
+        reflectionPrompt: `Were you tempted to remember your hits and forget your misses — and did you resist?`,
+        measureSeconds: 150 },
+      { id: 'd5', title: `The Researcher's Verdict`,
+        intro: `For two decades, careful people gathered this strange data — and still reached no agreement. When the program closed in 1995, one reviewer saw a real effect in the numbers; another said it was far too soon to claim anything. Two honest experts, the same data, different verdicts. Before you begin, predict your result, then weigh it as neutrally as they tried to.`,
+        task: `Run one final, careful session: a clear prediction, honest observation, and a fair-minded verdict at the end that you'd be willing to defend to a skeptic and a believer alike.`,
+        practice: `Measure, then sit with your own honest, undecided assessment of what you saw. Notice how it feels to reach a careful "I'm not sure" instead of a tidy conclusion.`,
+        reflectionPrompt: `How did it feel to land on an honest "I'm not sure" rather than a tidy conclusion?`,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  4 — The PEAR Laboratory  (engineers at Princeton, ~30 years, the RNG)
+  // ==========================================================================
+  {
+    id: 'the-pear-laboratory',
+    topic: 'psi-research',
+    title: `The PEAR Laboratory`,
+    level: 'Intermediate',
+    cover: 'assets/experiments/the-pear-laboratory.jpg',
+    order: 4,
+    summary: `Five days with the most unlikely lab of all — an engineering department at Princeton that spent nearly thirty years asking whether the mind can nudge a machine. Here the wheel feels most like a real instrument.`,
+    days: [
+      { id: 'd1', title: `An Engineer's Curiosity`,
+        intro: `In 1979, the Dean of Engineering at Princeton University, Robert Jahn, did something that raised eyebrows across science: he opened a laboratory to test whether human intention could affect machines. Not a mystic — a respected aerospace engineer, asking an honest question with proper equipment. The Princeton Engineering Anomalies Research lab would run for almost thirty years. Today you open your own small version.`,
+        task: `Treat the wheel as Jahn treated his machines: a precise instrument, observed by a careful mind. Before measuring, frame one clear, testable question and approach it like an engineer, not a believer.`,
+        practice: `Measure with an engineer's precision and neutrality, gathering clean observations. Notice whether an exacting, technical mindset changes how you sit with the wheel.`,
+        reflectionPrompt: `Did approaching the wheel as a precise instrument change how you observed it?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `The Random Machine`,
+        intro: `The lab's signature device was a random event generator — a machine producing an unpredictable stream of outputs, like an electronic coin-flipper. Volunteers simply sat with it and intended it to drift one way or the other, while the machine logged everything. It's a striking parallel to sitting with a wheel and quietly observing. Today you run that experiment yourself.`,
+        task: `Before measuring, pick one gentle intention for your session — steadier, higher, calmer — and hold it lightly while the wheel runs, exactly as PEAR's volunteers did with their machine. Don't force; just hold and observe.`,
+        practice: `Measure while holding your light intention, logging what actually happens without forcing anything. Notice the difference between gently intending and straining for a result.`,
+        reflectionPrompt: `Could you hold a light intention toward the wheel without straining for an outcome?`,
+        measureSeconds: 150 },
+      { id: 'd3', title: `A Tiny, Stubborn Effect`,
+        intro: `Here's what makes PEAR so debated: across millions of trials over the years, the team reported an effect — but a minuscule one, a deviation of about a tenth of one percent from chance. Far too small to see in any single session, yet, they argued, stubbornly there in the totals. Today you meet the humbling scale of such research.`,
+        task: `Measure knowing that whatever you observe today, no single session could ever settle anything — real effects at this scale only show up across thousands of trials. Hold that humility as you watch.`,
+        practice: `Measure with full attention but zero expectation of a dramatic result, valuing the honest data point. Notice how it feels to take part in something whose answer no single try can reveal.`,
+        reflectionPrompt: `How did it feel to contribute one honest data point to a question no single session can answer?`,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Signal or Noise?`,
+        intro: `This is the question that keeps everyone up at night: when a tiny pattern persists, is it a faint real signal — or just noise that hasn't averaged out yet? Brilliant people have looked at the very same PEAR numbers and reached opposite, sincere conclusions. Learning to sit inside that uncertainty is a genuine skill. Today you practise it.`,
+        task: `As you measure, watch for any pattern that seems to emerge — and then ask yourself, honestly, whether it could simply be chance dressed up as meaning. Hold the question open.`,
+        practice: `Measure while weighing every apparent pattern against the possibility of pure noise. Notice how genuinely hard it is to tell a faint signal from random chance.`,
+        reflectionPrompt: `How hard was it to tell a possible signal from simple noise?`,
+        measureSeconds: 150 },
+      { id: 'd5', title: `Your Own Anomalies Lab`,
+        intro: `You've opened an engineer's lab, run the machine, met the tiny effect, and wrestled with signal versus noise. For nearly thirty years, real scientists did exactly this, and left the question open when they closed the doors in 2007. Before you begin, predict your session, then judge it with an engineer's cool honesty.`,
+        task: `Run your final session as a complete little anomalies experiment: precise setup, a light intention, a clear prediction, and a neutral verdict — your own PEAR lab, for one day.`,
+        practice: `Measure as the careful researcher you've become, then weigh the result without bias. Notice how this disciplined neutrality compares with how you first approached the wheel — and whether your prediction held.`,
+        reflectionPrompt: `How did your cool, neutral verdict compare with how you first judged the wheel — and was your prediction right?`,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  5 — The Open Question  (why there is still no agreement — stays OPEN)
+  // ==========================================================================
+  {
+    id: 'the-open-question',
+    topic: 'psi-research',
+    title: `The Open Question`,
+    level: 'Advanced',
+    cover: 'assets/experiments/the-open-question.jpg',
+    order: 5,
+    summary: `Five days on the most honest part of the whole story: why, after more than a century of research, there is still no agreement — and why that unfinished question might be the most interesting thing of all.`,
+    days: [
+      { id: 'd1', title: `The Hardest Test in Science`,
+        intro: `Science trusts a result only when others can reproduce it — do the same thing, get the same answer. That single demand is where psi research has always struggled: effects that appear in one lab often shrink or vanish in the next. Reproducibility is the real battleground, and it matters far beyond this topic. Today you feel that demand yourself.`,
+        task: `Try to reproduce a result from earlier in your journey: repeat, as exactly as you can, a session that once felt notable, and see whether it comes out the same. Predict first whether it will.`,
+        practice: `Measure while attempting an honest repeat of a past session. Notice whether you can reproduce your own earlier experience — or whether it slips away when you try.`,
+        reflectionPrompt: `Could you reproduce your own earlier result — or did it change when you repeated it?`,
+        measureSeconds: 150 },
+      { id: 'd2', title: `The Ganzfeld Debate`,
+        intro: `In the 1980s, the telepathy experiment called the ganzfeld became a battleground between two honest opponents: researcher Charles Honorton, who found hit rates around 38% where chance was 25%, and skeptic Ray Hyman, who hunted for flaws. Remarkably, they co-wrote a joint statement agreeing on stricter rules for future tests. Disagreement done well — that is science working. Today you hold both views at once.`,
+        task: `As you measure, deliberately run two minds in parallel: the believer who notices anything promising, and the skeptic who looks for the ordinary explanation. Let them both watch the same session.`,
+        practice: `Measure while giving fair hearing to both the hopeful and the doubting voice. Notice which one you naturally lean toward, and whether you can hold them in balance.`,
+        reflectionPrompt: `Did you lean more toward the hopeful or the skeptical voice — and could you balance them?`,
+        measureSeconds: 180 },
+      { id: 'd3', title: `The Experiment That Shook Psychology`,
+        intro: `In 2011, a respected psychologist, Daryl Bem, published nine experiments in a top journal appearing to show people could feel the future. The shock wasn't only the claim — it was that his methods were the standard ones everyone used. When others couldn't replicate it, psychology was forced to overhaul how it does research altogether. Psi research, oddly, helped clean up all of science. Today you honour rigour.`,
+        task: `Hold your session to an unusually high standard: a clear prediction made in advance, no shifting the goalposts afterward, and an honest record whatever it shows. Be stricter with yourself than you need to be.`,
+        practice: `Measure under your own strict rules, refusing to bend them after the fact. Notice whether tighter standards change what you let yourself conclude.`,
+        reflectionPrompt: `Did holding yourself to stricter standards change what you allowed yourself to conclude?`,
+        measureSeconds: 180 },
+      { id: 'd4', title: `Two Honest Conclusions`,
+        intro: `When the government's remote-viewing program was reviewed in 1995, two experts examined the same evidence. The statistician Jessica Utts concluded the effect was real and statistically established; the psychologist Ray Hyman concluded it was premature to say any such thing. Both were careful, honest, and reasonable — and they disagreed. Today you sit with that genuine uncertainty.`,
+        task: `Measure, then form two honest verdicts about what you observed: the strongest fair case that something happened, and the strongest fair case that it was ordinary. Argue both sincerely.`,
+        practice: `Measure while preparing to make both cases as fairly as you can. Notice how it feels to hold two reasonable, opposite conclusions without forcing a winner.`,
+        reflectionPrompt: `Could you hold two opposite but reasonable conclusions at once, without forcing one to win?`,
+        measureSeconds: 210 },
+      { id: 'd5', title: `What Do You Think?`,
+        intro: `Across this whole topic you've met the first societies, the card decks, the secret programs, the engineers' lab, and the long, unresolved debate. Notice what we never did: tell you the answer. After more than a century, careful people still disagree — and that open question is now yours to carry, as a researcher, not a believer or a skeptic. Before you begin, predict, and then simply observe.`,
+        task: `Run one last, complete session as the researcher you've become: a prediction, careful observation, honest notes — and then let the verdict stay open, exactly as the real story does.`,
+        practice: `Measure, and rather than reaching for an answer, rest in the honest, unfinished question. Notice what it's like to end not with a conclusion, but with genuine, curious uncertainty.`,
+        reflectionPrompt: `After all this, what do you actually think — and can you hold the question open, the way the science still does?`,
         measureSeconds: 240 },
     ],
   },
