@@ -1,5 +1,6 @@
 import { supabase } from './db.js';
 import * as auth from './auth.js';
+import { createAddToCalendar } from './calendar.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
@@ -155,6 +156,10 @@ export function mount(el){
         avgEl.innerHTML = `Avg <b>${avg.toFixed(1)}</b>`;
         right.append(avgEl);
       }
+    }
+    // Let visitors put an upcoming session into their own calendar (Google / .ics).
+    if(state === 'upcoming'){
+      right.append(createAddToCalendar({ ...s, _hostName: organizerName }));
     }
     right.append(join);
 

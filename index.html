@@ -225,6 +225,23 @@
   .btn-secondary:hover{background:rgba(255,255,255,0.13)}
   .btn-secondary:disabled{opacity:.5;cursor:default}
 
+  /* Add-to-calendar control (upcoming session cards) */
+  .cal-add{position:relative;display:inline-flex}
+  .cal-btn{display:inline-flex;align-items:center;gap:6px;font-family:'Inter',sans-serif;
+    font-size:13px;font-weight:600;background:rgba(255,255,255,0.07);color:var(--white);
+    border:1px solid var(--panel-border);padding:8px 14px;border-radius:8px;cursor:pointer;
+    transition:background .2s;white-space:nowrap}
+  .cal-btn:hover{background:rgba(255,255,255,0.13)}
+  .cal-btn svg{display:block;flex-shrink:0}
+  .cal-menu{position:absolute;top:calc(100% + 6px);right:0;z-index:1000;min-width:190px;
+    background:linear-gradient(160deg, rgba(13,11,40,0.97), rgba(82,48,218,0.18));
+    border:1px solid rgba(155,109,255,0.45);border-radius:12px;padding:6px;
+    box-shadow:0 24px 60px -16px rgba(0,0,0,0.7);animation:fab-menu-in .14s ease-out}
+  .cal-opt{display:block;width:100%;text-align:left;padding:10px 14px;border-radius:8px;
+    font-family:'Inter',sans-serif;font-size:14px;font-weight:500;color:#fff;text-decoration:none;
+    background:none;border:none;cursor:pointer}
+  .cal-opt:hover{background:rgba(155,109,255,0.16)}
+
   /* Connection (invitation) page */
   .connect-card{max-width:560px;margin:8px auto;background:rgba(255,255,255,0.04);
     border:1px solid var(--panel-border);border-radius:16px;padding:32px 30px;text-align:center}
@@ -446,9 +463,24 @@
   .xp-star.on{color:#ffd479}
   .xp-rating-thanks{font-size:14px;color:#3ddc84}
 
-  /* Profile: connection link + following list */
+  /* Profile: username-only social fields */
+  .prefix-input{display:flex;align-items:stretch;background:rgba(255,255,255,0.06);
+    border:1px solid var(--panel-border);border-radius:8px;overflow:hidden;transition:border-color .2s,background .2s}
+  .prefix-input:focus-within{border-color:var(--accent);background:rgba(82,48,218,0.12)}
+  .prefix-input-pre{display:flex;align-items:center;padding:0 1px 0 13px;color:var(--faint);
+    font-size:14px;white-space:nowrap;user-select:none}
+  .prefix-input input{border:none;background:transparent;border-radius:0;padding-left:2px;flex:1;min-width:0}
+  .prefix-input input:focus{background:transparent;border:none}
+
+  /* Profile: connection link + QR + following list */
   .link-row{display:flex;gap:10px;align-items:center}
   .link-input{flex:1;font-size:13px;color:var(--muted)}
+  .qr-block{display:flex;gap:18px;align-items:center;margin-top:16px;flex-wrap:wrap}
+  .qr-img{flex-shrink:0;background:#fff;padding:8px;border-radius:12px;line-height:0}
+  .qr-img svg{display:block;width:150px;height:150px}
+  .qr-side{flex:1;min-width:200px}
+  .qr-cap{color:var(--muted);font-size:13px;line-height:1.45;margin-bottom:12px}
+  .qr-actions{display:flex;gap:10px;flex-wrap:wrap}
   .following-list{display:flex;flex-direction:column;gap:10px}
   .following-row{display:flex;align-items:center;gap:12px}
   .following-avatar{width:36px;height:36px;border-radius:50%;overflow:hidden;flex-shrink:0;

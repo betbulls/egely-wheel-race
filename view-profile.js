@@ -1,4 +1,5 @@
 import * as auth from './auth.js';
+import { qrSvg, qrCanvas } from './qrcode.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
@@ -32,6 +33,49 @@ function cleanUrl(raw){
     if(!u.hostname || !u.hostname.includes('.')) return { error: true };
     return { value: u.href };
   } catch { return { error: true }; }
+}
+
+// Social platforms where the user types only their username — the platform URL
+// is built for them. The DB still stores a full URL, so the connect page is
+// unchanged and existing full-URL data keeps working.
+const SOCIAL = [
+  { col: 'instagram_url', id: 'pfInsta', label: 'Instagram', prefix: 'instagram.com/', ph: 'yourhandle' },
+  { col: 'youtube_url',   id: 'pfYt',    label: 'YouTube',   prefix: 'youtube.com/',   ph: '@yourchannel' },
+  { col: 'tiktok_url',    id: 'pfTt',    label: 'TikTok',    prefix: 'tiktok.com/',    ph: '@yourhandle' },
+  { col: 'facebook_url',  id: 'pfFb',    label: 'Facebook',  prefix: 'facebook.com/',  ph: 'yourpage' },
+];
+
+// One prefixed username field: the platform domain is a fixed label; the user
+// only types the part after it.
+function prefixInput(id, label, prefix, ph, value){
+  return `
+    <div class="field full" style="margin-top:12px">
+      <label for="${id}">${esc(label)}</label>
+      <div class="prefix-input">
+        <span class="prefix-input-pre">${esc(prefix)}</span>
+        <input id="${id}" type="text" autocapitalize="none" autocorrect="off" spellcheck="false"
+               maxlength="120" value="${esc(value || '')}" placeholder="${esc(ph)}">
+      </div>
+    </div>`;
+}
+
+// Extract the username from a stored full URL (for showing in a prefixed field).
+function handleFromUrl(url, prefix){
+  let v = (url || '').trim();
+  if(!v) return '';
+  v = v.replace(/^https?:\/\//i, '').replace(/^www\./i, '');
+  if(v.toLowerCase().startsWith(prefix.toLowerCase())) v = v.slice(prefix.length);
+  return v.replace(/\/+$/, '');
+}
+
+// Build a full URL from a typed username. Tolerates someone pasting a whole URL.
+function urlFromHandle(prefix, raw){
+  let v = (raw || '').trim();
+  if(!v) return null;
+  v = v.replace(/^https?:\/\//i, '').replace(/^www\./i, '');
+  if(v.toLowerCase().startsWith(prefix.toLowerCase())) v = v.slice(prefix.length);
+  v = v.replace(/^\/+/, '').replace(/\/+$/, '');
+  return v ? 'https://' + prefix + v : null;
 }
 
 export function mount(el){
@@ -79,12 +123,12 @@ export function mount(el){
 
     <div class="panel">
       <h2>Social Links</h2>
-      <p class="page-sub" style="margin:-8px 0 14px">All optional — add only the ones you use.</p>
+      <p class="page-sub" style="margin:-8px 0 14px">All optional — just your username, we build the link.</p>
       ${urlInput('pfWebsite', 'Website', 'https://yoursite.com', s.website)}
-      ${urlInput('pfInsta', 'Instagram', 'https://instagram.com/yourhandle', s.instagram)}
-      ${urlInput('pfYt', 'YouTube', 'https://youtube.com/@yourchannel', s.youtube)}
-      ${urlInput('pfTt', 'TikTok', 'https://tiktok.com/@yourhandle', s.tiktok)}
-      ${urlInput('pfFb', 'Facebook', 'https://facebook.com/yourpage', s.facebook)}
+      ${prefixInput('pfInsta', 'Instagram', 'instagram.com/', 'yourhandle', handleFromUrl(s.instagram, 'instagram.com/'))}
+      ${prefixInput('pfYt', 'YouTube', 'youtube.com/', '@yourchannel', handleFromUrl(s.youtube, 'youtube.com/'))}
+      ${prefixInput('pfTt', 'TikTok', 'tiktok.com/', '@yourhandle', handleFromUrl(s.tiktok, 'tiktok.com/'))}
+      ${prefixInput('pfFb', 'Facebook', 'facebook.com/', 'yourpage', handleFromUrl(s.facebook, 'facebook.com/'))}
     </div>
 
     <div class="panel">
@@ -119,13 +163,10 @@ export function mount(el){
     msg.className = 'form-msg ok'; msg.textContent = 'Photo ready — click Save profile.';
   });
 
-  // DB column ↔ input id ↔ label for the optional URL fields.
+  // Full-URL fields (validated as URLs). Socials are handled separately as
+  // username-only inputs below.
   const URL_FIELDS = [
     ['website',        'pfWebsite', 'Website'],
-    ['instagram_url',  'pfInsta',   'Instagram'],
-    ['youtube_url',    'pfYt',      'YouTube'],
-    ['tiktok_url',     'pfTt',      'TikTok'],
-    ['facebook_url',   'pfFb',      'Facebook'],
     ['affiliate_link', 'pfAff',     'Affiliate link'],
   ];
 
@@ -151,6 +192,11 @@ export function mount(el){
       payload[col] = r.value;
       $(id).value = r.value || '';   // reflect the normalised value (adds https://)
     }
+    // Socials: username in → full URL stored. Reflect the cleaned handle back.
+    for(const sf of SOCIAL){
+      payload[sf.col] = urlFromHandle(sf.prefix, $(sf.id).value);
+      $(sf.id).value = handleFromUrl(payload[sf.col], sf.prefix);
+    }
 
     $('pfSave').disabled = true; msg.className = 'form-msg'; msg.textContent = 'Saving…';
     const { error } = await auth.saveProfile(payload);
@@ -169,17 +215,37 @@ export function mount(el){
     panel.innerHTML = `
       <div class="panel">
         <h2>Your connection link</h2>
-        <p class="page-sub" style="margin:2px 0 12px">Share this with your members — by email, QR code, or social media. When they open it, they can connect with you.</p>
+        <p class="page-sub" style="margin:2px 0 12px">Share this with your members — by link, QR code, or social media. When they open it, they can connect with you.</p>
         <div class="link-row">
           <input id="pfLink" class="link-input" readonly value="${esc(url)}">
           <button class="btn-secondary" id="pfCopy">Copy</button>
         </div>
         <span class="form-msg" id="pfCopyMsg"></span>
+        <div class="qr-block">
+          <div class="qr-img">${qrSvg(url, { scale: 5, margin: 3 })}</div>
+          <div class="qr-side">
+            <p class="qr-cap">Scan to open your connection page. Print it on packaging, business cards or slides.</p>
+            <div class="qr-actions">
+              <button class="btn-secondary" id="pfPreview">Preview your page ↗</button>
+              <button class="btn-secondary" id="pfQrDl">Download QR (PNG)</button>
+            </div>
+          </div>
+        </div>
       </div>`;
     $('pfCopy').addEventListener('click', async () => {
       try { await navigator.clipboard.writeText(url); }
       catch { $('pfLink').select(); document.execCommand('copy'); }
       $('pfCopyMsg').className = 'form-msg ok'; $('pfCopyMsg').textContent = 'Copied.';
+    });
+    $('pfPreview').addEventListener('click', () => window.open(url, '_blank', 'noopener'));
+    $('pfQrDl').addEventListener('click', () => {
+      qrCanvas(url, { scale: 12, margin: 4 }).toBlob(blob => {
+        const u = URL.createObjectURL(blob);
+        const a2 = document.createElement('a');
+        a2.href = u; a2.download = 'egely-connection-qr.png';
+        document.body.appendChild(a2); a2.click(); a2.remove();
+        setTimeout(() => URL.revokeObjectURL(u), 2000);
+      });
     });
   }
 
