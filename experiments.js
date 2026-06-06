@@ -37,6 +37,7 @@ export const TOPICS = [
   { id: 'energy-healing', title: `Energy Healing`, icon: '🤲', cover: 'assets/experiments/energy-healing.jpg', order: 3 },
   { id: 'human-connection', title: `Human Connection`, icon: '🤝', cover: 'assets/experiments/human-connection.jpg', order: 4 },
   { id: 'crystal-healing', title: `Crystal Healing`, icon: '💎', cover: 'assets/experiments/crystal-healing.jpg', order: 5 },
+  { id: 'kundalini-energy', title: `Kundalini Energy`, icon: '🌀', cover: 'assets/experiments/kundalini-energy.jpg', order: 6 },
 ];
 
 export const EXPERIMENTS = [
@@ -1189,6 +1190,247 @@ export const EXPERIMENTS = [
         task: `Build your full ritual: your meaningful object set just so, your fixed opening routine, a clear expectation, and the quiet sense that this act matters. Then measure, giving it the full weight of a personal ritual.`,
         practice: `Measure inside your complete personal ritual. Notice what feels most different now, at the end — and whether the change lives in the object, or in you — and whether your prediction held.`,
         reflectionPrompt: `After this whole journey, does the difference live in the object, or in you?`,
+        measureSeconds: 240 },
+    ],
+  },
+
+  // ##########################################################################
+  //  KUNDALINI ENERGY TOPIC
+  //  Frame (like Telekinesis): we do NOT ask whether kundalini is "real" or
+  //  "awaken" anything — the spiritual/skeptic trap. Instead: what intense
+  //  inner experiences have people across cultures described for centuries, and
+  //  what does modern consciousness & body research find? A CULTURAL +
+  //  EXPERIENTIAL topic — never supernatural, religious or medical. Telekinesis
+  //  = focus, Meditation = awareness, Energy Healing = connection, Crystal
+  //  Healing = meaning, Kundalini = OBSERVING INNER EXPERIENCE & STATES OF
+  //  CONSCIOUSNESS. Bridges two worlds: ancient yoga traditions <-> modern
+  //  science (interoception, breathing/HRV, posture, flow/altered-state
+  //  research). The wheel proves nothing — it's an instrument the user sits
+  //  beside while observing themselves. The word "kundalini" appears
+  //  prominently only in experiment 5, and even there as "how traditions spoke
+  //  of it", never "now we awaken it". NEVER woo: chakra activation, serpent
+  //  power awakening, DNA activation, third eye opening, ascension, frequency
+  //  upgrades. ~2 real "wow" sources per experiment; the rest is self-observation.
+  // ##########################################################################
+
+  // ==========================================================================
+  //  1 — Awakening Attention  (what happens when you first attend to yourself?)
+  // ==========================================================================
+  {
+    id: 'awakening-attention',
+    topic: 'kundalini-energy',
+    title: `Awakening Attention`,
+    level: 'Beginner',
+    cover: 'assets/experiments/awakening-attention.jpg',
+    order: 1,
+    summary: `Four short days turning attention inward for the first time — noticing the quiet stream of body sensation that is always there, just beneath awareness, with the wheel running beside you.`,
+    days: [
+      { id: 'd1', title: `Turning Attention Inward`,
+        intro: `Most of the day your attention points outward — at screens, tasks, other people. It's surprisingly rare to simply turn it around and notice what's happening inside your own body, right now. Yet that inner landscape is always there, quietly broadcasting. Today you turn the attention inward, with the wheel running quietly nearby.`,
+        task: `Let the wheel run, and instead of watching it, close your eyes and sweep your attention slowly through your body — head to feet — simply noticing whatever is there. Don't look for anything special; just visit each part.`,
+        practice: `For the measurement, keep your attention turned inward, scanning the body without judging what you find. Notice how much is happening inside you that you usually never feel.`,
+        reflectionPrompt: `How much was happening inside your body that you normally never notice?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `What the Brain Filters Out`,
+        intro: `Your senses pour in something like eleven million bits of information every second — yet your conscious mind handles only around forty of them. The rest is filtered out before you ever notice, including most of what your body is feeling. We're not aware of very much; we just think we are. Today you reclaim a little of what usually gets filtered.`,
+        task: `With the wheel running, pick one small region — your hands, or your feet — and rest your full attention there. Stay long enough for the faint signals to surface: warmth, weight, a pulse, a faint tingle.`,
+        practice: `For the measurement, keep your attention parked on that one small area, letting hidden sensations rise into awareness. Notice what appears once you stop filtering it out.`,
+        reflectionPrompt: `What sensations rose into awareness once you really attended to one part of your body?`,
+        measureSeconds: 120 },
+      { id: 'd3', title: `The Body Beneath Thinking`,
+        intro: `We live so much in our thoughts that the body becomes a kind of background hum we stop hearing. But underneath the mental chatter, the body is always present, always sensing. Slipping below the level of thinking, into pure sensation, is a different way of being awake. Today you drop beneath the thoughts.`,
+        task: `With the wheel running, each time you notice you've drifted into thinking, gently drop your attention back down into raw body sensation — the feeling of sitting, breathing, the air on your skin. Thought, then back to the body.`,
+        practice: `For the measurement, keep returning from thought to direct sensation. Notice whether resting in the body, beneath thinking, feels different from your usual mental chatter.`,
+        reflectionPrompt: `Did resting in pure body sensation feel different from being lost in thought?`,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Awake to Yourself`,
+        intro: `Over three days you've turned attention inward, met what the brain usually filters out, and dropped beneath thinking into the body. This simple inward awareness is the doorway to everything this topic explores. Before you start, predict: after a few days of practice, will tuning into your body feel easier than it did on Day 1?`,
+        task: `With the wheel running, settle into a calm, full awareness of your whole inner state at once — body, breath, the subtle field of sensation — awake to yourself without straining. Just be present to what is already there.`,
+        practice: `For the measurement, rest in that open inner awareness, noticing whatever arises. Notice how tuning into yourself feels now compared with the first day — and whether your prediction held.`,
+        reflectionPrompt: `How did tuning into your inner world feel now compared with Day 1 — and was your prediction right?`,
+        measureSeconds: 150 },
+    ],
+  },
+
+  // ==========================================================================
+  //  2 — Energy & Sensation  (why do we call certain body feelings "energy"?)
+  // ==========================================================================
+  {
+    id: 'energy-and-sensation',
+    topic: 'kundalini-energy',
+    title: `Energy & Sensation`,
+    level: 'Beginner',
+    cover: 'assets/experiments/energy-and-sensation.jpg',
+    order: 2,
+    summary: `Five days on a word people reach for all over the world — energy — and the real, surprising sensations underneath it: tingling, warmth, pulsing, the quiet electricity of a living body.`,
+    days: [
+      { id: 'd1', title: `The Language of Energy`,
+        intro: `People everywhere describe certain feelings as "energy" — a buzz of excitement, a wave of warmth, a tingling up the arms. They're not measuring anything with instruments; they're reaching for a word to capture a vivid bodily sensation. Today we set aside whether any energy "moves" and simply look at what the body actually feels.`,
+        task: `With the wheel running, scan your body for any sensation you'd naturally call "energy" — a tingle, a buzz, a warmth, a restlessness. Don't explain it; just locate it and feel it clearly.`,
+        practice: `For the measurement, stay curious about whatever sensations you'd label "energy", observing them as plainly as you can. Notice what is actually there, underneath the word.`,
+        reflectionPrompt: `What did the sensations you'd call "energy" actually feel like, underneath the word?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `Tingling on Demand`,
+        intro: `Here's a strange, real fact: breathe quickly for a little while and many people feel tingling spread through their hands, feet and face. It isn't mysterious — fast breathing lowers carbon dioxide and shifts the body's chemistry, making the nerves fire differently. A dramatic "energy" sensation, produced entirely by breath. Today you explore it gently.`,
+        task: `Before measuring, breathe a little faster and fuller than usual for a short while — only until you feel a mild tingling or buzzing, then stop and let your breath return to normal. Never push to dizziness; gentle is enough.`,
+        practice: `Measure as the sensation settles, observing the tingling or buzz with curious attention. Notice how a simple change in breathing can produce a vivid bodily "energy" of its own.`,
+        reflectionPrompt: `What did the breath-made tingling feel like — and did it resemble what people call "energy"?`,
+        measureSeconds: 150 },
+      { id: 'd3', title: `Shivers Down the Spine`,
+        intro: `Almost everyone has felt it: a piece of music swells, and a wave of chills runs down the spine, raising the hairs on your arms. Scientists call it frisson, and it's real and measurable — a burst of dopamine and a spike of nervous-system arousal you can record on the skin. A genuine rush of "energy" through the body, triggered by nothing but sound. Today you chase that wave.`,
+        task: `Before or during the measurement, play a piece of music that reliably gives you chills, and let the wave of frisson move through you. Feel exactly where it travels in the body.`,
+        practice: `Measure while staying open to those waves of chills, tracking them as they rise and fade. Notice the path the sensation takes through your body, and how strong it feels.`,
+        reflectionPrompt: `Where did the wave of chills travel in your body, and how strong was it?`,
+        measureSeconds: 150 },
+      { id: 'd4', title: `The Sensing Body`,
+        intro: `There's a whole sense most people never name: interoception, the felt sense of your own insides — heartbeat, breath, the gut, the subtle tone of the body. Some people feel it vividly, others barely at all, and you can sharpen it simply by paying attention. Today you turn that inner sense up.`,
+        task: `With the wheel running, see if you can feel your own heartbeat without touching your pulse — just by attending to your chest, throat, or fingertips. If you can't find it, rest on the breath or the gut instead.`,
+        practice: `For the measurement, keep listening inward for the body's quiet signals — pulse, breath, subtle movement. Notice how much of your own inner workings you can actually feel from the inside.`,
+        reflectionPrompt: `How much of your body's inner activity could you actually feel from the inside?`,
+        measureSeconds: 150 },
+      { id: 'd5', title: `Reading Your Own Signals`,
+        intro: `You've met the sensations behind the word "energy", made tingling with your breath, ridden waves of chills, and listened to your body from the inside. None of it required believing anything moves — only paying close attention. Before you begin, predict: will your body feel more alive and detailed now than it did at the start of this experiment?`,
+        task: `With the wheel running, take an unhurried inventory of every sensation you can find — warmth, pulse, tingle, the subtle hum of being alive — and simply read them, like a rich inner weather report.`,
+        practice: `For the measurement, rest in that full, detailed sensing of your body. Notice how alive and textured your inner world feels now compared with Day 1 — and whether your prediction held.`,
+        reflectionPrompt: `Did your body feel more alive and detailed than at the start — and was your prediction right?`,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  3 — Breath, Posture & Awareness  (how body architecture reshapes attention)
+  // ==========================================================================
+  {
+    id: 'breath-posture-awareness',
+    topic: 'kundalini-energy',
+    title: `Breath, Posture & Awareness`,
+    level: 'Intermediate',
+    cover: 'assets/experiments/breath-posture-awareness.jpg',
+    order: 3,
+    summary: `Five days on something every yoga tradition discovered and modern science now measures: how the simple architecture of breath and posture quietly reshapes your attention and your state.`,
+    days: [
+      { id: 'd1', title: `The Upright Spine`,
+        intro: `Yoga has always begun with the seat — Patanjali's ancient definition of posture is simply "steady and comfortable". Modern research backs the instinct: in one study, people held in an upright posture under stress felt more enthusiastic and confident, while those who slumped felt sluggish and fearful. How you hold the body shapes how you feel. Today you sit up and notice.`,
+        task: `Before measuring, set your spine: sit tall but not stiff, crown lifting gently, shoulders easy — steady and comfortable. Settle into the posture before you reach for the wheel.`,
+        practice: `Measure from that upright, easy posture, staying aware of how it feels. Notice whether sitting tall changes your mood, alertness or attention compared with slumping.`,
+        reflectionPrompt: `Did sitting upright change your mood or alertness compared with how you usually sit?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `The Pace of Breath`,
+        intro: `There's a breathing rate — around six slow breaths a minute — where something quietly clicks: the heart and breath fall into step, and the calming branch of the nervous system takes over. Researchers call it resonance, and it's one of the fastest drug-free ways we know to settle the body. Many old breathing practices land near this same slow pace. Today you find it.`,
+        task: `With the wheel running, slow your breath toward roughly six a minute — in for about five seconds, out for about five — smooth and unforced. Don't strain for the count; just breathe slow and even.`,
+        practice: `Measure while holding that slow, even breath. Notice whether breathing at this calm pace shifts your body and attention into something steadier.`,
+        reflectionPrompt: `Did slowing your breath to a calm, even pace shift your state?`,
+        measureSeconds: 150 },
+      { id: 'd3', title: `Breath as a Dial`,
+        intro: `Breath is the one body rhythm you can either leave on automatic or take over at will — which makes it a kind of dial for your own state. Quick and shallow tends to rouse you; slow and deep tends to settle you. Most people never realise they're holding the dial. Today you turn it both ways.`,
+        task: `With the wheel running, experiment: breathe a little quicker and lighter for a stretch, then slow and deepen it, and feel how each changes you. Then leave the breath wherever feels best and rest there.`,
+        practice: `Measure while gently steering your breath and feeling its effect, then letting it settle. Notice how directly your breathing seems to set the dial of your inner state.`,
+        reflectionPrompt: `How directly did changing your breath change your state?`,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Where Attention Sits`,
+        intro: `Notice where "you" seem to be located right now — most people feel themselves somewhere behind the eyes, up in the head. But attention can be moved: drop it into the chest, the belly, the whole body, and your sense of yourself shifts with it. The traditions that explore inner experience spend a lot of time moving attention down, out of the head. Today you try.`,
+        task: `With the wheel running and your posture steady, deliberately move the centre of your attention out of your head — down into your chest, then your belly, resting it low and settled in the body.`,
+        practice: `Measure while keeping your attention settled low in the body rather than up in the head. Notice whether moving where attention "sits" changes how you feel.`,
+        reflectionPrompt: `Did moving your attention down out of your head change how you felt?`,
+        measureSeconds: 150 },
+      { id: 'd5', title: `Body as Instrument`,
+        intro: `You've set the spine, found the resonant breath, used breath as a dial, and moved attention through the body. Together these are the oldest tools for tuning a human being — the body played like an instrument. Before you begin, predict: will a deliberately tuned posture and breath feel noticeably different from how you started this topic?`,
+        task: `With the wheel running, bring it all together: an upright, easy spine, a slow even breath, attention settled low in the body. Tune yourself fully, then simply rest in the result.`,
+        practice: `Measure from that fully tuned state of body and breath. Notice how this compares with your ordinary, untuned sitting — and whether your prediction held.`,
+        reflectionPrompt: `How did a fully tuned posture and breath compare with how you began — and was your prediction right?`,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  4 — States of Consciousness  (why does the same mind feel so different?)
+  // ==========================================================================
+  {
+    id: 'states-of-consciousness',
+    topic: 'kundalini-energy',
+    title: `States of Consciousness`,
+    level: 'Intermediate',
+    cover: 'assets/experiments/states-of-consciousness.jpg',
+    order: 4,
+    summary: `Five days on a quiet mystery: why the same mind can feel so different from one moment to the next — absorbed, spacious, sharpened, or strangely still — and what the science of altered states has found.`,
+    days: [
+      { id: 'd1', title: `Not One Single Mind`,
+        intro: `We talk as if we have one steady mind, but your state of consciousness shifts all day — drowsy, alert, daydreaming, absorbed, anxious, calm. Each feels like a slightly different version of you. We rarely stop to notice these shifts, let alone explore them on purpose. Today you start watching your own states change.`,
+        task: `With the wheel running, simply observe the quality of your consciousness right now — sharp or foggy, busy or still, tense or open — without changing it. Just take an honest reading of your current state.`,
+        practice: `For the measurement, keep noticing the texture of your state and any small shifts in it. Notice how your state of mind actually feels, and whether it stays put or drifts.`,
+        reflectionPrompt: `What did your state of mind actually feel like — and did it stay steady or shift?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `Lost in Absorption`,
+        intro: `Some people can become so absorbed in a book, a piece of music or a memory that the outside world simply falls away — psychologists measure this as a trait called "absorption". The more absorbed you become, the more your ordinary sense of time and self loosens. It's an everyday doorway into an altered state, and almost everyone has walked through it. Today you walk through on purpose.`,
+        task: `With the wheel running, let yourself become completely absorbed in one thing — the sensation of breathing, a sound, the turning wheel itself. Sink into it fully, letting everything else fade to the edges.`,
+        practice: `Measure while sinking as deeply into absorption as you can. Notice whether deep absorption changes your sense of time, of yourself, or of being present.`,
+        reflectionPrompt: `When you became fully absorbed, did your sense of time or self change?`,
+        measureSeconds: 150 },
+      { id: 'd3', title: `When the Mind Goes Quiet`,
+        intro: `Here's a surprising discovery: many altered states — flow, the runner's high, deep meditation — seem to share one thing, a temporary quieting of the brain's busy front region, the part that plans, judges and monitors you. When that inner manager goes quiet, self-consciousness fades and things feel effortless. The "higher" state is, oddly, partly a switching-off. Today you look for that quiet.`,
+        task: `With the wheel running, do something simple and absorbing with full attention, and watch for the moment the inner commentator — the one judging and planning — goes quiet. Don't force it; just notice when effort drops away.`,
+        practice: `Measure while letting the self-monitoring mind grow quiet, doing without commenting. Notice whether things feel more effortless when the inner manager steps back.`,
+        reflectionPrompt: `Did anything feel more effortless when your inner commentator went quiet?`,
+        measureSeconds: 150 },
+      { id: 'd4', title: `The Effortless State`,
+        intro: `In the states people prize most — deep in a craft, a sport, music — action and awareness seem to merge: you stop watching yourself do the thing and simply become the doing. There's no separate "you" standing back and managing. It feels less like trying and more like being carried. Today you reach toward that merging at the wheel.`,
+        task: `With the wheel running, give yourself fully to attending to it, until the line between you-watching and the-watching softens — no manager, no effort, just the activity happening. If the separate "you" reappears, gently dissolve back into the doing.`,
+        practice: `Measure while letting watcher and watched merge as much as they will. Notice whether the sense of a separate self managing things fades at all.`,
+        reflectionPrompt: `Did the sense of a separate self, watching and managing, fade at all?`,
+        measureSeconds: 150 },
+      { id: 'd5', title: `Shifting State at Will`,
+        intro: `You've read your own states, sunk into absorption, felt the busy mind go quiet, and tasted the merging of action and awareness. These are the building blocks of what every tradition calls a "higher" or "altered" state — reached not by magic but by attention. Before you begin, predict: can you deliberately shift into a noticeably different state of consciousness now?`,
+        task: `With the wheel running, deliberately guide yourself into a shifted state — deeply absorbed, quiet-minded, effortless — using everything you've practised. Then rest there and simply observe it.`,
+        practice: `Measure from that deliberately shifted state. Notice how different it feels from your ordinary waking mind — and whether your prediction held.`,
+        reflectionPrompt: `Could you deliberately shift into a different state — and how different did it feel?`,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  5 — Kundalini Traditions  (what did the traditions mean by kundalini?)
+  //  The culmination — the word appears prominently, openly, as culture &
+  //  experience; ancient practice meets modern science. We never "awaken"
+  //  anything and never answer the question — we explore how people described it.
+  // ==========================================================================
+  {
+    id: 'kundalini-traditions',
+    topic: 'kundalini-energy',
+    title: `Kundalini Traditions`,
+    level: 'Advanced',
+    cover: 'assets/experiments/kundalini-traditions.jpg',
+    order: 5,
+    summary: `Five days meeting, at last, the old and striking idea people have called kundalini — not to awaken anything, but to explore how different cultures described intense inner experience, and where ancient practice meets modern science.`,
+    days: [
+      { id: 'd1', title: `The Coiled Word`,
+        intro: `The word kundalini is Sanskrit for "coiled" — picture a coiled spring, or a sleeping serpent. For centuries, yogic traditions used it to describe a latent inner potential said to rest at the base of the spine, and it reached the West only in 1919, when a British scholar translated the old texts. We're not here to awaken anything — only to explore what people meant by it. Today you simply sit with the idea.`,
+        task: `With the wheel running, sit tall and bring a curious, open mind to the idea that humans have long imagined a reservoir of inner potential along the spine. You don't have to believe it — just hold it lightly and notice the base of your spine, the length of your back.`,
+        practice: `Measure while resting attention along the spine, from base to crown, with open curiosity. Notice what you actually feel along the spine when you simply pay attention to it.`,
+        reflectionPrompt: `What did you actually notice along your spine when you simply attended to it?`,
+        measureSeconds: 150 },
+      { id: 'd2', title: `An Old Map of the Inner World`,
+        intro: `Long before brain scans, yogis built remarkably detailed maps of inner experience. Patanjali laid out an eight-step path from posture and breath all the way to deep absorption; a fifteenth-century manual, the Hatha Yoga Pradipika, catalogued breathing and concentration techniques in extraordinary detail. Whatever you make of their cosmology, these were careful observers of the inner world. Today you borrow their method: attention, turned inward, with care.`,
+        task: `With the wheel running, follow the old sequence in miniature: steady posture, slow breath, then attention drawn inward and gathered to a single point. Move through it slowly, as a practised observer would.`,
+        practice: `Measure while holding that gathered, inward-drawn attention. Notice what becomes available when you follow an old, careful method instead of just sitting.`,
+        reflectionPrompt: `Did following an old, structured method change what you noticed inside?`,
+        measureSeconds: 180 },
+      { id: 'd3', title: `Inner Heat, Measured`,
+        intro: `In 1982, a Harvard researcher published something startling in the journal Nature: Tibetan monks practising a meditation of "inner heat" could raise the temperature of their fingers and toes by several degrees, drying cold wet sheets draped over their shoulders with body warmth alone. An ancient practice, producing an effect you can put a thermometer on. Tradition and science, meeting on the same body. Today you turn toward your own inner warmth.`,
+        task: `With the wheel running, sit steady and bring your attention to the centre of your body, imagining a gentle warmth there with each slow breath. Don't strain to heat anything — just attend, softly, to warmth and the breath feeding it.`,
+        practice: `Measure while resting attention on a sense of inner warmth. Notice whether focused attention on the body can produce any real, felt change in it.`,
+        reflectionPrompt: `Could focused attention on your body produce any real, felt change you could notice?`,
+        measureSeconds: 180 },
+      { id: 'd4', title: `One Experience, Many Names`,
+        intro: `When the psychologist Carl Jung studied kundalini in 1932, he didn't take it as literal serpents and energy — he read it as a vivid map of inner psychological growth. And across the world, cultures that never met described strikingly similar intense inner experiences, each in their own language. The big question of this whole topic sits right here: why do so many traditions report something so alike? Today you hold that question open.`,
+        task: `With the wheel running, settle deeply and simply pay open, honest attention to your own inner experience — whatever sensations, states or shifts arise — without naming them with anyone's system. Let it be your own first-hand report.`,
+        practice: `Measure while observing your inner experience as directly as you can, free of any tradition's labels. Notice what is genuinely there for you, before any name is put on it.`,
+        reflectionPrompt: `Setting aside every tradition's labels, what was genuinely there in your own experience?`,
+        measureSeconds: 210 },
+      { id: 'd5', title: `Your Own Experience`,
+        intro: `Across this whole topic you've turned attention inward, met the sensations behind the word "energy", tuned breath and posture, explored shifting states, and looked at how traditions and science describe intense inner experience. Through all of it the wheel proved nothing — it simply kept you company while you observed yourself. Before you begin, predict: after these weeks, will your inner world feel richer and more familiar than when you started?`,
+        task: `With the wheel running, bring everything together: steady posture, slow breath, attention turned fully inward, open and curious. Then explore your inner experience freely, as your own quiet investigator.`,
+        practice: `Measure from that full, inward, exploring state. Notice what feels most different now about your inner world — and whether the richest part lives in any tradition, or simply in your own attention — and whether your prediction held.`,
+        reflectionPrompt: `After this whole journey inward, what feels most different about your own inner world?`,
         measureSeconds: 240 },
     ],
   },
