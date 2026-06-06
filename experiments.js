@@ -36,6 +36,7 @@ export const TOPICS = [
   { id: 'meditation',     title: `Meditation`,     icon: '🧘', cover: 'assets/experiments/meditation.jpg',     order: 2 },
   { id: 'energy-healing', title: `Energy Healing`, icon: '🤲', cover: 'assets/experiments/energy-healing.jpg', order: 3 },
   { id: 'human-connection', title: `Human Connection`, icon: '🤝', cover: 'assets/experiments/human-connection.jpg', order: 4 },
+  { id: 'crystal-healing', title: `Crystal Healing`, icon: '💎', cover: 'assets/experiments/crystal-healing.jpg', order: 5 },
 ];
 
 export const EXPERIMENTS = [
@@ -950,6 +951,244 @@ export const EXPERIMENTS = [
         task: `Join a live or group session if you can, or hold the whole community vividly in mind, and bring everything together: be present, share the attention, sync your rhythm, stay open to others — all at once, as part of the many.`,
         practice: `Measure inside that full sense of collective connection. Notice what feels most different now, at the end — between this shared moment and the solo measurements you started with — and whether your prediction held.`,
         reflectionPrompt: `After exploring connection from two people to many, what feels most different about measuring together rather than alone?`,
+        measureSeconds: 240 },
+    ],
+  },
+
+  // ##########################################################################
+  //  CRYSTAL HEALING TOPIC
+  //  Frame (like Energy Healing): we do NOT ask whether crystals "work" — the
+  //  boring debate. Instead: what happens to a person's attention, intention
+  //  and perception when they give MEANING to an object? Telekinesis = focus,
+  //  Meditation = awareness, Energy Healing = connection, Crystal Healing =
+  //  MEANING & SYMBOLS. The crystal is NEVER the protagonist — it is a pretext
+  //  for observation; the PERSON is the protagonist. The wheel is an observing
+  //  instrument: "is it a different experience to measure near an object you've
+  //  given meaning to?" — a question we invite, never answer. NEVER any woo
+  //  (vibrational frequency, crystal energy, healing vibration, quantum crystal,
+  //  raising your frequency) and NEVER a healing claim. Real curiosities only:
+  //  why we keep stones from trips, why a wedding ring matters, athletes' lucky
+  //  objects, why rituals work. ~2 real "wow" sources per experiment; the rest
+  //  is everyday human observation.
+  // ##########################################################################
+
+  // ==========================================================================
+  //  1 — The Meaning We Give Objects  (what makes a thing more than matter?)
+  // ==========================================================================
+  {
+    id: 'meaning-of-objects',
+    topic: 'crystal-healing',
+    title: `The Meaning We Give Objects`,
+    level: 'Beginner',
+    cover: 'assets/experiments/meaning-of-objects.jpg',
+    order: 1,
+    summary: `Four short days on a quiet human habit: turning ordinary objects into something that matters — and what that meaning does to us, with the wheel nearby.`,
+    days: [
+      { id: 'd1', title: `The Object You'd Never Replace`,
+        intro: `Somewhere you probably own an object you would never swap for an identical copy — a worn wedding ring, a grandparent's watch, a stone you carried home from a trip. A perfect duplicate would feel wrong, even though it's physically the same. The matter hasn't changed; the meaning has. Today you bring one such object near the wheel.`,
+        task: `Find one object that carries real meaning for you and set it beside the wheel where you can see it as you measure. Don't expect anything of it — simply let it be present, the way a photo sits on a desk.`,
+        practice: `Measure with your meaningful object in view, staying tuned to your own state. Notice whether having something that matters to you nearby changes how the measurement feels.`,
+        reflectionPrompt: `Did having a meaningful object nearby change how the measurement felt?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `The Copying Machine`,
+        intro: `Psychologists once showed young children a machine that seemed to make perfect copies of any object. The children happily accepted a duplicate of a toy — but when it came to their own beloved blanket or teddy, most refused, and some burst into tears. Even small children sense that a treasured object holds something a copy can't. We call this hunch essentialism: the feeling that a thing is more than its atoms.`,
+        task: `Hold your meaningful object from yesterday and ask yourself, honestly: would an identical copy really be the same? Sit with whatever the answer stirs up, then set the original beside the wheel.`,
+        practice: `Measure while holding the sense that this particular object is irreplaceable, not just its shape and colour. Notice whether treating it as one-of-a-kind changes the feeling of having it near.`,
+        reflectionPrompt: `Did treating your object as truly irreplaceable change how its presence felt?`,
+        measureSeconds: 120 },
+      { id: 'd3', title: `A Stranger's Touch`,
+        intro: `Here's how far this goes: at auction, a sweater sells for far more if people believe a beloved celebrity once wore it — and for far less if they're told it was washed clean first. The same garment, valued differently by an invisible "essence" we imagine clinging to it. We treat objects as if they soak up something from the people and places they've touched.`,
+        task: `Choose an object that has been touched by someone who matters to you, or that comes from a place you love. Bring it to the wheel and let yourself feel whatever it seems to carry from that person or place.`,
+        practice: `Measure while sensing the invisible history your object seems to hold. Notice whether an object's story — who or where it came from — changes how it feels to have it with you.`,
+        reflectionPrompt: `Did the story behind your object — its origin, or who touched it — change how it felt to hold?`,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Your Own Meaning`,
+        intro: `Over three days you've felt how an object can become irreplaceable, why a copy feels wrong, and how we sense a history clinging to things. None of that lives in the material — it lives in you, in the meaning you give. Today you do it on purpose. Before you start, predict: will an object you have deliberately made meaningful feel different from a random one?`,
+        task: `Take any simple object — a stone, a coin, the crystal if you have one — and spend a moment giving it meaning: decide what it stands for, and why it matters to you now. Then set it by the wheel as your own charged object.`,
+        practice: `Measure with the meaning you've just given it held clearly in mind. Notice whether an object you chose to make meaningful feels different from one with no story at all — and whether your prediction held.`,
+        reflectionPrompt: `Did an object you deliberately made meaningful feel different from a random one — and was your prediction right?`,
+        measureSeconds: 150 },
+    ],
+  },
+
+  // ==========================================================================
+  //  2 — Focus Through Symbols  (can an object give attention something to hold?)
+  // ==========================================================================
+  {
+    id: 'focus-through-symbols',
+    topic: 'crystal-healing',
+    title: `Focus Through Symbols`,
+    level: 'Beginner',
+    cover: 'assets/experiments/focus-through-symbols.jpg',
+    order: 2,
+    summary: `Five days on an old trick humans use everywhere: giving the restless mind a single object or symbol to rest on — and what a concrete anchor does for your attention.`,
+    days: [
+      { id: 'd1', title: `Something to Hold`,
+        intro: `Attention left with nothing to hold drifts almost at once — but give it one concrete thing to rest on and it steadies, the way a hand finds a railing. This is why people reach for something to look at or hold when they want to concentrate. Today an object becomes your railing, with the wheel running beside it.`,
+        task: `Pick one small object — the crystal, a stone, anything with a clear shape — and place it where you can rest your eyes on it. Let your attention settle onto that single object as the wheel turns.`,
+        practice: `Measure with your attention anchored to the object, returning to it whenever you drift. Notice whether having one concrete thing to focus on steadies your attention more than focusing on nothing.`,
+        reflectionPrompt: `Did having one concrete object to rest on steady your attention?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `Beads Around the World`,
+        intro: `Look across the world's religions and you'll find the same quiet invention again and again: a string of beads to count prayers on. The Hindu and Buddhist mala has 108, the Catholic rosary its decades, the Muslim misbaha its ninety-nine — arising separately, yet all the same idea. Across cultures that never met, humans reached for a physical object to hold their attention steady. Today you join that very old habit.`,
+        task: `Hold your object in your hand and let it be the thing that keeps you here — fingers resting on it, attention returning to it. If it helps, slowly turn or pass it through your fingers as you settle.`,
+        practice: `Measure while keeping light physical contact with your object, letting it hold you in the moment. Notice whether something to hold, not just to look at, anchors you even more.`,
+        reflectionPrompt: `Did having something to physically hold anchor you even more than looking at it?`,
+        measureSeconds: 150 },
+      { id: 'd3', title: `A Centre to Return To`,
+        intro: `Many traditions arrange their focus objects around a single centre — a still point the eye keeps coming back to. The pattern matters less than the returning: a fixed centre gives wandering attention a home to find its way back to, over and over. Today your object becomes that centre.`,
+        task: `Set your object as the clear centre of your attention, and treat everything else — sounds, thoughts, the wheel's motion — as the edges. Each time you drift to the edges, come gently back to the centre.`,
+        practice: `Measure with your object held as the still centre you return to. Notice how it feels to always have one place to come back to, rather than drifting with nowhere to land.`,
+        reflectionPrompt: `Did always having one centre to return to change how your attention wandered?`,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Looking Through, Not At`,
+        intro: `There's a subtle shift available with any focus object: instead of staring at it, you can let it become a kind of window — a thing you look through to reach a quieter, steadier state. The object isn't the destination; it's the doorway. Today you try looking through yours.`,
+        task: `Rest your attention on your object, then let your gaze soften so it stops being a thing you examine and becomes a doorway into stillness. Don't analyse it — use it to settle past it.`,
+        practice: `Measure while using the object as a doorway rather than a destination. Notice whether looking through your object, instead of at it, opens into a calmer state.`,
+        reflectionPrompt: `Did using your object as a doorway, rather than staring at it, open into something calmer?`,
+        measureSeconds: 150 },
+      { id: 'd5', title: `Your Focal Object`,
+        intro: `You've used an object to anchor attention, held it the way half the world holds prayer beads, made it a centre to return to, and a doorway to look through. Today you bring all of it into one session with your chosen focal object. Before you begin, predict: will focusing through a meaningful object feel steadier than the bare attention you started with?`,
+        task: `Settle with your object as a complete focal symbol — something to hold, a centre to return to, a doorway to look through — and bring your steadiest attention to the wheel through it.`,
+        practice: `Measure with your object fully serving as your focal symbol. Notice how anchored attention feels now compared with Day 1, when you focused on nothing — and whether your prediction held.`,
+        reflectionPrompt: `How did focusing through your object compare with focusing on nothing on Day 1 — and was your prediction right?`,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  3 — Beauty & Attention  (why do certain forms pull and hold the eye?)
+  // ==========================================================================
+  {
+    id: 'beauty-and-attention',
+    topic: 'crystal-healing',
+    title: `Beauty & Attention`,
+    level: 'Intermediate',
+    cover: 'assets/experiments/beauty-and-attention.jpg',
+    order: 3,
+    summary: `Five days on a question hiding in plain sight: why do certain shapes and patterns pull our eyes and hold them — and what happens when we really look.`,
+    days: [
+      { id: 'd1', title: `What Catches the Eye`,
+        intro: `Some forms simply pull the eye and won't let go — the facets of a crystal, a spiral shell, a balanced face. A crystal, in fact, is matter arranged in a strict, repeating order all the way down, which is exactly why it grows those clean, flat faces. Today you let one beautiful object catch and hold your attention.`,
+        task: `Choose the most visually interesting object you have — the crystal if you own one, or anything with pleasing form — and place it before the wheel. Simply let your eyes be drawn to it and rest there.`,
+        practice: `Measure while letting a genuinely interesting form hold your gaze. Notice whether something beautiful to look at holds your attention more easily than something plain.`,
+        reflectionPrompt: `Did something beautiful to look at hold your attention more easily than something plain?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `Six Sides, No Two Alike`,
+        intro: `Every snowflake that has ever fallen shares one rule: six sides, set by the way water molecules lock together as they freeze. Within that rule the variations are endless — a farmer named Wilson Bentley photographed over five thousand and never found a repeat. Order and uniqueness at once: a strict pattern that never makes the same thing twice. Nature is full of this, and it quietly fascinates us.`,
+        task: `Look closely at the structure of your object — its edges, its faces, the way it catches light — as if seeing its hidden order for the first time. Hunt for the rules and the irregularities together.`,
+        practice: `Measure while studying the fine structure of your object, its order and its quirks. Notice what details appear once you look for the pattern, instead of just glancing.`,
+        reflectionPrompt: `What hidden order or detail appeared in your object once you really looked for it?`,
+        measureSeconds: 150 },
+      { id: 'd3', title: `Nature Counts in Spirals`,
+        intro: `Count the spirals in a sunflower head and you'll keep landing on the same numbers — 34 one way, 55 the other; in a pinecone, 8 and 13. These are Fibonacci numbers, and plants use them because spacing each seed about 137.5 degrees from the last packs them most efficiently. The beauty we see in these forms is the visible side of a hidden mathematics. Today you look for that order around you.`,
+        task: `Before measuring, find one natural pattern near you — a plant, a shell, the grain of wood, your crystal — and really look at its repeating structure. Bring that freshly-seen pattern to mind as you settle at the wheel.`,
+        practice: `Measure while holding the sense that order and pattern run quietly through everything you find beautiful. Notice whether seeing the structure beneath beauty changes how you attend to your object.`,
+        reflectionPrompt: `Did noticing the hidden structure beneath a beautiful form change how you looked at it?`,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Why Symmetry Feels Good`,
+        intro: `There may be a simple reason symmetry pleases us: it's easy for the brain to process, and we tend to feel that ease as beauty. A symmetrical pattern carries less information, so the mind handles it smoothly — and that smoothness arrives as a quiet sense of this is good. Even animals prefer symmetry. Today you feel that ease directly.`,
+        task: `Rest your gaze on the most balanced, symmetrical part of your object — or fold your attention around its central axis. Let the eye settle into the symmetry and notice how effortless it feels.`,
+        practice: `Measure while resting in the easy, balanced symmetry of your object. Notice whether something the eye processes smoothly also leaves your attention calmer.`,
+        reflectionPrompt: `Did resting on something smooth and symmetrical leave your attention calmer?`,
+        measureSeconds: 150 },
+      { id: 'd5', title: `Beauty in Front of You`,
+        intro: `You've let a form catch your eye, found order in a snowflake, counted nature's spirals, and felt why symmetry pleases. Today you simply rest in the beauty of your object while you measure. Before you begin, predict: will attending to something genuinely beautiful feel different from an ordinary measurement?`,
+        task: `Place your most beautiful object before the wheel and give it your full, appreciative attention — its form, its order, its symmetry — letting yourself simply enjoy looking at it.`,
+        practice: `Measure while resting in the simple pleasure of attending to something beautiful. Notice how this compares with an ordinary measurement — and whether your prediction held.`,
+        reflectionPrompt: `Did attending to something beautiful feel different from an ordinary measurement — and was your prediction right?`,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  4 — Expectation & Experience  (does what we expect shape what we feel?)
+  // ==========================================================================
+  {
+    id: 'expectation-and-experience',
+    topic: 'crystal-healing',
+    title: `Expectation & Experience`,
+    level: 'Intermediate',
+    cover: 'assets/experiments/expectation-and-experience.jpg',
+    order: 4,
+    summary: `Five days on one of the mind's strangest powers: how what we expect to feel quietly shapes what we actually feel — even before anything happens.`,
+    days: [
+      { id: 'd1', title: `What You Expect`,
+        intro: `Tell someone a coffee is exceptional and the first sip tastes better; warn them a path is long and it feels longer. We don't meet the world raw — we meet it through a fog of expectation, usually without noticing. Today you watch your own expectations arrive at the wheel.`,
+        task: `Before you measure, notice honestly what you expect this session to be like — calm, restless, good, dull. Don't try to change it; just name the expectation you're carrying in.`,
+        practice: `Measure while quietly aware of the expectation you brought with you. Notice whether what you expected seems to shape what you actually experience.`,
+        reflectionPrompt: `Did what you expected going in seem to shape how the session actually felt?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `The Wine That Wasn't Red`,
+        intro: `In a classic study, wine students were given a glass of red to describe — cherry, cedar, spice — never realising it was white wine dyed red. Their expert noses followed their eyes, not the liquid. Expectation didn't just colour their words; it seems to have changed what they actually tasted. We perceive, to a startling degree, what we expect to perceive.`,
+        task: `Choose an object and decide, in advance, one quality it will seem to have for you today — calming, grounding, gently energising. Set that expectation deliberately, then bring the object to the wheel.`,
+        practice: `Measure while holding the quality you decided the object would have. Notice whether expecting a particular feeling actually makes you more likely to feel it.`,
+        reflectionPrompt: `Did expecting a particular quality from your object make you more likely to feel it?`,
+        measureSeconds: 150 },
+      { id: 'd3', title: `The Price of Pleasure`,
+        intro: `Researchers gave people the same wine twice, once calling it cheap and once expensive, while scanning their brains. The "expensive" wine wasn't just rated as nicer — the brain's pleasure regions genuinely lit up more. The enjoyment was real, measured in neurons; only the price was fake. What we believe about a thing reaches all the way down into how much we actually enjoy it.`,
+        task: `Pick an object and treat it, today, as something rare and valuable — handle it with a little extra care, as if it were precious. Let that sense of value sit with you as you measure.`,
+        practice: `Measure while treating your object as genuinely valuable. Notice whether holding something as precious changes the quality of your experience, even though the object hasn't changed.`,
+        reflectionPrompt: `Did treating your object as precious change your experience, even though the object itself hadn't changed?`,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Belief Shapes Feeling`,
+        intro: `This is where crystals get interesting. If you hold a stone expecting calm and you genuinely feel calmer, something real has happened — not in the stone, but in you. Expectation can produce true, felt changes; that's not a trick, it's how the mind works. The honest and far more fascinating question isn't whether the stone does it, but what your own expectation can do.`,
+        task: `Hold your object and let yourself fully expect one gentle effect — say, a settled, steady calm — without arguing about whether the object causes it. Just let the expectation be wholehearted as you measure.`,
+        practice: `Measure while wholeheartedly expecting a gentle effect, watching your own state rather than the object. Notice whether your expectation alone can produce something you genuinely feel.`,
+        reflectionPrompt: `Could your expectation alone produce a change you genuinely felt?`,
+        measureSeconds: 150 },
+      { id: 'd5', title: `Your Expectation`,
+        intro: `You've watched expectation flavour a session, redraw a taste, deepen a pleasure, and produce a real feeling on its own. Today you put it to work deliberately. Before you begin, predict: how much of what you feel this session will come from the object, and how much from what you expect?`,
+        task: `Choose an object, set one clear, positive expectation for what this session will give you, and hold it fully — then measure, letting the expectation do its quiet work.`,
+        practice: `Measure inside a clear, deliberate expectation. Notice how much of your experience seems to flow from your own mind rather than the object — and whether your prediction held.`,
+        reflectionPrompt: `How much of your experience came from your own expectation rather than the object — and was your prediction right?`,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  5 — Personal Rituals  (why do we build rituals — and do they steady us?)
+  //  The culmination — the closing lesson: the difference lives in you, not
+  //  the crystal. We invite the question; we never answer it.
+  // ==========================================================================
+  {
+    id: 'personal-rituals',
+    topic: 'crystal-healing',
+    title: `Personal Rituals`,
+    level: 'Advanced',
+    cover: 'assets/experiments/personal-rituals.jpg',
+    order: 5,
+    summary: `Five days on something nearly everyone does and few examine: the small private rituals we build — and how an object, a routine and a little meaning can genuinely steady us.`,
+    days: [
+      { id: 'd1', title: `The Things We Always Do`,
+        intro: `Almost everyone has them: the same mug each morning, a fixed order of getting ready, a lucky shirt for big days. We rarely call them rituals, but that's what they are — small fixed sequences that make the world feel a little more under control. Today you notice your own, and build one around the wheel.`,
+        task: `Before measuring, create a simple opening routine — the same three small actions each time: settle the object, take one slow breath, set your attention. Do it deliberately, the same way, then begin.`,
+        practice: `Measure after performing your small opening routine. Notice whether a fixed little sequence beforehand changes how you settle into the session.`,
+        reflectionPrompt: `Did a small fixed routine beforehand change how you settled into the measurement?`,
+        measureSeconds: 150 },
+      { id: 'd2', title: `The Champion's Routine`,
+        intro: `Watch top athletes and you'll see it everywhere: one tennis great lines up his water bottles with every label facing exactly the same way; a baseball star ate chicken before every single game; another player bounces the ball precisely five times before serving. They aren't naive — many say these routines simply help them focus and feel ready. Today you borrow a champion's trick.`,
+        task: `Give your measurement the seriousness of a pre-game routine: arrange your object and your space in a fixed, deliberate way, exactly as you intend to each time. Treat the setup itself as part of the performance.`,
+        practice: `Measure after a careful, athlete-style setup. Notice whether preparing with deliberate routine leaves you more focused or ready than just starting cold.`,
+        reflectionPrompt: `Did a deliberate, athlete-style setup leave you more focused than starting cold?`,
+        measureSeconds: 180 },
+      { id: 'd3', title: `The Lucky Ball`,
+        intro: `In one experiment, golfers sank noticeably more putts when simply told they were using a "lucky" ball — same ball, same green. The charm didn't bend the laws of physics; it raised their confidence, and the steadier, more committed stroke did the rest. A lucky object can work, but the power runs through you, not the object. Today you test that on the wheel.`,
+        task: `Choose an object to be your lucky one for today, and let yourself genuinely treat it as such — confident, a little reassured by its presence. Set it by the wheel as your charm.`,
+        practice: `Measure with your lucky object present and the quiet confidence it lends you. Notice whether feeling a little luckier or steadier changes how the session goes.`,
+        reflectionPrompt: `Did treating an object as lucky lend you a steadiness you could feel?`,
+        measureSeconds: 180 },
+      { id: 'd4', title: `Why Rituals Calm Us`,
+        intro: `Researchers found that performing a short ritual before a stressful task — a fixed little sequence of actions — measurably lowered people's anxiety and improved how they did. The strange twist: the calming effect appeared only when people thought of it as a "ritual", not as "random behaviours". The meaning we assign the act is part of what makes it work. Today you lean into that.`,
+        task: `Do your opening routine again, but this time hold it clearly in mind as a real ritual — something with meaning and weight, not just motions. Let that framing settle you before you measure.`,
+        practice: `Measure after a routine you've deliberately treated as a meaningful ritual. Notice whether naming it a true ritual, rather than going through the motions, calms you more.`,
+        reflectionPrompt: `Did treating your routine as a meaningful ritual calm you more than just going through the motions?`,
+        measureSeconds: 210 },
+      { id: 'd5', title: `Your Own Ritual`,
+        intro: `Across this whole topic you've given objects meaning, used them to focus, found beauty in their order, watched expectation shape experience, and built rituals that steady you. Through all of it the crystal was never really the point — what's remarkable is what your attention, expectation and meaning can do. Today you bring it together into one ritual of your own. Before you start, predict: will your complete personal ritual feel different from the plain measurement you began with, weeks ago?`,
+        task: `Build your full ritual: your meaningful object set just so, your fixed opening routine, a clear expectation, and the quiet sense that this act matters. Then measure, giving it the full weight of a personal ritual.`,
+        practice: `Measure inside your complete personal ritual. Notice what feels most different now, at the end — and whether the change lives in the object, or in you — and whether your prediction held.`,
+        reflectionPrompt: `After this whole journey, does the difference live in the object, or in you?`,
         measureSeconds: 240 },
     ],
   },
