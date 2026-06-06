@@ -46,6 +46,7 @@ export const TOPICS = [
   { id: 'reiki', title: `Reiki`, icon: '👐', cover: 'assets/experiments/reiki.jpg', order: 12 },
   { id: 'aura', title: `Aura`, icon: '✨', cover: 'assets/experiments/aura.jpg', order: 13 },
   { id: 'food-and-awareness', title: `Food & Awareness`, icon: '🍎', cover: 'assets/experiments/food-and-awareness.jpg', order: 14 },
+  { id: 'mindfulness', title: `Mindfulness`, icon: '🌿', cover: 'assets/experiments/mindfulness.jpg', order: 15 },
 ];
 
 export const EXPERIMENTS = [
@@ -3446,6 +3447,265 @@ export const EXPERIMENTS = [
         task: `Eat a meal today with everything you've gathered: full attention, real tasting, honest hunger, and a sense of its meaning and connection. Then come to the wheel.`,
         practice: `Measure from that complete, aware, meaningful meal. Notice what feels most different now about the simple act of eating — and whether your prediction held.`,
         reflectionPrompt: `After this whole journey, what feels most different about the everyday act of eating?`,
+        measureSeconds: 240 },
+    ],
+  },
+
+  // ##########################################################################
+  //  MINDFULNESS TOPIC
+  //  Frame: the most PRACTICAL, LEAST woo topic — almost zero (no energy, aura,
+  //  quantum, kundalini). Big question: how much happens around us that we never
+  //  notice? Mindfulness = the art of attention in EVERYDAY LIFE. KEY DISTINCTION
+  //  from the Meditation topic (which is the inner world / "how to pay
+  //  attention"): Mindfulness is "how to LIVE" — Ellen Langer's secular school,
+  //  "actively noticing new things", NO cushion or mantra required. This is the
+  //  first big topic a fully SKEPTICAL, non-spiritual person can complete and
+  //  find meaningful. TONS of real mini-tasks; pattern: mini-challenge -> short
+  //  reflection -> wheel. FRESH sources, NOT repeating Meditation/Food/earlier
+  //  topics: change blindness (Simons & Levin door study, NOT the gorilla),
+  //  highway hypnosis, Killingsworth & Gilbert's HAPPINESS finding ("a wandering
+  //  mind is an unhappy mind"), savoring (Bryant & Veroff), Ellen Langer's
+  //  mindfulness-without-meditation & Counterclockwise study. EATING stays in the
+  //  Food topic — here use drinking, walking, chores, music, showering. Closing
+  //  feeling: "I can be far more present in my ordinary life — and it's better
+  //  when I am."
+  // ##########################################################################
+
+  // ==========================================================================
+  //  1 — The Autopilot Mind  (how much of life runs without us noticing)
+  // ==========================================================================
+  {
+    id: 'the-autopilot-mind',
+    topic: 'mindfulness',
+    title: `The Autopilot Mind`,
+    level: 'Beginner',
+    cover: 'assets/experiments/the-autopilot-mind.jpg',
+    order: 1,
+    summary: `Four short days on a strange fact about being human: we run much of our lives on autopilot, missing far more than we realise — and how easily we can switch the autopilot off.`,
+    days: [
+      { id: 'd1', title: `Life on Autopilot`,
+        intro: `Have you ever arrived somewhere and realised you remember nothing of the journey? Or finished a meal, a shower, a whole morning, with no real memory of it? An enormous slice of life runs on autopilot, while our attention is somewhere else entirely. Today you simply start catching it.`,
+        task: `Before measuring, look back over your day and notice how much of it you did on autopilot — getting ready, travelling, routines you can't quite recall. No judgment, just an honest count.`,
+        practice: `Measure while reflecting on how much of your day ran without you really being there. Notice what it's like to see how much you do on autopilot.`,
+        reflectionPrompt: `How much of your day did you realise you'd spent on autopilot?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `The Road You Don't Remember`,
+        intro: `Drivers know it well: you can travel a familiar route for miles and arrive with no memory of doing it — a phenomenon called highway hypnosis. Your brain runs the whole routine on stored autopilot while your conscious mind drifts off. It's efficient, but it means you can be physically somewhere and mentally absent. Today you switch one routine back on.`,
+        task: `Pick one everyday routine — brushing your teeth, making a drink, washing your hands — and do it with complete attention, as if for the first time, noticing every movement and sensation. Takes a couple of minutes.`,
+        practice: `Measure straight after, still in that switched-on attention. Notice whether doing a routine fully awake felt different from doing it on autopilot.`,
+        reflectionPrompt: `Did doing a routine with full attention feel different from your usual autopilot?`,
+        practiceMinutes: 2,
+        measureSeconds: 120 },
+      { id: 'd3', title: `The Person You Didn't Notice`,
+        intro: `Here's how much autopilot can hide: in a famous experiment, a researcher asked a stranger for directions, and while a door was briefly carried between them, a completely different person took his place — and about half the people simply carried on talking, never noticing the swap. We miss astonishing things when our attention is elsewhere. Today you notice how much you miss.`,
+        task: `Before measuring, look around the space you're in and find three things you walk past every day but have never really registered — a mark, an object, a detail. Notice how invisible the familiar had become.`,
+        practice: `Measure while holding the surprise of what was there all along, unseen. Notice how much of your everyday surroundings you'd stopped actually noticing.`,
+        reflectionPrompt: `What had been right in front of you every day that you'd never really noticed?`,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Waking Up the Routine`,
+        intro: `Over three days you've seen how much runs on autopilot, how a routine feels when you switch it on, and how much the inattentive mind misses. The good news is simple: autopilot can be interrupted any time you choose to pay attention. Before you start, predict: will doing an ordinary act fully awake change your measurement?`,
+        task: `Choose any small, ordinary activity — a short walk, washing your hands, making a drink — and do the whole thing with complete, awake attention, switching the autopilot fully off. Then come to the wheel.`,
+        practice: `Measure from that wide-awake state. Notice how being fully present in an ordinary act compares with autopilot — and whether your prediction held.`,
+        reflectionPrompt: `How did doing an ordinary act fully awake compare with autopilot — and was your prediction right?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+    ],
+  },
+
+  // ==========================================================================
+  //  2 — The Power of Noticing  (what appears when we finally slow down)
+  // ==========================================================================
+  {
+    id: 'the-power-of-noticing',
+    topic: 'mindfulness',
+    title: `The Power of Noticing`,
+    level: 'Beginner',
+    cover: 'assets/experiments/the-power-of-noticing.jpg',
+    order: 2,
+    summary: `Five days on a quiet superpower hiding in plain sight: noticing. Simple little experiments in really seeing, hearing and sensing the world you thought you already knew.`,
+    days: [
+      { id: 'd1', title: `Five New Things`,
+        intro: `The Harvard psychologist Ellen Langer spent decades on a refreshingly simple definition of mindfulness: actively noticing new things. No cushion, no mantra — just fresh attention to what's around you. And there's always more there than we think. Today you go looking.`,
+        task: `Look around a room you know well and find five things you have genuinely never noticed before — a colour, a mark, how the light falls, a detail of something familiar. Spend a couple of minutes hunting.`,
+        practice: `Measure while still in that fresh, searching attention. Notice how much was hiding in a room you thought you knew completely.`,
+        reflectionPrompt: `How many genuinely new things did you find in a place you thought you knew?`,
+        practiceMinutes: 2,
+        measureSeconds: 120 },
+      { id: 'd2', title: `One Sound`,
+        intro: `Right now there are sounds around you that you've filtered out completely — a hum, distant traffic, the room itself. Your brain hides them so you can function, but they never left. Slow down and a whole hidden soundscape reappears. Today you listen.`,
+        task: `Close your eyes and, for one full minute, pick a single sound and give it your complete attention — its texture, how it rises and fades. Then widen out and notice how many sounds were there all along.`,
+        practice: `Measure while keeping that open, attentive listening. Notice how many sounds were present the whole time, beneath your awareness.`,
+        reflectionPrompt: `How many sounds appeared once you actually stopped to listen?`,
+        practiceMinutes: 2,
+        measureSeconds: 150 },
+      { id: 'd3', title: `Seeing the Familiar`,
+        intro: `Here's the paradox of attention: the things we see most often, we see least. A face we love, a street we walk daily, our own hands — repetition turns them invisible. Really seeing the familiar again, as if new, is a small act of waking up. Today you try it.`,
+        task: `Pick something utterly familiar — your own hand, a everyday object, the view from a window — and look at it for a couple of minutes as though seeing it for the very first time, hunting for detail you've long stopped noticing.`,
+        practice: `Measure while holding that fresh way of seeing. Notice whether the familiar can become interesting again when you truly look.`,
+        reflectionPrompt: `Could you make something familiar feel new again just by really looking?`,
+        practiceMinutes: 2,
+        measureSeconds: 150 },
+      { id: 'd4', title: `A Song, Fully Heard`,
+        intro: `When did you last listen to a song and do nothing else — not scroll, not tidy, not plan, just listen? We "hear" music constantly as background, but rarely give it our whole attention. Today you give one piece of music everything.`,
+        task: `Choose one song and listen to it from start to finish without touching your phone or doing anything else — following the instruments, the words, the spaces. Just the music and you.`,
+        practice: `Measure soon after, still carrying that undivided attention. Notice how different fully hearing a song is from having it on in the background.`,
+        reflectionPrompt: `How different was fully listening to a song from having it on as background?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+      { id: 'd5', title: `The Noticing Habit`,
+        intro: `Across these days you've found new things in old rooms, heard hidden sounds, seen the familiar afresh, and truly listened. Notice that none of it took special training — only the decision to pay attention. Before you start, predict: will a few minutes of active noticing change your measurement?`,
+        task: `Spend a few minutes actively noticing new things wherever you are — sights, sounds, textures, details — as Langer described, simply hunting for the new. Then come to the wheel.`,
+        practice: `Measure from that switched-on, noticing state. Notice how it compares with your ordinary, half-seeing attention — and whether your prediction held.`,
+        reflectionPrompt: `How did a few minutes of active noticing compare with your usual half-seeing — and was your prediction right?`,
+        practiceMinutes: 3,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  3 — Present Moment  (past, future, or here?)
+  // ==========================================================================
+  {
+    id: 'present-moment',
+    topic: 'mindfulness',
+    title: `Present Moment`,
+    level: 'Intermediate',
+    cover: 'assets/experiments/present-moment.jpg',
+    order: 3,
+    summary: `Five days on a simple, startling question: where does your mind actually spend its time — and what does it cost you to be somewhere other than here?`,
+    days: [
+      { id: 'd1', title: `Where Is Your Mind?`,
+        intro: `Catch yourself at any random moment and ask where your mind is: replaying the past, rehearsing the future, or actually here in the present? For most of us, "here" is the rarest answer — yet now is the only moment that's actually happening. Today you start checking.`,
+        task: `Before measuring, pause several times and honestly note where your mind is — past, future, or present. Just take a quick census of your own attention. Then settle.`,
+        practice: `Measure while continuing to notice where your mind goes — back, forward, or here. Notice how often your attention is anywhere but the present moment.`,
+        reflectionPrompt: `Where did your mind spend most of its time — past, future, or here?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `Half Your Life Elsewhere`,
+        intro: `Harvard researchers built an app that pinged thousands of people at random to ask what they were doing and thinking. The result was striking: people's minds were wandering away from the present nearly half of all waking hours — about 47% of the time. We are, quite literally, somewhere else for half our lives. Today you watch your own wandering.`,
+        task: `As you go about a simple activity before measuring, count how many times your mind drifts off the present in just a couple of minutes. Don't stop it — just tally how often it happens.`,
+        practice: `Measure while noticing each time your attention drifts from the present. Notice just how often, and how easily, the mind slips away from now.`,
+        reflectionPrompt: `How often did your mind drift from the present in just a few minutes?`,
+        practiceMinutes: 2,
+        measureSeconds: 150 },
+      { id: 'd3', title: `A Wandering Mind`,
+        intro: `That same study found something deeper and more surprising: people were noticeably less happy when their minds were wandering, no matter what they were doing — and the wandering predicted their mood more than the activity itself. A wandering mind, the researchers concluded, is an unhappy mind. Being present, it seems, isn't just nice; it matters. Today you feel the difference.`,
+        task: `For a couple of minutes before measuring, deliberately bring your full attention to whatever you're doing right now, and notice your mood when present versus when your mind had wandered off.`,
+        practice: `Measure while staying as present as you can. Notice whether being genuinely here feels any different, in mood, from being lost in thought.`,
+        reflectionPrompt: `Did being fully present feel any different, in mood, from a wandering mind?`,
+        practiceMinutes: 2,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Coming Back to Now`,
+        intro: `Being present isn't about never drifting — the mind will always wander. It's about noticing you've drifted and gently coming back, again and again. Each return is the whole skill. Today you practise returning.`,
+        task: `For a few minutes, do something simple and, every time you notice your mind has wandered off, gently bring it back to the present — and count the returns, kindly, without frustration.`,
+        practice: `Measure while continuing to notice and return whenever you drift. Notice how it feels to keep coming back to now, rather than scolding yourself for leaving.`,
+        reflectionPrompt: `How did it feel to simply keep returning to the present, instead of judging the wandering?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+      { id: 'd5', title: `Being Here`,
+        intro: `Across these days you've located your wandering mind, learned how often it leaves, felt that presence and mood are linked, and practised coming back. None of this is mystical — it's simply the skill of being where you actually are. Before you start, predict: will a few minutes of real presence change your measurement?`,
+        task: `Spend a few unhurried minutes fully in the present — your senses, your surroundings, this exact moment — returning gently whenever you drift. Then come to the wheel.`,
+        practice: `Measure from that present, gathered state. Notice how being truly here compares with your scattered, time-travelling usual mind — and whether your prediction held.`,
+        reflectionPrompt: `How did being fully present compare with your usual scattered mind — and was your prediction right?`,
+        practiceMinutes: 3,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  4 — Mindful Actions  (an ordinary act, done with full attention)
+  // ==========================================================================
+  {
+    id: 'mindful-actions',
+    topic: 'mindfulness',
+    title: `Mindful Actions`,
+    level: 'Intermediate',
+    cover: 'assets/experiments/mindful-actions.jpg',
+    order: 4,
+    summary: `Five days turning ordinary, overlooked actions — a glass of water, a walk, the washing-up — into small islands of full attention, and noticing what that does to the simplest moments of a day.`,
+    days: [
+      { id: 'd1', title: `A Glass of Water`,
+        intro: `You drink water every day without a thought. But slow it right down — the weight of the glass, the cool, the taste, the swallow — and even this turns into a small, complete experience. The most ordinary acts hold more than we ever give them credit for. Today you start with water.`,
+        task: `Pour a glass of water and drink it with complete attention — the temperature, the sensation, each swallow — slowly, doing nothing else. A couple of minutes, just this.`,
+        practice: `Measure straight after, still in that slowed-down attention. Notice how much was in an act you normally do without noticing at all.`,
+        reflectionPrompt: `How much did you notice in something as ordinary as drinking a glass of water?`,
+        practiceMinutes: 2,
+        measureSeconds: 120 },
+      { id: 'd2', title: `Mindful Walking`,
+        intro: `Walking is usually just transport — a way to get somewhere while the mind races ahead. But walk with no destination, simply to walk, and it becomes something else: the feet, the rhythm, the moving world. Today you walk just to walk.`,
+        task: `Take a slow walk of about three minutes with no goal at all — not to arrive anywhere, just to notice each step, your breath, and what passes around you. Then come to the wheel.`,
+        practice: `Measure soon after, carrying that walking attention. Notice whether moving with full attention felt different from your usual hurried, goal-driven walking.`,
+        reflectionPrompt: `Did walking just to walk, with full attention, feel different from your usual hurried walking?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+      { id: 'd3', title: `The Chore as Practice`,
+        intro: `There's an old saying in Zen: before enlightenment, chop wood, carry water; after enlightenment, chop wood, carry water. The humble chore — washing dishes, tidying, folding — can be a rush to get through, or a chance to be fully present. Same task, completely different experience. Today you turn a chore into a practice.`,
+        task: `Pick one small chore and do it with complete attention instead of rushing — the warmth of the water, the movements, the sounds — present with the task itself, not the finishing of it. Then settle.`,
+        practice: `Measure afterward, still in that unhurried attention. Notice whether a dull chore changed character when you gave it your full presence.`,
+        reflectionPrompt: `Did a chore feel different when you did it as a practice rather than a rush?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Savouring`,
+        intro: `Psychologists have a name for deliberately attending to and prolonging a good moment: savouring. Research finds that people who savour — really noticing a warm shower, sunlight, a good smell, a first sip — are measurably happier. The pleasures were always there; savouring is simply paying them full attention. Today you savour one.`,
+        task: `Choose one small, ordinary pleasure available to you — warmth, a scent, a comfortable moment — and give it your complete attention, drawing it out and enjoying it fully for a couple of minutes. Then come to the wheel.`,
+        practice: `Measure while the savoured pleasure still lingers. Notice whether fully attending to a small good thing makes it richer.`,
+        reflectionPrompt: `Did fully savouring a small pleasure make it richer than letting it pass unnoticed?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+      { id: 'd5', title: `Anything, Mindfully`,
+        intro: `Across these days you've made water, walking, a chore and a pleasure into moments of full attention. The quiet realisation is that ANY activity can become mindful — there are no special mindful activities, only mindful and mindless ways of doing them. Before you start, predict: will doing an everyday act with full attention change your measurement?`,
+        task: `Choose any ordinary activity at all and do it with complete, undivided attention from start to finish — proving to yourself that anything can be done mindfully. Then come to the wheel.`,
+        practice: `Measure from that fully-attentive state. Notice how doing an ordinary thing mindfully compares with rushing through it — and whether your prediction held.`,
+        reflectionPrompt: `How did doing an ordinary act with full attention compare with rushing it — and was your prediction right?`,
+        practiceMinutes: 3,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  5 — Living Awake  (mindfulness as a way of living, not a technique)
+  //  The culmination — secular, not spiritual; closing: "what did you notice
+  //  about yourself?"
+  // ==========================================================================
+  {
+    id: 'living-awake',
+    topic: 'mindfulness',
+    title: `Living Awake`,
+    level: 'Advanced',
+    cover: 'assets/experiments/living-awake.jpg',
+    order: 5,
+    summary: `Five days pulling it together into something larger than any exercise: the simple, secular idea that how present you are may shape the quality of your whole life — no cushion, no belief required.`,
+    days: [
+      { id: 'd1', title: `Mindfulness Without Meditation`,
+        intro: `When people hear "mindfulness" they often picture meditation cushions and incense. But the researcher Ellen Langer, who has studied it for decades, defines it far more simply: mindfulness is just actively noticing new things, moment to moment, as you live. No mat, no mantra, no belief required — just an awake way of going through your day. Today you take her at her word.`,
+        task: `Before measuring, set a simple intention for the kind of attention Langer describes — to keep noticing new things in whatever you do — and carry that awake, curious stance to the wheel.`,
+        practice: `Measure while holding that everyday, noticing kind of mindfulness. Notice how it feels to treat awareness as a way of living rather than a special exercise.`,
+        reflectionPrompt: `What was it like to treat mindfulness as simply noticing, rather than a special technique?`,
+        measureSeconds: 150 },
+      { id: 'd2', title: `The Mind Shapes the Body`,
+        intro: `Langer ran a famous, much-discussed study: she had elderly men spend a week living as though it were twenty years earlier, surrounded by the music, news and objects of their youth — and by the end, their posture, eyesight and even how young they looked had measurably improved. How we attend to and frame our lives, she argues, reaches further into the body than we assume. Today you sit with that possibility.`,
+        task: `Before measuring, consider how much your own state can shift with attention and framing — how the same day can feel heavy or alive depending on how you meet it. Hold that openness, then settle.`,
+        practice: `Measure while open to how much attention and mindset might shape your state. Notice whether meeting the moment differently changes how you feel in it.`,
+        reflectionPrompt: `Did the way you framed and attended to the moment seem to change how you felt in it?`,
+        measureSeconds: 180 },
+      { id: 'd3', title: `Awake or Asleep`,
+        intro: `There's a real difference between sleepwalking through a day and being awake to it — and most of us do far more of the former than we'd like. Since so much of life is simply the moments we actually notice, the quality of a life may come down, in large part, to the quality of its attention. Today you weigh that.`,
+        task: `Before measuring, reflect honestly on how much of your recent life you've been awake for versus asleep through — and let that sharpen your wish to be present now. Then come to the wheel.`,
+        practice: `Measure while choosing to be fully awake to this moment. Notice the difference between sleepwalking through an experience and being genuinely present in it.`,
+        reflectionPrompt: `How much of your life lately have you been truly awake for — and what was it like to be awake now?`,
+        measureSeconds: 180 },
+      { id: 'd4', title: `Choosing Presence`,
+        intro: `Presence isn't a state you reach once and keep — it's a choice you make, lose, and make again, hundreds of times a day. That's not failure; it's how it works. The whole practice is simply choosing, in this moment, to be here — and then choosing it again. Today you practise the choosing.`,
+        task: `For a few minutes, keep gently choosing presence — each time you notice you've drifted, simply choose "here" again, without any fuss. Treat presence as a decision you can always remake. Then settle.`,
+        practice: `Measure while repeatedly choosing to return to the present. Notice how it feels to treat presence as an ever-available choice rather than a goal to achieve.`,
+        reflectionPrompt: `How did it feel to treat presence as a choice you can simply make again and again?`,
+        practiceMinutes: 3,
+        measureSeconds: 210 },
+      { id: 'd5', title: `Living Awake`,
+        intro: `Across this whole topic you've caught yourself on autopilot, rediscovered the power of noticing, found out where your mind really lives, and made ordinary acts mindful. None of it was spiritual or philosophical — just practical, everyday awareness anyone can use. Before you start, predict, then bring it all to one fully-present session, and ask the only question that matters: what have you noticed about yourself?`,
+        task: `Settle into a few minutes of complete, awake presence — noticing, here, choosing this moment — gathering everything the topic gave you. Then come to the wheel as awake as you can be.`,
+        practice: `Measure from that fully-present state. Notice what feels most different now about how you move through ordinary life — and whether your prediction held.`,
+        reflectionPrompt: `After these weeks, what have you noticed about yourself — and about how present you usually are?`,
+        practiceMinutes: 3,
         measureSeconds: 240 },
     ],
   },
