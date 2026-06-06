@@ -40,6 +40,7 @@ export const TOPICS = [
   { id: 'kundalini-energy', title: `Kundalini Energy`, icon: '🌀', cover: 'assets/experiments/kundalini-energy.jpg', order: 6 },
   { id: 'psi-research', title: `Psi Research`, icon: '🔬', cover: 'assets/experiments/psi-research.jpg', order: 7 },
   { id: 'intuition', title: `Intuition`, icon: '🧭', cover: 'assets/experiments/intuition.jpg', order: 8 },
+  { id: 'rituals-and-tradition', title: `Rituals & Human Tradition`, icon: '🕯️', cover: 'assets/experiments/rituals-and-tradition.jpg', order: 9 },
 ];
 
 export const EXPERIMENTS = [
@@ -1913,6 +1914,249 @@ export const EXPERIMENTS = [
         task: `Make a final, honest prediction — informed by everything you now know about your own intuition — then measure as your own calm, well-calibrated investigator.`,
         practice: `Measure while bringing all of it together: the fast read, the body, the trained eye, the honest filter. Notice what feels most different now about how you understand your own mind.`,
         reflectionPrompt: `After this whole journey, what do you understand about your own mind that you didn't before?`,
+        measureSeconds: 240 },
+    ],
+  },
+
+  // ##########################################################################
+  //  RITUALS & HUMAN TRADITION TOPIC
+  //  Frame: the most ANTHROPOLOGICAL topic — about humanity, not the individual.
+  //  Big question: why do rituals appear in nearly every human culture, across
+  //  millennia? NOT religion / superstition / which-faith-is-right — purely
+  //  human behaviour: why do people DO this? Roles so far: ... Psi Research =
+  //  the researcher, Intuition = self-knowledge, Rituals = HUMAN CULTURE. Heavy
+  //  on STORIES, lighter on psychology. The aha is "wait... I do this too" —
+  //  connecting the reader to all of humanity. May speak of temples, monks,
+  //  ceremonies as human behaviour, never about which religion is correct. The
+  //  wheel does NOT measure the ritual; it asks: "is it a different experience
+  //  to measure after deliberately framing the act as a ritual — same place,
+  //  same gesture, same order?". FRESH sources, deliberately NOT repeating
+  //  Crystal Healing (essentialism / celebrity contagion / Damisch / Brooks /
+  //  Nadal) or Human Connection (Gabriel / Wiltermuth / rocking chairs): habit
+  //  loop & ~40-45% habits (Graybiel/Wood), ichigo ichie & the tea ceremony,
+  //  the endowment effect (mug), inalienable possessions (Weiner) & wedding-ring
+  //  history, Jordan's UNC shorts & the haka, Xygalatas's fire-walking
+  //  heart-rate study, the Kumbh Mela, Durkheim & Turner's communitas, van
+  //  Gennep's rites of passage. ~2 "wow" stories per experiment; closing
+  //  feeling: "I am part of this."
+  // ##########################################################################
+
+  // ==========================================================================
+  //  1 — Everyday Rituals  (you use more rituals than you think)
+  // ==========================================================================
+  {
+    id: 'everyday-rituals',
+    topic: 'rituals-and-tradition',
+    title: `Everyday Rituals`,
+    level: 'Beginner',
+    cover: 'assets/experiments/everyday-rituals.jpg',
+    order: 1,
+    summary: `Four short days noticing something hiding in plain sight: how many small rituals already shape your day — and what changes when you do one of them on purpose.`,
+    days: [
+      { id: 'd1', title: `The Rituals You Don't Notice`,
+        intro: `The first coffee in the same favourite mug. The exact order you get ready. The route you always take, the way you always settle into a chair. We rarely call these rituals, but that's what they are — small repeated acts that quietly steady the day. Before this topic is over, you'll spot dozens of your own. Today you start looking.`,
+        task: `Before you measure, notice the little routine you already bring to it — where you sit, what you do first, the order of your movements. Don't change anything yet; just observe the ritual you didn't know you had.`,
+        practice: `Measure while quietly aware of the small habits surrounding the act. Notice how much of what you do is already a quiet, repeated ritual.`,
+        reflectionPrompt: `What small rituals did you notice you already bring to your day, without realising?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `Habit or Ritual?`,
+        intro: `Researchers estimate that something like forty percent of what we do each day isn't decided at all — it's habit, run automatically by an older part of the brain that "chunks" repeated actions so we don't have to think. A habit is autopilot. A ritual is the same repeated act, but filled with attention and meaning. That single difference is what this whole topic explores. Today you turn one habit into a ritual.`,
+        task: `Take an automatic part of your measurement routine and do it with full, deliberate attention instead — slowly, on purpose, as if it mattered. Turn the autopilot off for just this once.`,
+        practice: `Measure while performing your usual routine with real attention rather than on autopilot. Notice whether doing the same act consciously feels different from doing it automatically.`,
+        reflectionPrompt: `Did doing your routine with full attention feel different from doing it on autopilot?`,
+        measureSeconds: 120 },
+      { id: 'd3', title: `One Time, One Meeting`,
+        intro: `In the Japanese tea ceremony there's a guiding phrase — ichigo ichie, "one time, one meeting". It means that even if the same people gather in the same room a hundred times, this particular moment will never come again, so it deserves your full presence. The tea master Sen no Rikyu built an entire art around treating a simple cup of tea as unrepeatable. Today you bring that spirit to the wheel.`,
+        task: `Approach this measurement as if it could only ever happen once — because, in truth, it can. Set up slowly and attentively, treating the ordinary act as a small ceremony that will never be repeated exactly.`,
+        practice: `Measure with the sense that this exact session is unrepeatable and worth your full presence. Notice whether treating a routine moment as once-in-a-lifetime changes how it feels.`,
+        reflectionPrompt: `Did treating this session as unrepeatable change how present you were?`,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Framing the Measurement`,
+        intro: `Over three days you've found your hidden rituals, told habit from ritual, and met the art of treating a moment as unrepeatable. Now you build something on purpose: a small ritual frame around the measurement — a fixed place, a gesture, an order. Before you start, predict: will giving the act a deliberate frame change the experience at all?`,
+        task: `Design a simple opening ritual and use it: the same spot, perhaps a candle or a chosen object, one calming gesture, then begin — the same way each time. Perform it deliberately, then measure.`,
+        practice: `Measure inside the ritual frame you've just created. Notice whether deliberately framing the act, rather than just doing it, changes what you experience — and whether your prediction held.`,
+        reflectionPrompt: `Did giving the act a deliberate ritual frame change the experience — and was your prediction right?`,
+        measureSeconds: 150 },
+    ],
+  },
+
+  // ==========================================================================
+  //  2 — Objects of Meaning  (how a simple object becomes priceless)
+  // ==========================================================================
+  {
+    id: 'objects-of-meaning',
+    topic: 'rituals-and-tradition',
+    title: `Objects of Meaning`,
+    level: 'Beginner',
+    cover: 'assets/experiments/objects-of-meaning.jpg',
+    order: 2,
+    summary: `Five days on a deeply human habit: taking ordinary objects — a ring, a stone, a worn keepsake — and filling them with meaning, until they become things we would never trade for anything.`,
+    days: [
+      { id: 'd1', title: `More Than an Object`,
+        intro: `Somewhere you own a thing that's worthless to everyone but you — a ring, a ticket stub, a chipped mug, a stone from a beach. To a stranger it's nothing; to you it holds a whole story. Humans do this everywhere: we pour meaning into matter until the object carries it. Today you bring one such thing to the wheel.`,
+        task: `Find one object that means something to you and place it where you can see it as you measure. You're not asking anything of it — just letting a meaningful thing be present, part of the moment.`,
+        practice: `Measure with your meaningful object nearby, noticing your own sense of it. Notice what it adds, if anything, to have something that matters to you in the room.`,
+        reflectionPrompt: `What did it add to have a personally meaningful object present?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `Why Owning Changes Everything`,
+        intro: `Here's a neat experiment: give people a plain mug, then ask what they'd sell it for — and ask others what they'd pay to buy the same mug. Owners consistently demanded about twice as much as buyers would offer. Nothing about the mug changed; only that it was now theirs. Mere ownership quietly makes a thing more valuable to us. Today you notice that pull.`,
+        task: `Pick an object that is distinctly yours and, as you measure, hold the simple awareness that it belongs to you — not to anyone else. Let that quiet sense of "mine" be part of the session.`,
+        practice: `Measure while aware of your sense of ownership over the object. Notice whether something being truly yours makes you regard it differently from any identical copy.`,
+        reflectionPrompt: `Did the simple fact that the object is yours make you value it more than an identical one?`,
+        measureSeconds: 150 },
+      { id: 'd3', title: `Heirlooms`,
+        intro: `Anthropologists have noticed that every culture keeps certain objects that are never meant to be sold — heirlooms, passed hand to hand down the generations, carrying the family's story with them. The researcher Annette Weiner called these "inalienable possessions": things that seem to hold the very identity of the people who owned them. A grandmother's ring isn't jewellery; it's her, still here. Today you honour that kind of object.`,
+        task: `If you have something handed down to you — or simply an object tied to someone you love — bring it to the measurement and let its history be present with you. If not, picture one clearly in mind.`,
+        practice: `Measure while sensing the chain of people and time your object carries. Notice whether an object that links you to others feels different from one that's only yours.`,
+        reflectionPrompt: `Did an object that connects you to other people or to the past feel different to hold?`,
+        measureSeconds: 150 },
+      { id: 'd4', title: `The Ring`,
+        intro: `Consider the wedding ring. Ancient Romans gave iron bands and wore them on the fourth finger of the left hand, believing a "vein of love" ran from there straight to the heart. The anatomy was wrong, but the custom stuck — and across thousands of years and countless cultures, humans keep choosing a small circle of metal to carry their deepest bonds. A tiny object, an enormous meaning. Today you reflect on that.`,
+        task: `Bring to mind, or wear, an object that stands for a bond or a promise in your life. As you measure, let it represent that connection, the way a ring stands in for a vow.`,
+        practice: `Measure while letting a small object hold a large meaning for you. Notice how much weight a simple thing can carry once we agree to let it.`,
+        reflectionPrompt: `How much meaning could a single small object hold once you let it stand for something?`,
+        measureSeconds: 150 },
+      { id: 'd5', title: `Your Object of Meaning`,
+        intro: `You've met the worthless-yet-priceless keepsake, felt how ownership changes value, honoured the heirloom, and seen a ring carry a vow. None of this meaning lives in the matter — we put it there, as humans always have. Before you start, predict: will measuring with a truly meaningful object present feel different from measuring with nothing?`,
+        task: `Choose your single most meaningful object and make it the centre of a small ritual: place it deliberately, take a moment with what it stands for, then measure with it present.`,
+        practice: `Measure inside that meaning, the object holding its story beside you. Notice whether a deliberately meaningful object changes the session — and whether your prediction held.`,
+        reflectionPrompt: `Did measuring with a deeply meaningful object present feel different — and was your prediction right?`,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  3 — Rituals Before Performance  (why every high-stakes domain invents them)
+  // ==========================================================================
+  {
+    id: 'rituals-before-performance',
+    topic: 'rituals-and-tradition',
+    title: `Rituals Before Performance`,
+    level: 'Intermediate',
+    cover: 'assets/experiments/rituals-before-performance.jpg',
+    order: 3,
+    summary: `Five days on a pattern you'll find wherever the stakes are high — athletes, performers, soldiers and surgeons all build private ceremonies before the big moment. Why does nearly everyone, everywhere, do this?`,
+    days: [
+      { id: 'd1', title: `Before the Big Moment`,
+        intro: `Watch anyone facing a high-stakes moment and you'll spot it: the deep breath at the free-throw line, the singer's backstage routine, the soldier squaring away his kit. Across completely different worlds, people independently invent the same thing — a ritual to cross from ordinary time into "now it counts". Today you notice your own threshold.`,
+        task: `Before you measure, create a clear "now it begins" moment — a breath, a phrase, a small gesture that marks the shift from getting ready to doing. Cross that line deliberately, then start.`,
+        practice: `Measure while aware of having stepped across a deliberate threshold into the act. Notice whether marking a clear start changes how focused or ready you feel.`,
+        reflectionPrompt: `Did marking a clear "now it begins" moment change how ready you felt?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `The Champion's Secret`,
+        intro: `Michael Jordan wore his old University of North Carolina shorts under his Chicago Bulls uniform for every single game of his career — a private good-luck ritual he never played without. He's far from alone; elite athletes are full of these fixed routines, and most say the same thing: it isn't magic, it helps them feel ready and focused. Today you borrow a champion's trick.`,
+        task: `Choose one small, fixed thing to do before you measure — the same each time — and treat it as your personal good-luck routine, the way Jordan reached for those shorts. Do it, then begin.`,
+        practice: `Measure after your fixed personal routine, noticing your state. Notice whether having a reliable pre-game ritual leaves you steadier or more focused.`,
+        reflectionPrompt: `Did a fixed personal ritual beforehand leave you steadier or more focused?`,
+        measureSeconds: 150 },
+      { id: 'd3', title: `The Warrior's Dance`,
+        intro: `Before every match, New Zealand's rugby team performs the haka — a thunderous Maori ceremonial chant and dance, stamping and chanting in perfect unison. Its creators are clear that it isn't really about frightening opponents; it's about building the players' courage inwardly and binding them together as one. Cultures the world over have such rituals to summon strength before a trial. Today you summon yours.`,
+        task: `Before measuring, do something physical and deliberate to gather your energy — a few firm breaths, a stretch, a posture of readiness — your own small version of a pre-contest ritual. Then settle and begin.`,
+        practice: `Measure from that gathered, readied state. Notice whether a physical ritual of preparation changes how present and strong you feel.`,
+        reflectionPrompt: `Did a physical ritual of preparation change how present or strong you felt?`,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Theaters and Barracks`,
+        intro: `The pattern is everywhere once you see it. Actors never say "Macbeth" inside a theatre and wish each other to "break a leg". Soldiers polish drill and ceremony to a mirror shine. Surgeons scrub in with an exact, unvarying sequence. None of these is mere superstition — each marks a passage into a serious, focused state. Today you treat your own act with that seriousness.`,
+        task: `Give the measurement the dignity of a professional's routine: prepare your space and yourself with care and in a set order, as a surgeon or performer would before they begin. Then measure.`,
+        practice: `Measure after a careful, professional-style preparation. Notice whether treating the act with ceremony changes the quality of your attention.`,
+        reflectionPrompt: `Did preparing with real ceremony change the quality of your attention?`,
+        measureSeconds: 150 },
+      { id: 'd5', title: `Your Performance Ritual`,
+        intro: `You've marked a threshold, borrowed a champion's charm, gathered yourself like a warrior, and prepared with a professional's care. Across every field, humans reach for ritual exactly when it matters most — not because it's magic, but because it readies the mind. Before you start, predict: will a full pre-performance ritual change your session compared with just beginning cold?`,
+        task: `Build your complete performance ritual — threshold, lucky element, physical readying, careful order — and run it fully before you measure, like an athlete before the whistle.`,
+        practice: `Measure after your full performance ritual. Notice how it compares with simply starting cold, the way you might on an ordinary day — and whether your prediction held.`,
+        reflectionPrompt: `Did a full performance ritual change your session compared with starting cold — and was your prediction right?`,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  4 — Collective Rituals  (what happens when many do the same thing at once)
+  // ==========================================================================
+  {
+    id: 'collective-rituals',
+    topic: 'rituals-and-tradition',
+    title: `Collective Rituals`,
+    level: 'Intermediate',
+    cover: 'assets/experiments/collective-rituals.jpg',
+    order: 4,
+    summary: `Five days on something humans cannot seem to stop doing: gathering in their thousands and millions to move, sing and feel as one. What happens to us when we do the same thing together?`,
+    days: [
+      { id: 'd1', title: `Doing It Together`,
+        intro: `A crowd singing the same song. A stadium rising as one. A congregation, a festival, a dance floor. There's a particular feeling that only appears when many people do the same thing at the same time — and humans have chased it for as long as we've existed. Today you reach toward it, even alone at your wheel.`,
+        task: `As you measure, hold the sense that you are not really alone — that others, somewhere, are sitting with their own wheels, part of the same quiet shared practice. Let yourself feel like one of many.`,
+        practice: `Measure while imagining yourself part of a wider gathering all doing this together. Notice whether feeling part of something collective changes the experience.`,
+        reflectionPrompt: `Did imagining yourself part of a wider gathering change how the measurement felt?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `Hearts in Sync`,
+        intro: `In a Spanish village, anthropologists wired up people at a fire-walking festival — both the walkers crossing the burning coals and their families watching. Astonishingly, the spectators' heart rates rose and fell in sync with their loved ones on the fire, beat for beat, though they sat perfectly still. A shared ritual had physically linked their bodies. Today you feel how shared experience reaches across people.`,
+        task: `Before measuring, bring vividly to mind someone you feel deeply connected to, and imagine you are both part of the same moment. Carry that felt connection into the session.`,
+        practice: `Measure while holding a strong sense of being in sync with someone who matters to you. Notice whether feeling connected to another person colours the experience.`,
+        reflectionPrompt: `Did holding a strong sense of connection to someone colour the experience?`,
+        measureSeconds: 150 },
+      { id: 'd3', title: `The Largest Gathering on Earth`,
+        intro: `Every twelve years in India, the Kumbh Mela draws crowds almost beyond imagining — the 2025 gathering was expected to reach around four hundred million people, more than the entire population of the United States, all coming to bathe at a sacred river. Even the famous Hajj to Mecca, at roughly two million, is small beside it. Whatever draws us, the human pull to gather and do the same thing is enormous. Today you sit with that scale.`,
+        task: `As you measure, picture the vast, unbroken line of human beings — across countries and centuries — who have gathered to share a meaningful act, and place yourself quietly among them. One more person in a very long tradition.`,
+        practice: `Measure while feeling yourself part of that immense human story of gathering. Notice whether belonging to something so much larger than yourself shifts anything.`,
+        reflectionPrompt: `Did sensing yourself part of a vast human tradition shift anything in you?`,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Communitas`,
+        intro: `The sociologist Emile Durkheim had a name for the electricity of a crowd in shared ritual: "collective effervescence", a wave of energy that lifts people beyond themselves. The anthropologist Victor Turner went further, describing "communitas" — the deep, equal fellowship that arises when people share a ritual and, for a while, all status falls away and they are simply human together. Today you reach for that levelling warmth.`,
+        task: `As you measure, set aside every role and label you carry — job, status, the lot — and rest in the simple fact of being one human among humans. Let that equal, shared feeling fill the moment.`,
+        practice: `Measure from that stripped-down sense of plain human fellowship. Notice whether letting go of your roles, even briefly, changes how you feel.`,
+        reflectionPrompt: `Did letting go of your everyday roles, even briefly, change how you felt?`,
+        measureSeconds: 150 },
+      { id: 'd5', title: `Joining In`,
+        intro: `You've imagined the gathering, felt hearts sync across a fire, sat with the scale of millions, and tasted the equal fellowship of communitas. Humans gather and ritualise together because it binds us — that's the quiet anthropological truth under every festival and ceremony. Before you start, predict: will measuring as part of the wider community feel different from measuring purely alone?`,
+        task: `If a live or group session is available, join it and measure with others in real time. If not, hold the whole community of fellow users vividly in mind, and measure as one of many doing this together right now.`,
+        practice: `Measure inside that full sense of shared, collective practice. Notice how being part of the many compares with going it alone — and whether your prediction held.`,
+        reflectionPrompt: `How did measuring as part of the community compare with going it alone — and was your prediction right?`,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  5 — Transformation Rituals  (why cultures mark life's turning points)
+  //  The culmination — closing feeling: "I am part of humanity's oldest pattern."
+  // ==========================================================================
+  {
+    id: 'transformation-rituals',
+    topic: 'rituals-and-tradition',
+    title: `Transformation Rituals`,
+    level: 'Advanced',
+    cover: 'assets/experiments/transformation-rituals.jpg',
+    order: 5,
+    summary: `Five days on the deepest pattern of all: why, in every culture on Earth, the great turning points of a life — birth, adulthood, marriage, death — are marked with ritual. And why, by the end, you may feel part of that unbroken human story yourself.`,
+    days: [
+      { id: 'd1', title: `Marking the Threshold`,
+        intro: `Think of the moments a life turns: a wedding, a graduation, a coming of age, a funeral. No culture leaves these unmarked — every one of them, everywhere, surrounds the great transitions with ceremony. It seems we cannot simply slip from one chapter to the next; we need to cross the threshold deliberately. Today you reflect on the thresholds you've crossed.`,
+        task: `Before measuring, bring to mind one real turning point in your own life and how it was marked — or wasn't. Carry that sense of a life-passage with you, then begin.`,
+        practice: `Measure while holding awareness of life's turning points and how we mark them. Notice what it brings up to sit with the idea of thresholds and change.`,
+        reflectionPrompt: `What did it bring up to reflect on the thresholds you've crossed in your life?`,
+        measureSeconds: 150 },
+      { id: 'd2', title: `The Three Stages`,
+        intro: `Over a century ago, the ethnographer Arnold van Gennep noticed something remarkable: rituals of transition, all over the world, share the same hidden three-part shape. First separation — you leave your old self behind. Then a strange in-between, neither here nor there. Then reincorporation — you return, changed, with a new status. Wedding, initiation, graduation — all follow this same ancient pattern. Today you walk it in miniature.`,
+        task: `Shape your session in three deliberate steps: a clear letting-go of the day behind you, a quiet in-between as you settle, and a conscious return as you finish. Move through separation, threshold and return on purpose.`,
+        practice: `Measure as the middle, in-between stage of that three-part passage. Notice whether moving through a deliberate beginning, middle and end changes the experience.`,
+        reflectionPrompt: `Did shaping the session as a clear passage — leaving, crossing, returning — change it?`,
+        measureSeconds: 180 },
+      { id: 'd3', title: `Betwixt and Between`,
+        intro: `The anthropologist Victor Turner gave a name to that strange middle stage of any rite of passage: liminality, from the Latin for "threshold" — the time when you are no longer who you were and not yet who you'll be. It can feel disorienting, but Turner saw it as where transformation actually happens, and where people bond most deeply. Today you rest in your own threshold.`,
+        task: `As you measure, let yourself sit in a deliberately in-between state — nothing to finish, nowhere to be, simply on the threshold. Don't reach forward or back; rest in the middle.`,
+        practice: `Measure while resting in that betwixt-and-between, open and unhurried. Notice what it feels like to dwell in a threshold rather than rushing across it.`,
+        reflectionPrompt: `What did it feel like to rest in an in-between, threshold state rather than rushing through?`,
+        measureSeconds: 180 },
+      { id: 'd4', title: `Coming of Age Around the World`,
+        intro: `Look at how cultures turn a child into an adult and the variety is dazzling: a bar or bat mitzvah, a quinceanera at fifteen, Japan's coming-of-age day in bright kimono, a young Maasai's long initiation, the Vanuatu islanders whose land-diving leaps inspired the bungee jump. Utterly different on the surface — yet all saying the same thing: you are not a child anymore. Same human need, a thousand beautiful forms. Today you honour your own becoming.`,
+        task: `Before measuring, reflect on a way you have grown or changed — and silently mark it, the way a ceremony would: this happened, I am different now. Then measure in acknowledgement of it.`,
+        practice: `Measure while quietly honouring some real growth in yourself, as a rite of passage would. Notice whether formally marking a change makes it feel more real.`,
+        reflectionPrompt: `Did deliberately marking a real change in yourself make it feel more real?`,
+        measureSeconds: 210 },
+      { id: 'd5', title: `Your Own Passage`,
+        intro: `Across this whole topic you've found your hidden rituals, filled objects with meaning, prepared like a champion, gathered with the millions, and walked the ancient shape of transition. Notice the feeling underneath it all — the quiet recognition that you do these things too, exactly as humans always have. You are part of an unbroken tradition stretching back as far as our species. Before you start, predict, then measure this final session as a small rite marking the end of the journey.`,
+        task: `Make this last measurement a complete ritual of your own: a clear threshold, a meaningful object, a gathered state, an honest sense of marking the end of something. Bring everything the topic gave you into one deliberate ceremony.`,
+        practice: `Measure inside that full, self-made rite, present to being part of humanity's oldest pattern. Notice what feels most different now — and whether you feel, at last, that you do this too — and whether your prediction held.`,
+        reflectionPrompt: `After this whole journey, where do you recognise yourself in humanity's oldest tradition of ritual?`,
         measureSeconds: 240 },
     ],
   },
