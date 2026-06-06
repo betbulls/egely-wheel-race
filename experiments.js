@@ -45,6 +45,7 @@ export const TOPICS = [
   { id: 'yoga', title: `Yoga`, icon: '🪷', cover: 'assets/experiments/yoga.jpg', order: 11 },
   { id: 'reiki', title: `Reiki`, icon: '👐', cover: 'assets/experiments/reiki.jpg', order: 12 },
   { id: 'aura', title: `Aura`, icon: '✨', cover: 'assets/experiments/aura.jpg', order: 13 },
+  { id: 'food-and-awareness', title: `Food & Awareness`, icon: '🍎', cover: 'assets/experiments/food-and-awareness.jpg', order: 14 },
 ];
 
 export const EXPERIMENTS = [
@@ -3195,6 +3196,256 @@ export const EXPERIMENTS = [
         practice: `Measure as a curious, open-minded observer of your own experience. Notice what, across this whole journey, you genuinely observed — and whether your prediction held.`,
         reflectionPrompt: `After this whole journey, what did you honestly observe — and what do you now make of the aura question?`,
         practiceMinutes: 3,
+        measureSeconds: 240 },
+    ],
+  },
+
+  // ##########################################################################
+  //  FOOD & AWARENESS TOPIC
+  //  Frame: the most EVERYDAY topic — deliberately NOT "Nutrition" or "Healthy
+  //  Eating" (too dietetic, a thousand apps do that). Big question: how much do
+  //  we actually pay attention to what we eat? EXPERIENCE-centred: "what do I
+  //  notice about myself?". NOT a diet topic — AVOID calories, diets, macros,
+  //  weight loss, and "good food / bad food". The FIRST topic built around real
+  //  MINI-TASKS (eat one bite slowly, a meal without the phone, a raisin, notice
+  //  fullness). The wheel comes after: "is your measurement different after a
+  //  mindful meal?". CRITICAL: do NOT cite Brian Wansink (retracted / data
+  //  fraud); use credible non-Wansink sources: Rozin's amnesic-patients study,
+  //  Robinson 2013 attentive-eating meta-analysis, retronasal smell (~80% of
+  //  flavour), the raisin exercise (Kabat-Zinn/MBSR), hunger-vs-craving, the
+  //  PREDICT/ZOE study (same food -> very different responses, so observe
+  //  YOURSELF, never prescribe), commensality & fasting across cultures. NEVER
+  //  instruct the user to actually fast or skip meals (health) — fasting appears
+  //  only as cultural reflection. Experiment 5 connects to the Rituals topic.
+  //  Closing feeling: "the most ordinary thing — eating — is full of attention,
+  //  pleasure and meaning I'd stopped noticing."
+  // ##########################################################################
+
+  // ==========================================================================
+  //  1 — Mindless Eating  (how often do we eat barely noticing?)
+  // ==========================================================================
+  {
+    id: 'mindless-eating',
+    topic: 'food-and-awareness',
+    title: `Mindless Eating`,
+    level: 'Beginner',
+    cover: 'assets/experiments/mindless-eating.jpg',
+    order: 1,
+    summary: `Four short days on something you do every single day, usually on autopilot: eating. How often do you barely notice it happening — and what changes the moment you do?`,
+    days: [
+      { id: 'd1', title: `Eating on Autopilot`,
+        intro: `Think about how you usually eat: scrolling a phone, watching a screen, working, walking — the food vanishing almost without you tasting it. Most of our eating happens on autopilot, while our attention is somewhere else entirely. Today you simply catch yourself doing it.`,
+        task: `Before measuring, recall your last few meals or snacks and notice how many you ate while distracted, barely tasting them. No judgment — just an honest look at how automatic eating has become.`,
+        practice: `Measure while reflecting on how much of your eating happens without attention. Notice what it's like to realise how often you eat on autopilot.`,
+        reflectionPrompt: `How many of your recent meals did you eat on autopilot, barely noticing?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `The Meal You Forgot`,
+        intro: `Here's a striking experiment: researchers offered a full second lunch to patients with severe memory loss, just minutes after the first — and they happily ate it, and started a third, because they couldn't remember having eaten. It suggests we stop eating partly because we remember we ate, not only because we're full. So what happens when we barely remember our meals at all?`,
+        task: `Before measuring, try to recall in real detail exactly what you ate yesterday — every meal and snack. Notice how much is surprisingly hazy.`,
+        practice: `Measure while holding how patchy the memory of your own eating can be. Notice whether food eaten without attention leaves much of a trace at all.`,
+        reflectionPrompt: `How clearly could you actually remember everything you ate yesterday?`,
+        measureSeconds: 120 },
+      { id: 'd3', title: `One Bite, Fully Noticed`,
+        intro: `You don't need a whole meal to break the autopilot — a single bite will do. The difference between gulping something down and truly tasting one mouthful is surprisingly large, and surprisingly available, any time you choose. Today you take one fully-noticed bite.`,
+        task: `Take one bite of any food and eat it as slowly and attentively as you possibly can — the smell, the first taste, the texture, the chewing, the swallow. Spend a couple of minutes on that single bite.`,
+        practice: `Measure straight afterward, still in that slowed-down attention. Notice whether one truly-noticed bite feels different from a normal, automatic one.`,
+        reflectionPrompt: `How different did one fully-noticed bite feel from how you normally eat?`,
+        practiceMinutes: 2,
+        measureSeconds: 150 },
+      { id: 'd4', title: `A Meal Without Distraction`,
+        intro: `When researchers gathered the studies together, a clear pattern emerged: people who eat while distracted tend to eat more — and, oddly, eat even more later — than those who pay attention. Attention to a meal genuinely changes the meal. Before you start, predict: will eating something with full attention feel different from eating it distracted?`,
+        task: `Eat one small thing — a piece of fruit, a snack — with zero distraction: no phone, no screen, no reading. Just you and the food, for as long as it takes. Then come to the wheel.`,
+        practice: `Measure after that undistracted eating. Notice how it compares with your usual distracted eating — and whether your prediction held.`,
+        reflectionPrompt: `How did eating with full, undistracted attention compare with your usual way — and was your prediction right?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+    ],
+  },
+
+  // ==========================================================================
+  //  2 — Taste & Attention  (how much of flavour do we actually perceive?)
+  // ==========================================================================
+  {
+    id: 'taste-and-attention',
+    topic: 'food-and-awareness',
+    title: `Taste & Attention`,
+    level: 'Beginner',
+    cover: 'assets/experiments/taste-and-attention.jpg',
+    order: 2,
+    summary: `Five days rediscovering a sense you use constantly but rarely attend to: taste. Simple, surprising little experiments with flavour, smell and texture, then the wheel.`,
+    days: [
+      { id: 'd1', title: `The Raisin`,
+        intro: `There's a famous mindfulness exercise that uses a single raisin. You examine it as though you'd never seen one — its wrinkles, weight, smell — then eat it impossibly slowly, noticing everything. People are often astonished how much is in one raisin they'd normally swallow in a second. Today you try it, with a raisin or any small food.`,
+        task: `Take one small piece of food and spend two to three minutes with it: look at it closely, smell it, feel its texture, then eat it as slowly as you can, noticing every sensation. Treat it as if tasting for the first time.`,
+        practice: `Measure straight afterward, still in that heightened attention to taste. Notice how much flavour and detail appeared once you truly paid attention.`,
+        reflectionPrompt: `How much more did you notice in one small food when you really paid attention?`,
+        practiceMinutes: 3,
+        measureSeconds: 120 },
+      { id: 'd2', title: `Flavour Is Mostly Smell`,
+        intro: `Here's a surprise: most of what you call "taste" is actually smell. As you chew, aromas travel up the back of your throat to your nose, and that's where the richness comes from — around eighty percent of flavour. Pinch your nose while eating and food turns flat and hard to identify; let go, and the flavour floods back. Today you prove it on yourself.`,
+        task: `Take a bite of something flavourful while gently pinching your nose shut, and notice how muted it tastes. Then release your nose mid-chew and feel the flavour rush in. Try it a couple of times.`,
+        practice: `Measure afterward, struck by how much of taste is really smell. Notice how differently you'll think about flavour now.`,
+        reflectionPrompt: `What happened to the flavour when you blocked, then released, your nose?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+      { id: 'd3', title: `Five Tastes, a Thousand Smells`,
+        intro: `Your tongue is surprisingly simple: it detects only five basic tastes — sweet, sour, salty, bitter and savoury (umami). The old "tongue map" with zones for each is a myth; every part tastes everything. All the richness — apple versus pear, coffee versus chocolate — comes from your nose detecting thousands of aromas. Today you separate the two.`,
+        task: `Eat something and try to tease apart what is pure taste (one of the five) from what is really smell. Notice how little the tongue alone reports, and how much the nose adds.`,
+        practice: `Measure while holding that fresh sense of how taste and smell combine. Notice how much of eating's pleasure actually comes through the nose.`,
+        reflectionPrompt: `Could you tell apart the simple tongue-tastes from the rich smells in your food?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Texture and Temperature`,
+        intro: `Flavour isn't the whole story of eating. So much of the pleasure is texture and temperature — the crunch, the creaminess, the warmth, the cold — a whole world of sensation we rarely attend to. The same food can delight or disappoint on texture alone. Today you notice the feel of food.`,
+        task: `Eat something with an interesting texture and, for a couple of minutes, attend only to how it feels in your mouth — crunch, softness, temperature, how it changes as you chew. Forget the flavour; feel the food.`,
+        practice: `Measure afterward, still attentive to mouth-feel. Notice how much of eating you'd been missing by ignoring texture and temperature.`,
+        reflectionPrompt: `What did you notice about texture and temperature that you'd normally ignore?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+      { id: 'd5', title: `A Meal, Fully Tasted`,
+        intro: `Across these days you've slowed down to a raisin, found that flavour is mostly smell, separated taste from aroma, and felt the texture of food. Together they turn eating from a blur into a rich, layered experience. Before you start, predict: will a slowly, fully-tasted few minutes of eating change your measurement?`,
+        task: `Eat a small portion of something you enjoy with complete attention — smell, taste, texture, temperature, all of it — for a few unhurried minutes. Then come to the wheel.`,
+        practice: `Measure from that fully-tasted state. Notice how attentive eating compares with the blur of Day 1 — and whether your prediction held.`,
+        reflectionPrompt: `How did fully tasting your food compare with how you ate at the start — and was your prediction right?`,
+        practiceMinutes: 3,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  3 — Hunger & Craving  (the difference between needing and wanting)
+  // ==========================================================================
+  {
+    id: 'hunger-and-craving',
+    topic: 'food-and-awareness',
+    title: `Hunger & Craving`,
+    level: 'Intermediate',
+    cover: 'assets/experiments/hunger-and-craving.jpg',
+    order: 3,
+    summary: `Five days on a distinction almost no one makes but everyone feels: the difference between real hunger and a craving — and what we're often actually reaching for when we reach for food.`,
+    days: [
+      { id: 'd1', title: `Are You Actually Hungry?`,
+        intro: `We eat for all kinds of reasons that have nothing to do with hunger: the clock says lunchtime, the food is just there, we're bored, tired, stressed or celebrating. Genuine physical hunger is only one of many reasons we put food in our mouths. Today you start checking which is which.`,
+        task: `Before measuring, think of the last time you ate or wanted to eat, and ask honestly: was that real hunger, or something else — habit, boredom, emotion, the clock? Just notice, without judging.`,
+        practice: `Measure while reflecting on how often you eat for reasons other than hunger. Notice how rarely, or often, pure physical hunger is actually the trigger.`,
+        reflectionPrompt: `How often do you eat for reasons other than genuine hunger?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `Hunger or Craving?`,
+        intro: `Hunger and craving feel similar but behave differently. Real hunger builds slowly, comes from the body, and any food will satisfy it. A craving arrives suddenly, comes from the brain's reward system, and demands one specific thing — and often won't quit even after you've eaten. There's a simple test: would plain food do?`,
+        task: `Next time you want to eat, pause and run the test: would something plain — a piece of bread, an apple, plain rice — satisfy you? If yes, it's likely hunger. If only one specific treat will do, it's likely a craving. Notice which it is.`,
+        practice: `Measure while holding what you discovered about your own wanting. Notice how it feels to tell true hunger apart from a craving.`,
+        reflectionPrompt: `When you ran the test, was it real hunger or a craving — and how could you tell?`,
+        measureSeconds: 150 },
+      { id: 'd3', title: `The Feeling Behind the Food`,
+        intro: `Here's the interesting part: a craving is often not really about the food at all. We reach for chocolate wanting comfort, for crisps wanting to soothe stress, for sweets wanting a small reward. Underneath the craving for a thing is usually a craving for a feeling. Today you look underneath.`,
+        task: `When a craving shows up, pause and ask what feeling you're actually after — comfort, calm, reward, distraction, energy? Name the feeling beneath the food, then decide freely what to do.`,
+        practice: `Measure while aware of the feeling that was driving the craving. Notice whether naming the real need changes the pull of the food.`,
+        reflectionPrompt: `What feeling were you really reaching for, underneath the craving?`,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Watching a Craving`,
+        intro: `A craving feels urgent, as if it will only grow until you give in — but watch one closely and you'll often find it rises, peaks and fades on its own, like a wave, usually within a few minutes. You don't always have to fight it or feed it; sometimes you can simply watch it pass. Today you try.`,
+        task: `When a craving arrives, instead of acting on it, spend two to three minutes simply observing it — where you feel it, how strong it is, whether it grows or fades — with curiosity, not a battle.`,
+        practice: `Measure while watching the craving rather than obeying it. Notice whether a craving, simply observed, changes or passes on its own.`,
+        reflectionPrompt: `When you watched a craving instead of acting on it, what did it do?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+      { id: 'd5', title: `Eating From Choice`,
+        intro: `Across these days you've separated hunger from craving, found the feeling beneath the food, and watched a craving rise and fall. The point was never to deny yourself anything — only to eat from clear, awake choice rather than autopilot. Before you start, predict: will eating (or not) from a conscious choice feel different?`,
+        task: `Next time you eat, make it a genuine choice: notice whether it's hunger or craving, what you actually want, and then choose freely and without guilt. Then come to the wheel.`,
+        practice: `Measure after eating, or choosing not to, from real awareness. Notice how eating from conscious choice compares with eating on autopilot — and whether your prediction held.`,
+        reflectionPrompt: `How did eating from a conscious choice compare with autopilot eating — and was your prediction right?`,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  4 — Energy & Food  (notice how YOU feel — no good foods, no bad foods)
+  // ==========================================================================
+  {
+    id: 'energy-and-food',
+    topic: 'food-and-awareness',
+    title: `Energy & Food`,
+    level: 'Intermediate',
+    cover: 'assets/experiments/energy-and-food.jpg',
+    order: 4,
+    summary: `Five days as your own honest observer: how do different foods and meals leave you feeling? Not dietetics, not good-versus-bad — just careful self-observation, with the wheel as your instrument.`,
+    days: [
+      { id: 'd1', title: `How You Feel After Eating`,
+        intro: `Some meals leave you heavy and sleepy; others leave you light and clear; some pick you up, some flatten you an hour later. We rarely connect the dots between what we ate and how we then feel. Today you start paying attention to the afterward.`,
+        task: `After a meal today, pause and read your state honestly: energised or drowsy, light or heavy, clear or foggy, calm or restless? Then come to the wheel soon after eating.`,
+        practice: `Measure not long after a meal, staying aware of how that meal left you feeling. Notice whether your post-meal state seems to show up in the session at all.`,
+        reflectionPrompt: `How did your last meal leave you feeling — and did you notice it in the measurement?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `No Good Foods, No Bad Foods`,
+        intro: `One of the largest nutrition studies ever run found something freeing: the very same food can produce up to an eightfold difference in how people respond to it — even identical twins react differently. There is no universal good or bad food; there is only how a food affects you. That's why this topic asks you to observe, never to follow rules.`,
+        task: `Before measuring, drop every idea of "healthy" or "unhealthy", "good" or "bad" food, and replace it with one honest question: how does this particular food actually make me feel? Carry that curiosity in.`,
+        practice: `Measure as your own personal scientist, interested only in your real responses, not in rules. Notice how it feels to study your own body instead of obeying food advice.`,
+        reflectionPrompt: `What changed when you swapped food rules for honest self-observation?`,
+        measureSeconds: 150 },
+      { id: 'd3', title: `The Afternoon Dip`,
+        intro: `That heavy, sleepy slump after a big meal is real — and the same study found it varies enormously from person to person, with your sleep, timing and movement mattering as much as the food itself. Your body is not a textbook; it's its own experiment. Today you watch your own energy curve.`,
+        task: `Notice your energy in the hour or two after eating today — does it dip, hold steady, or lift? Then bring that awareness of your own rhythm to the wheel.`,
+        practice: `Measure while aware of where you are on your own post-meal energy curve. Notice whether your energy after eating seems to show up in how the session feels.`,
+        reflectionPrompt: `What did your energy do after eating — dip, hold, or lift — and did it appear in the session?`,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Empty and Full`,
+        intro: `One of the simplest experiments you can run is to compare yourself empty versus full. Measuring on an empty stomach and measuring soon after a meal can feel like two different states — and only you can know your own difference. Today you pay attention to one side of that comparison.`,
+        task: `Choose your state deliberately today — either clearly hungry and empty, or comfortably after a meal — and note which you've chosen before you begin. Over time you'll feel the contrast.`,
+        practice: `Measure in your chosen state, empty or full, paying attention to how your body feels. Notice how this state compares with how you remember the other one feeling.`,
+        reflectionPrompt: `How did measuring empty (or full) compare with how the opposite state usually feels?`,
+        measureSeconds: 150 },
+      { id: 'd5', title: `Your Own Map`,
+        intro: `Across these days you've watched how meals leave you, dropped the good-food/bad-food rules, tracked your energy, and compared empty with full. Quietly, you've been drawing a personal map that no diet book could give you: how food actually affects you. Before you start, predict: will measuring after a deliberately-noticed meal feel different?`,
+        task: `Eat a meal today with full attention to how it leaves you feeling, then come to the wheel as the careful observer of yourself you've become. No rules — just your own honest data.`,
+        practice: `Measure from that attentive, post-meal state. Notice what your personal map is starting to show you — and whether your prediction held.`,
+        reflectionPrompt: `What is your own map starting to show about how food affects you — and was your prediction right?`,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  5 — Food Traditions  (why food means community & meaning everywhere)
+  //  Connects to the Rituals topic. Fasting appears only as cultural reflection.
+  // ==========================================================================
+  {
+    id: 'food-traditions',
+    topic: 'food-and-awareness',
+    title: `Food Traditions`,
+    level: 'Advanced',
+    cover: 'assets/experiments/food-traditions.jpg',
+    order: 5,
+    summary: `Five days on the deepest truth about food: it was never only fuel. In every culture, eating carries community, memory and meaning — and noticing that can change the simplest meal.`,
+    days: [
+      { id: 'd1', title: `Breaking Bread Together`,
+        intro: `Almost everywhere, the most important moments happen around food: the family dinner, the celebration feast, the deal sealed over a meal. The word "companion" literally means "one you share bread with". Researchers find that people who eat with others are happier and more connected — eating together may be one of humanity's oldest bonding tools. Today you notice that.`,
+        task: `Before measuring, bring to mind a meal shared with people who matter to you — the food, the table, the company — and let that warmth return. If you can, eat something today in good company.`,
+        practice: `Measure while holding that sense of food as connection, not just fuel. Notice whether thinking of eating as something shared changes your state.`,
+        reflectionPrompt: `What did it bring up to think of eating as a way of being connected to others?`,
+        measureSeconds: 150 },
+      { id: 'd2', title: `The Feast`,
+        intro: `Every culture has its feast foods — the dishes that only appear at celebrations, weddings, holidays and homecomings. They're rarely the most practical foods; they're the ones soaked in joy, abundance and belonging. A feast says: this moment matters, and we mark it with food. Today you honour that.`,
+        task: `Before measuring, recall a feast or celebration meal that meant something to you — the special dish, the occasion, the people. Let the significance of it, not just the flavour, come back. Then settle.`,
+        practice: `Measure while holding the meaning a celebration meal can carry. Notice how different food feels when it stands for joy and belonging, not just nourishment.`,
+        reflectionPrompt: `How did food feel when you remembered it carrying joy and meaning, not just flavour?`,
+        measureSeconds: 180 },
+      { id: 'd3', title: `The Fast`,
+        intro: `Just as cultures gather to feast, nearly all of them also set times to deliberately not eat — Ramadan, Lent, Yom Kippur and many more. Across traditions, going without food for a while is used to sharpen attention, mark something sacred, and feel solidarity with others. Feasting and fasting are two sides of giving food meaning. Today you simply reflect on hunger, without changing how you eat.`,
+        task: `Before your next normal meal, let yourself notice the natural hunger that has built up — the very edge that fasting traditions work with — without skipping or delaying anything. Just feel ordinary hunger consciously for a moment. Then eat as usual and, later, measure.`,
+        practice: `Measure while reflecting on how differently cultures relate to going without, and on your own everyday hunger. Notice what attention to natural hunger, before a normal meal, reveals.`,
+        reflectionPrompt: `What did you notice when you paid attention to ordinary hunger before a meal?`,
+        measureSeconds: 180 },
+      { id: 'd4', title: `Food as Memory`,
+        intro: `Certain foods are time machines: a grandmother's recipe, a dish from your childhood, a taste from a place you love. Food carries memory and identity more powerfully than almost anything — one bite can return an entire world. Today you let a food carry its meaning.`,
+        task: `Before measuring, bring to mind a food tied to a strong memory or to who you are — where you're from, who made it, when you ate it. If you can, taste a little of it. Let the memory come with the flavour.`,
+        practice: `Measure while holding the memory and meaning your food carries. Notice whether food connected to memory feels different from ordinary eating.`,
+        reflectionPrompt: `What memory or sense of identity did a meaningful food bring back for you?`,
+        practiceMinutes: 2,
+        measureSeconds: 210 },
+      { id: 'd5', title: `Your Table`,
+        intro: `Across this whole topic you've found how mindlessly we usually eat, how rich taste really is, the difference between hunger and craving, how food shapes your energy, and how deeply it carries community and meaning. The quiet conclusion isn't a diet — it's that eating well means eating with awareness. Before you start, predict, then bring it all to one meal.`,
+        task: `Eat a meal today with everything you've gathered: full attention, real tasting, honest hunger, and a sense of its meaning and connection. Then come to the wheel.`,
+        practice: `Measure from that complete, aware, meaningful meal. Notice what feels most different now about the simple act of eating — and whether your prediction held.`,
+        reflectionPrompt: `After this whole journey, what feels most different about the everyday act of eating?`,
         measureSeconds: 240 },
     ],
   },
