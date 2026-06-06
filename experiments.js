@@ -41,6 +41,7 @@ export const TOPICS = [
   { id: 'psi-research', title: `Psi Research`, icon: '🔬', cover: 'assets/experiments/psi-research.jpg', order: 7 },
   { id: 'intuition', title: `Intuition`, icon: '🧭', cover: 'assets/experiments/intuition.jpg', order: 8 },
   { id: 'rituals-and-tradition', title: `Rituals & Human Tradition`, icon: '🕯️', cover: 'assets/experiments/rituals-and-tradition.jpg', order: 9 },
+  { id: 'quantum-healing', title: `Quantum Healing`, icon: '⚛️', cover: 'assets/experiments/quantum-healing.jpg', order: 10 },
 ];
 
 export const EXPERIMENTS = [
@@ -2157,6 +2158,249 @@ export const EXPERIMENTS = [
         task: `Make this last measurement a complete ritual of your own: a clear threshold, a meaningful object, a gathered state, an honest sense of marking the end of something. Bring everything the topic gave you into one deliberate ceremony.`,
         practice: `Measure inside that full, self-made rite, present to being part of humanity's oldest pattern. Notice what feels most different now — and whether you feel, at last, that you do this too — and whether your prediction held.`,
         reflectionPrompt: `After this whole journey, where do you recognise yourself in humanity's oldest tradition of ritual?`,
+        measureSeconds: 240 },
+    ],
+  },
+
+  // ##########################################################################
+  //  QUANTUM HEALING TOPIC
+  //  Frame: the most INTELLECTUAL topic — BIG QUESTIONS. The term "Quantum
+  //  Healing" appears as a HISTORICAL & CULTURAL phenomenon, never as a medical
+  //  or scientific claim. Big question: why did people start using the language
+  //  of quantum physics to talk about consciousness, healing and human
+  //  potential? We examine how modern physics met human imagination — we do NOT
+  //  heal with quantum energy or activate quantum vibrations. Do NOT teach
+  //  physics (no exam); aim for "that's fascinating", not Schrödinger revision.
+  //  Pseudoscientific phrases (quantum vibrations, quantum frequency healing,
+  //  DNA activation, quantum manifestation) appear ONLY as cultural examples,
+  //  never as fact. BE PRECISE, especially on the observer / double-slit: in
+  //  physics "observation" = physical interaction with a detector, NOT a
+  //  conscious mind; "consciousness collapses the wave function" is a documented
+  //  misconception (and itself the cultural phenomenon we study). Real people as
+  //  short "wow" moments, not biographies: Planck, Einstein, Heisenberg, Bohr,
+  //  Schrödinger, Everett, Wheeler, Gell-Mann, Chalmers. The wheel is a reminder
+  //  that observation itself is interesting; the user measures with different
+  //  mental frames to OBSERVE, not to prove. Closing feeling: "the world is much
+  //  stranger and more interesting than I thought."
+  // ##########################################################################
+
+  // ==========================================================================
+  //  1 — The Quantum Revolution  (when the clockwork universe cracked open)
+  // ==========================================================================
+  {
+    id: 'the-quantum-revolution',
+    topic: 'quantum-healing',
+    title: `The Quantum Revolution`,
+    level: 'Beginner',
+    cover: 'assets/experiments/the-quantum-revolution.jpg',
+    order: 1,
+    summary: `Four short days at the moment science got strange — when the tidy, predictable universe of Newton cracked open, and reality turned out to be far weirder than anyone expected.`,
+    days: [
+      { id: 'd1', title: `The Clockwork World`,
+        intro: `For two centuries after Newton, science pictured the universe as a vast, perfect clockwork: know the position of every part, and you could in principle predict the entire future. It was orderly, reassuring, and almost complete. Then, around 1900, that whole picture began to crack. Today you start at the edge of that old certainty.`,
+        task: `Set up the wheel and, before you measure, adopt the old clockwork view for a moment: as if everything were perfectly predictable, including this session. Notice how that assumption feels.`,
+        practice: `Measure while holding the tidy idea that everything is, in principle, predictable. Notice whether the world actually feels as orderly and certain as the clockwork picture promised.`,
+        reflectionPrompt: `Did the world feel as predictable as the old clockwork picture promised?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `The World Comes in Pieces`,
+        intro: `In 1900, Max Planck stumbled onto something he found almost unbelievable: energy doesn't flow in a smooth stream — it comes in tiny, indivisible packets he called "quanta". He was a conservative man and called it an act of desperation, hoping someone would explain it away. No one could. The smooth world had a graininess no one had suspected. Today you look closely.`,
+        task: `As you measure, look at the wheel's movement as if examining it for hidden structure — not one smooth flow, but something with fine grain, the way Planck peered into energy itself. Look closely, with curiosity.`,
+        practice: `Measure while attending to the fine detail and texture of what you observe. Notice whether close attention reveals structure where you'd normally see a smooth blur.`,
+        reflectionPrompt: `Did looking closely reveal fine structure where you'd normally see a smooth blur?`,
+        measureSeconds: 120 },
+      { id: 'd3', title: `The End of Certainty`,
+        intro: `In 1927, Werner Heisenberg proved something stranger still: you cannot know a particle's exact position and motion at the same time — not because our instruments are clumsy, but as a built-in limit of reality itself. Even Einstein recoiled, insisting "God does not play dice". But the dice, it seemed, were real. Certainty itself had quietly ended.`,
+        task: `Before measuring, accept that you genuinely cannot predict exactly how this session will go — and treat that not as a problem but as the honest truth of an uncertain world. Then measure without needing to know in advance.`,
+        practice: `Measure while letting go of the need to predict or control the outcome. Notice how it feels to sit with genuine uncertainty rather than expecting a fixed result.`,
+        reflectionPrompt: `How did it feel to measure while accepting that you genuinely couldn't predict the outcome?`,
+        measureSeconds: 150 },
+      { id: 'd4', title: `A Stranger Universe`,
+        intro: `In barely three decades, the clockwork shattered: energy in packets, limits on what can be known, dice at the foundation of things. The lesson wasn't that physics had failed — it was that reality is far stranger and more interesting than the old certainties allowed. Today you simply stand in that strangeness as an observer.`,
+        task: `Approach this measurement with fresh eyes, as if the world were newly revealed to be mysterious and surprising. You're not here to explain anything — just to observe a strange, interesting world.`,
+        practice: `Measure as a curious observer of a stranger-than-expected reality. Notice whether meeting the world as genuinely mysterious changes how you pay attention.`,
+        reflectionPrompt: `Did meeting the world as genuinely strange and mysterious change how you observed?`,
+        measureSeconds: 150 },
+    ],
+  },
+
+  // ==========================================================================
+  //  2 — Observer & Observation  (the most famous, most misunderstood experiment)
+  // ==========================================================================
+  {
+    id: 'observer-and-observation',
+    topic: 'quantum-healing',
+    title: `Observer & Observation`,
+    level: 'Beginner',
+    cover: 'assets/experiments/observer-and-observation.jpg',
+    order: 2,
+    summary: `Five days with the most famous and most misunderstood experiment in all of science — and a careful, honest look at what "the observer" really means, and what it definitely doesn't.`,
+    days: [
+      { id: 'd1', title: `The Famous Experiment`,
+        intro: `Fire tiny particles, one at a time, at a barrier with two slits, and something baffling happens: over many particles they build up a striped pattern that only makes sense if each one somehow behaved like a spreading wave passing through both slits at once. Send them one by one, and they still interfere with themselves. It's real, repeatable, and genuinely strange. Today you sit with that strangeness.`,
+        task: `As you measure, let yourself be struck by the simple oddness that the world allows such a thing — a single particle behaving like a wave. Hold the wheel's motion in that same spirit of "how is any of this possible?".`,
+        practice: `Measure while holding a sense of open wonder at how strange the physical world really is. Notice whether genuine wonder changes the quality of your attention.`,
+        reflectionPrompt: `Did sitting with genuine wonder at the world's strangeness change how you attended?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `What Observation Really Means`,
+        intro: `Here's the famous twist: if you place a detector to see which slit each particle goes through, the wave pattern vanishes and they behave like ordinary specks. It sounds magical — but the precise truth matters. "Observation" here means a physical interaction with a measuring device; the detector disturbs the system whether or not any human is watching. A machine alone gets the same result. No consciousness required.`,
+        task: `Today, observe precisely: notice the difference between simply being aware of the wheel and actively interacting with it. Keep the two clearly separate in your mind as you measure.`,
+        practice: `Measure while distinguishing passive awareness from active, physical interaction. Notice that watching something and physically acting on it are genuinely two different things.`,
+        reflectionPrompt: `Could you feel the difference between merely being aware of something and physically interacting with it?`,
+        measureSeconds: 150 },
+      { id: 'd3', title: `The Beautiful Misunderstanding`,
+        intro: `Because the word "observer" sounds like it means a conscious mind, a seductive idea spread: that consciousness itself creates reality, that simply looking collapses the world into being. It's a beautiful story — and physicists are clear that it's a misreading of what the experiment shows. Today we don't dismiss the idea or believe it; we just notice how easily a technical word grew into a myth.`,
+        task: `As you measure, watch your own mind reach for tidy, dramatic explanations of what you see — and gently notice each time it does. Don't believe or reject; just catch the storytelling impulse.`,
+        practice: `Measure while observing your mind's urge to spin a neat story around what you notice. Notice how naturally and quickly we turn an observation into a grand explanation.`,
+        reflectionPrompt: `How quickly did your mind try to turn what you observed into a grand story?`,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Observation in Everyday Life`,
+        intro: `Step away from physics and observation really does change things — just not mysteriously. You behave differently when you know you're watched; pay attention to your breath and it shifts; look closely at anything and you notice what you'd have missed. These are ordinary effects of attention, quite separate from the quantum kind — and interesting in their own right. Today you explore that everyday observer effect.`,
+        task: `Measure while deliberately observing yourself closely — your posture, breath, focus — and notice whether the simple act of watching yourself changes any of it.`,
+        practice: `Measure while paying unusually close attention to your own state. Notice whether observing yourself, in this ordinary way, changes what you observe.`,
+        reflectionPrompt: `Did closely observing yourself change what you were observing — in this ordinary, non-mysterious way?`,
+        measureSeconds: 150 },
+      { id: 'd5', title: `The Act of Looking`,
+        intro: `Across these days you've met the famous experiment, learned what "observation" really means, watched a myth grow from a word, and felt how attention shapes ordinary life. The honest conclusion is rich enough on its own: observation is genuinely fascinating — in physics and in your own mind — without needing any mystical claim. Before you start, simply decide to look well.`,
+        task: `Make this session purely about the quality of your looking: observe the wheel, and yourself observing it, as clearly and honestly as you can. Nothing to prove — just clean, careful attention.`,
+        practice: `Measure as an act of pure, honest observation. Notice what becomes available when looking itself, done well, is the whole point.`,
+        reflectionPrompt: `What did you notice when the entire point was simply to observe well?`,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  3 — Quantum Ideas in Culture  (how a word escaped the lab)
+  // ==========================================================================
+  {
+    id: 'quantum-ideas-in-culture',
+    topic: 'quantum-healing',
+    title: `Quantum Ideas in Culture`,
+    level: 'Intermediate',
+    cover: 'assets/experiments/quantum-ideas-in-culture.jpg',
+    order: 3,
+    summary: `Five days on a genuinely fascinating human story: how a word from physics escaped the laboratory and became one of the most powerful, slippery and over-used ideas in modern culture.`,
+    days: [
+      { id: 'd1', title: `A Word Escapes the Lab`,
+        intro: `Some words stay put; others break loose and roam. "Quantum" was always a precise, technical term — until it leapt into everyday speech, advertising and spirituality, where it came to mean something more like "mysterious, powerful, beyond the ordinary". Today you notice how a single word can carry wildly different meanings depending on who's holding it.`,
+        task: `As you measure, simply hold the question of what the word "quantum" conjures for you personally — power, mystery, science, nonsense? Notice your own associations without judging them.`,
+        practice: `Measure while observing your own reactions to a loaded word and idea. Notice how much meaning a single word can carry before anyone defines it.`,
+        reflectionPrompt: `What did the word "quantum" actually conjure for you — and where did that come from?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `Physics Meets Mysticism`,
+        intro: `In 1975, the physicist Fritjof Capra published "The Tao of Physics", arguing that modern physics and ancient Eastern mysticism were describing strangely similar worlds. Serious or not, it struck a deep chord and opened a door: for the first time, huge numbers of people began linking quantum ideas with consciousness and spirituality. Today you sit with that very human wish — to connect science and meaning.`,
+        task: `As you measure, notice your own pull, if any, toward wanting the strange and the meaningful to be connected. Don't act on it or dismiss it — just observe the wish itself.`,
+        practice: `Measure while noticing any desire to find deep meaning in what you observe. Notice how strong the human urge is to weave science and significance together.`,
+        reflectionPrompt: `Did you notice a pull to find deeper meaning in what you observed — and how strong was it?`,
+        measureSeconds: 150 },
+      { id: 'd3', title: `Quantum Everything`,
+        intro: `From there it spread everywhere. In 1989 the physician Deepak Chopra popularised "quantum healing"; a 2004 film, "What the Bleep Do We Know!?", spun quantum imagery into spiritual claims; and "quantum" became a marketing word stuck on everything from face cream to self-help. The same eight letters came to mean a hundred different things. Today you watch a word stretch.`,
+        task: `As you measure, treat this simply as a study in human culture: how an idea, once loose, gets reshaped to fit whatever people hope for. Observe with the curiosity of an anthropologist, not a judge.`,
+        practice: `Measure while holding a neutral, curious stance toward how ideas spread and mutate. Notice how easily a single idea can be stretched to mean almost anything.`,
+        reflectionPrompt: `What did you notice about how easily a single idea can be reshaped to fit our hopes?`,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Quantum Flapdoodle`,
+        intro: `Physicists noticed too. The Nobel laureate Murray Gell-Mann coined a wonderful phrase for the misuse of quantum language to dress up unrelated claims: "quantum flapdoodle". The point of the joke isn't to mock people, but to mark a clear line between what the physics actually says and what gets attached to it. Today you practise that clean line — interested, but precise.`,
+        task: `Measure while holding both attitudes at once: genuine openness to what's strange and real, and a calm refusal to be fooled by impressive-sounding words. Curious and clear-eyed together.`,
+        practice: `Measure while balancing open wonder with honest skepticism. Notice whether you can stay fascinated and clear-headed at the same time.`,
+        reflectionPrompt: `Could you stay genuinely fascinated and clear-headed at the same time?`,
+        measureSeconds: 150 },
+      { id: 'd5', title: `Why the Word Spread`,
+        intro: `So why did this one word capture so many imaginations? Perhaps because it seemed to promise exactly what people longed for: that reality is open, that mind matters, that science and meaning might meet. The claims may be loose, but the longing behind them is deeply human and worth understanding. Before you start, set aside both belief and scorn, and simply be curious.`,
+        task: `Measure as a fair-minded observer of the human appetite for mystery and meaning — including your own. Hold the whole phenomenon with warmth and clear eyes at once.`,
+        practice: `Measure while observing, without judgement, the very human hunger for wonder that this word fed. Notice what that longing feels like in yourself.`,
+        reflectionPrompt: `What did you notice about the human hunger for wonder — and do you feel it too?`,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  4 — Possibility & Choice  (the captivating idea of many possibilities)
+  // ==========================================================================
+  {
+    id: 'possibility-and-choice',
+    topic: 'quantum-healing',
+    title: `Possibility & Choice`,
+    level: 'Intermediate',
+    cover: 'assets/experiments/possibility-and-choice.jpg',
+    order: 4,
+    summary: `Five days on one of the most captivating ideas physics ever produced — that reality might hold many possibilities at once — and the very human reason we find open possibilities so irresistible.`,
+    days: [
+      { id: 'd1', title: `Many Possibilities at Once`,
+        intro: `One of quantum theory's strangest features is superposition: before it's measured, a tiny system can behave as if it holds several possibilities at the same time, rather than one definite state. It's a real and useful part of the physics — and also an idea that has fascinated people far beyond the lab, because it hints that things might be more open than they look. Today you hold that sense of openness.`,
+        task: `Before you measure, deliberately hold several possibilities open in your mind about how the session might go, without settling on one. Then begin, carrying that sense of "many ways this could unfold".`,
+        practice: `Measure while keeping a few possible outcomes open rather than fixing on one. Notice how it feels to hold several possibilities at once before things become definite.`,
+        reflectionPrompt: `How did it feel to hold several possibilities open at once before the session settled?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `The Cat in the Box`,
+        intro: `In 1935, Erwin Schrödinger imagined his famous cat — sealed in a box, seemingly both alive and dead until observed. Here's the twist most people miss: he invented it as a joke, a way of showing how absurd it would be to take quantum weirdness literally at human scale. He didn't believe the cat was really both. The most famous quantum image was meant as a warning, not a wonder. Today you enjoy that irony.`,
+        task: `As you measure, notice how tempting it is to take a vivid image literally — and gently hold the cat as Schrödinger meant it, a thought experiment, not a fact. Stay playful and precise.`,
+        practice: `Measure while holding a striking idea lightly, as a thought experiment rather than a literal truth. Notice how easily a vivid image can be mistaken for reality.`,
+        reflectionPrompt: `How easily does a vivid image, like the cat, get mistaken for literal truth?`,
+        measureSeconds: 150 },
+      { id: 'd3', title: `Worlds That Branch`,
+        intro: `In 1957, the physicist Hugh Everett proposed something audacious: maybe nothing ever collapses into a single outcome — maybe every possibility actually happens, each in its own branching world. It remains one of several serious, competing interpretations, and no one knows if it's true. But the idea that every unchosen path is taken somewhere thrills and unsettles us in equal measure. Today you feel its pull.`,
+        task: `Before measuring, imagine for a moment that every way this session could go genuinely happens, somewhere. Then measure this one, here, and notice how it feels to live just this single branch.`,
+        practice: `Measure while playing with the idea of countless branching possibilities, then resting in this one real moment. Notice whether imagining the alternatives changes how you value the actual one.`,
+        reflectionPrompt: `Did imagining all the alternative possibilities change how you valued this actual one?`,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Why We Love Open Doors`,
+        intro: `Our love of possibility isn't only romantic — it's measurable. In one experiment, people played a game with closing doors and irrationally paid real costs just to keep options open, unable to bear watching a door shut, even when it cost them. We're powerfully drawn to the unchosen, the "what if", the path not taken. Today you notice your own pull toward open doors.`,
+        task: `As you measure, notice your own relationship with keeping options open versus committing — do you cling to "maybe", or settle easily? Just observe your tendency without changing it.`,
+        practice: `Measure while noticing how you feel about closing options and committing to one path. Notice whether you, too, are pulled to keep doors open.`,
+        reflectionPrompt: `Are you pulled to keep your options open — and what does committing to one path feel like?`,
+        measureSeconds: 150 },
+      { id: 'd5', title: `Living With Possibility`,
+        intro: `You've held many outcomes at once, met the misunderstood cat, imagined branching worlds, and felt your own love of open doors. Underneath the physics is a very human theme: we live suspended between what could be and what is. Before you start, hold several possibilities for this session, make a gentle prediction among them, then watch the many become one.`,
+        task: `Hold a few real possibilities for how this session might go, quietly predict which will happen, then measure and watch one of them become actual — the "could be" settling into the "is".`,
+        practice: `Measure while noticing the moment possibility becomes actuality, and whether your prediction was among the paths that came true. Notice how it feels when the open settles into the real.`,
+        reflectionPrompt: `How did it feel to watch open possibility settle into one actual outcome — and was your prediction among them?`,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  5 — The Open Mystery  (where the smartest people still disagree)
+  //  The culmination — stays OPEN; closing feeling: "the world is stranger and
+  //  more interesting than I thought." Never a verdict.
+  // ==========================================================================
+  {
+    id: 'the-open-mystery',
+    topic: 'quantum-healing',
+    title: `The Open Mystery`,
+    level: 'Advanced',
+    cover: 'assets/experiments/the-open-mystery.jpg',
+    order: 5,
+    summary: `Five days at the genuine edge of human knowledge — where the world's smartest people still disagree, the deepest questions remain unanswered, and the honest response is wonder rather than certainty.`,
+    days: [
+      { id: 'd1', title: `Nobody Fully Understands`,
+        intro: `Here's a secret the textbooks rarely shout: although quantum physics predicts experiments with breathtaking precision, no one agrees on what it actually means. A recent survey of physicists found no interpretation with majority support — they're split between several rival views. Richard Feynman put it bluntly: "I think I can safely say that nobody understands quantum mechanics". The math works; the meaning is wide open. Today you sit in that honest gap.`,
+        task: `As you measure, hold the strange comfort that even the experts don't fully understand — so you needn't pretend to either. Simply observe, releasing any need to explain what it all means.`,
+        practice: `Measure while resting in the fact that the deepest meaning is genuinely unsettled, for everyone. Notice how it feels to observe without needing to understand.`,
+        reflectionPrompt: `How did it feel to observe freely, without needing to understand what it all means?`,
+        measureSeconds: 150 },
+      { id: 'd2', title: `The Participatory Universe`,
+        intro: `The physicist John Wheeler, who coined the term "black hole", spent his later years on a daring question: what if observation is somehow woven into the fabric of reality — the universe not as a finished thing we look at, but one we take part in? His "participatory universe" remains bold speculation, not established fact, but it comes from one of the great minds of physics, asked in complete seriousness. Today you sit with a giant's open question.`,
+        task: `As you measure, entertain Wheeler's question lightly — not as a belief, but as a wondering: what is the relationship between observing and what's observed? Hold the question, expect no answer.`,
+        practice: `Measure while holding a genuine open question about observer and observed, without resolving it. Notice what it's like to carry a question a great physicist couldn't answer either.`,
+        reflectionPrompt: `What was it like to hold an open question that even a great physicist left unanswered?`,
+        measureSeconds: 180 },
+      { id: 'd3', title: `The Hardest Problem`,
+        intro: `There's a mystery even deeper than quantum physics, sitting right behind your eyes. In 1995 the philosopher David Chalmers named it the "hard problem of consciousness": we can map every neuron, yet still have no idea why any of it should be accompanied by inner experience at all — why there's something it feels like to be you. After decades of brilliant work, this remains genuinely unsolved. Today you meet the mystery directly.`,
+        task: `As you measure, turn attention to the simple, staggering fact that you are experiencing anything at all — the very having of an experience. Don't explain it; just notice that it's happening.`,
+        practice: `Measure while resting in the plain wonder that experience itself exists. Notice what it's like to attend to the fact of your own awareness, rather than its contents.`,
+        reflectionPrompt: `What was it like to notice the sheer fact that you are experiencing anything at all?`,
+        measureSeconds: 180 },
+      { id: 'd4', title: `Sitting With Not Knowing`,
+        intro: `Faced with a real mystery, the mind wants to bolt — either toward a tidy mystical answer or a quick dismissal. Both close the question; both are more comfortable than the truth, which is that we simply don't know yet. Learning to rest in honest not-knowing, without flinching either way, is rare and quietly powerful. Today you practise it.`,
+        task: `As you measure, hold one of the big open questions — about reality, mind, or meaning — and deliberately resist resolving it in either direction. Stay in the honest middle: "I don't know, and that's all right".`,
+        practice: `Measure while dwelling in genuine not-knowing, refusing both easy belief and easy dismissal. Notice how it feels to leave a great question genuinely open.`,
+        reflectionPrompt: `Could you leave a big question genuinely open, without rushing to either belief or dismissal?`,
+        measureSeconds: 210 },
+      { id: 'd5', title: `A Stranger, Richer World`,
+        intro: `Across this whole topic you've watched the clockwork crack, met the misunderstood observer, traced a word's journey into culture, played with possibility, and stood at the edge of what anyone knows. Notice where you've arrived: not at proof of anything mystical, but at something better — a world far stranger, deeper and more interesting than the tidy one you might have assumed. Before you start, simply let yourself be amazed.`,
+        task: `Make this final session an act of pure wonder: measure as someone who has looked hard at reality and found it genuinely astonishing, with the biggest questions still gloriously open.`,
+        practice: `Measure while resting in open, honest amazement at how strange and rich the world turned out to be. Notice what feels different now from when you began this topic.`,
+        reflectionPrompt: `After all this, does the world feel stranger and more interesting than when you started — and how?`,
         measureSeconds: 240 },
     ],
   },
