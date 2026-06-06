@@ -44,6 +44,7 @@ export const TOPICS = [
   { id: 'quantum-healing', title: `Quantum Healing`, icon: '⚛️', cover: 'assets/experiments/quantum-healing.jpg', order: 10 },
   { id: 'yoga', title: `Yoga`, icon: '🪷', cover: 'assets/experiments/yoga.jpg', order: 11 },
   { id: 'reiki', title: `Reiki`, icon: '👐', cover: 'assets/experiments/reiki.jpg', order: 12 },
+  { id: 'aura', title: `Aura`, icon: '✨', cover: 'assets/experiments/aura.jpg', order: 13 },
 ];
 
 export const EXPERIMENTS = [
@@ -2929,6 +2930,271 @@ export const EXPERIMENTS = [
         practice: `Measure from that complete, present state. Notice what, across this whole topic, you actually observed in your own experience — and whether your prediction held.`,
         reflectionPrompt: `After all this, what did you honestly observe in your own experience — and what feels worth keeping?`,
         practiceMinutes: 4,
+        measureSeconds: 240 },
+    ],
+  },
+
+  // ##########################################################################
+  //  AURA TOPIC
+  //  Frame: like Telekinesis / Reiki / Psi — NOT "learn to see auras". Big
+  //  question: why have people for centuries spoken of an "energy field" around
+  //  humans — what did they actually see and experience? About PERCEPTION,
+  //  ATTENTION, human experience and culture. NOT aura reading / diagnosis /
+  //  colour meanings (those appear only as a CULTURAL artefact, never as fact).
+  //  Strong because the same idea recurs across cultures (aura, light body,
+  //  halo, prana, qi, vitality). LEAN on real perception science + cultural
+  //  history, demystifying respectfully (never sneering). FRESH sources, NOT
+  //  repeating Intuition's thin-slicing or Telekinesis's "sense of being
+  //  stared at": Troxler fading & complementary afterimages (a mundane reason a
+  //  steadily-watched person can seem to glow), the halo/nimbus across cultures,
+  //  Ekman's microexpressions & nonverbal leakage, the cross-cultural life-force
+  //  words (qi/prana/ki/pneuma/ruach — many literally meaning "breath"), Kirlian
+  //  photography (electrical, demystified) and synesthesia (some people really
+  //  do see colours around people — neurology, not woo), plus the modern term's
+  //  Theosophy origin. The wheel asks: "do you measure differently after a few
+  //  minutes attending to a person's presence, or your own vitality?" — an
+  //  observing instrument. Suggested arc placement (Csaba): Energy Healing ->
+  //  Reiki -> Aura -> Human Connection -> Intuition (a full library reorder is a
+  //  separate, optional step). Closing ending stays OPEN: "what did you observe?"
+  // ##########################################################################
+
+  // ==========================================================================
+  //  1 — Seeing More Than We Notice  (the eye is not a camera)
+  // ==========================================================================
+  {
+    id: 'seeing-more-than-we-notice',
+    topic: 'aura',
+    title: `Seeing More Than We Notice`,
+    level: 'Beginner',
+    cover: 'assets/experiments/seeing-more-than-we-notice.jpg',
+    order: 1,
+    summary: `Four short days on a surprise about your own eyes: how much you actually see, how much your brain quietly invents, and why a steadily-watched person can seem to shimmer or glow.`,
+    days: [
+      { id: 'd1', title: `The Edges of Sight`,
+        intro: `Your sharp, detailed vision is tiny — only a thumbnail's width at arm's length. Everything else, the whole wide world at the edges, is vague, colour-poor and mostly guessed at by the brain. We almost never notice this, because attention darts to fill the gaps. Today you explore the edges of your own sight.`,
+        task: `Fix your eyes softly on one point ahead, and for about two minutes, without moving them, become aware of how much sits in your peripheral vision — and how blurry and uncertain it really is out there.`,
+        practice: `Measure while keeping that soft, wide awareness of the visual edges. Notice how much of what surrounds you is sensed only vaguely, at the rim of sight.`,
+        reflectionPrompt: `How much of the world around you turned out to be vague and uncertain at the edges of sight?`,
+        practiceMinutes: 2,
+        measureSeconds: 120 },
+      { id: 'd2', title: `When Things Fade`,
+        intro: `Here's a strange, real quirk of the eye: if you hold your gaze perfectly still and attend to the edges, stationary things there begin to fade and vanish — the brain stops bothering with what doesn't change. It's called Troxler's fading, and only the eye's constant tiny movements normally keep the world from dissolving. It's also one honest reason a steadily-watched person's outline can seem to shimmer or shift.`,
+        task: `Fix your gaze on a single point and hold it as still as you can for a couple of minutes, paying attention to whether things at the edges dim, blur or fade. Don't force anything; just watch what your own vision does.`,
+        practice: `Measure while continuing that steady, unmoving gaze. Notice whether parts of your visual field fade or change the longer you hold still.`,
+        reflectionPrompt: `Did anything at the edges of your vision fade or shift when you held your gaze still?`,
+        practiceMinutes: 2,
+        measureSeconds: 120 },
+      { id: 'd3', title: `The Ghost the Eye Paints`,
+        intro: `Stare at a bright colour for a while, then look at a plain white wall, and a glowing patch appears in the opposite colour — a green spot becomes pink, a red one becomes cyan. The eye itself paints these "afterimages"; nothing is really there. Look steadily at a person against a plain background and the same effect can lay a faint coloured glow along their edge. The eye, it turns out, can paint a halo all on its own.`,
+        task: `Try it: rest your eyes on something colourful for thirty seconds or so, then look at a blank pale surface and watch the afterimage bloom and fade. Do this a couple of times before you settle.`,
+        practice: `Measure while remembering that your eye can generate colour and glow with nothing physically there. Notice how convincing these self-made images can be.`,
+        reflectionPrompt: `How real did the eye's self-made afterimage glow seem, even though nothing was there?`,
+        practiceMinutes: 2,
+        measureSeconds: 150 },
+      { id: 'd4', title: `What the Eye Adds`,
+        intro: `Across three days you've found that vision is vague at the edges, that steady things fade, and that the eye paints glows of its own. The lesson isn't that people are fooling themselves — it's that seeing is far stranger and more creative than we assume. Before you start, predict: will paying attention to how you see change the measurement?`,
+        task: `Settle and simply look — at the wheel, the room, your own hands — with fresh awareness that your eye is not a passive camera but an active, inventive organ. Then measure.`,
+        practice: `Measure while holding that awareness of how much your eye and brain add to what you see. Notice whether knowing this changes how you trust your own seeing — and whether your prediction held.`,
+        reflectionPrompt: `Did realising how much your eye adds change how you trust what you see — and was your prediction right?`,
+        practiceMinutes: 2,
+        measureSeconds: 150 },
+    ],
+  },
+
+  // ==========================================================================
+  //  2 — Light Around People  (the halo motif across cultures)
+  // ==========================================================================
+  {
+    id: 'light-around-people',
+    topic: 'aura',
+    title: `Light Around People`,
+    level: 'Beginner',
+    cover: 'assets/experiments/light-around-people.jpg',
+    order: 2,
+    summary: `Five days on a striking pattern in human art: across cultures that never met, people painted light around their holiest and most vital figures. Why does this same image keep appearing?`,
+    days: [
+      { id: 'd1', title: `The Glow of the Sacred`,
+        intro: `Look at sacred art from almost anywhere and you'll find the same thing: a ring or glow of light around the head or body of holy and powerful figures. We call it a halo, and it's so familiar we forget how strange it is that cultures everywhere, independently, reached for the very same image. Today you begin noticing it.`,
+        task: `Before measuring, picture a few images of light around a figure — a saint's halo, a glowing Buddha, a radiant icon — and simply hold the curiosity of why this image is so universal. Then settle.`,
+        practice: `Measure while holding that sense of a very old, very widespread human image. Notice what it stirs to sit with something so many cultures arrived at on their own.`,
+        reflectionPrompt: `What did it stir to consider how universal the image of light-around-a-person really is?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `Halos East and West`,
+        intro: `The halo is everywhere. Christian saints wear golden rings; Buddhist figures sit before flaming aureoles; Hindu deities glow within a prabhamandala, a circle of light; Persian Zoroastrian kings carried the khvarenah, a god-given radiance; even ancient Egyptian and Greek art used it. Different worlds, the same instinct: mark the special with light. Today you stand in that long tradition.`,
+        task: `Before measuring, choose one of these images that appeals to you and hold it in mind — the golden ring, the flames, the circle of light. Let it be a focus, the way a painter once did. Then settle at the wheel.`,
+        practice: `Measure while holding that single image of radiance. Notice whether dwelling on this ancient, shared symbol changes anything in your state.`,
+        reflectionPrompt: `Did focusing on an age-old image of radiance change how you felt?`,
+        measureSeconds: 150 },
+      { id: 'd3', title: `Light as Meaning`,
+        intro: `Maybe the halo isn't mysterious at all — maybe it's meaning made visible. Across every language, light stands for life and goodness: we "brighten up", have a "bright" idea, call someone a "shining" example, fear the "dark". Painting light around a revered figure may simply be showing, in pictures, what we already feel in words. Today you notice light-as-meaning.`,
+        task: `For a couple of minutes before measuring, notice how naturally your mind links light with good, alive and uplifted states — and darkness with the opposite. Just observe the link. Then begin.`,
+        practice: `Measure while aware of that deep link between light and aliveness in your own mind. Notice how automatic the connection between light and vitality really is.`,
+        reflectionPrompt: `How automatic was the link in your mind between light and being alive or well?`,
+        practiceMinutes: 2,
+        measureSeconds: 150 },
+      { id: 'd4', title: `The Light You Project`,
+        intro: `We use the same language for living people every day: someone is "radiant" with health, "glowing" with happiness, "lit up" when they talk about what they love — or "dimmed" and "grey" when low. Long before any theory of auras, humans described each other in light. Today you notice that in yourself.`,
+        task: `Before measuring, recall a time you felt genuinely "lit up" — alive, warm, bright — and let a little of that quality return now. Carry it to the wheel.`,
+        practice: `Measure while holding that felt sense of your own "brightness" or vitality. Notice whether deliberately summoning that lit-up quality changes your inner state.`,
+        reflectionPrompt: `Did summoning your own "lit-up" quality change how you felt while measuring?`,
+        practiceMinutes: 2,
+        measureSeconds: 150 },
+      { id: 'd5', title: `Radiance`,
+        intro: `Across these days you've met the universal halo, traced it East and West, seen light stand for life itself, and felt your own "glow". Whatever the halo is, it sits at the meeting point of perception, meaning and culture — which is far richer than any single explanation. Before you start, predict: will attending to a sense of radiance change your measurement?`,
+        task: `Settle, and hold a quiet sense of radiance — your own vitality, or the warm image of light around a person — without straining for anything. Then measure.`,
+        practice: `Measure while resting in that sense of radiance. Notice how it compares with an ordinary measurement — and whether your prediction held.`,
+        reflectionPrompt: `Did attending to a sense of radiance change the measurement — and was your prediction right?`,
+        practiceMinutes: 3,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  3 — Attention & Presence  (we read others without words)
+  // ==========================================================================
+  {
+    id: 'attention-and-presence',
+    topic: 'aura',
+    title: `Attention & Presence`,
+    level: 'Intermediate',
+    cover: 'assets/experiments/attention-and-presence.jpg',
+    order: 3,
+    summary: `Five days on a real, everyday kind of perception that can feel almost psychic: how much we pick up about another person's state — their mood, their energy — without a single word being spoken.`,
+    days: [
+      { id: 'd1', title: `Reading Without Words`,
+        intro: `A friend walks in and you know, instantly, that something's wrong — before they speak, before you could say how you know. We read each other constantly through a thousand silent signals, and we're remarkably good at it. Some of what people call sensing someone's "energy" may be exactly this. Today you tune that antenna.`,
+        task: `Before measuring, bring to mind one person and their current mood or state, sensing it as fully as you can without words. Then carry that attentive, reading attitude to the wheel.`,
+        practice: `Measure while holding a wordless sense of another person's state. Notice how much you seem to know about someone without anything being said.`,
+        reflectionPrompt: `How much did you seem to sense about another person without a single word?`,
+        practiceMinutes: 2,
+        measureSeconds: 120 },
+      { id: 'd2', title: `Faster Than a Blink`,
+        intro: `True feelings leak. The psychologist Paul Ekman documented "microexpressions" — flickers of real emotion that cross the face in as little as one twenty-fifth of a second, faster than a blink. Most people never consciously catch them, yet we often come away with an accurate "feeling" about someone anyway. We perceive far more than we register. Today you respect that hidden channel.`,
+        task: `Before measuring, recall a time you "just had a feeling" about someone that turned out right — and consider how much your eyes may have caught that your mind never noticed. Then settle.`,
+        practice: `Measure while trusting that you perceive more than you consciously know. Notice what it's like to credit your fast, wordless reading of people.`,
+        reflectionPrompt: `Have you ever "just sensed" something true about someone — and where might that have come from?`,
+        practiceMinutes: 2,
+        measureSeconds: 150 },
+      { id: 'd3', title: `The Whole Body Speaks`,
+        intro: `It isn't only faces. Posture, the set of the shoulders, the rhythm of breath, the energy of a walk — the whole body broadcasts a person's state, and we read it without naming any of it. A tired person, a tense room, an excited friend: we feel these as a whole, instantly. Today you read the body.`,
+        task: `Before measuring, picture someone you know well and "read" their whole-body state — how they hold themselves, move, breathe. Sense the overall impression, then come to the wheel.`,
+        practice: `Measure while holding that whole-body impression of another person. Notice how much a person's state comes through their body, beneath any words.`,
+        reflectionPrompt: `How much of a person's state did you sense from the body alone, with no words?`,
+        practiceMinutes: 2,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Sensing a Presence`,
+        intro: `Sit near someone, even in silence, and you feel something — a presence, an atmosphere, a quality you'd struggle to name. Some of it is those tiny signals; some is simply attention meeting attention. Whatever it is, it's real and worth observing honestly. Today you attend to presence itself.`,
+        task: `Solo: hold in mind, vividly, someone whose presence you know well, and sense the quality of "being with" them. With a partner: sit quietly near each other for a couple of minutes and simply notice the felt sense of their presence. Then measure.`,
+        practice: `Measure while attending to that felt presence, real or remembered. Notice what you actually perceive of another's presence, beneath words and labels.`,
+        reflectionPrompt: `What did you actually perceive of another person's presence, beneath any words?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+      { id: 'd5', title: `What You Pick Up`,
+        intro: `Across these days you've read moods in an instant, trusted what flashes by faster than a blink, sensed states from the whole body, and attended to presence itself. Much of what gets called "seeing someone's aura" may be this — fast, genuine, wordless human perception. Before you start, predict: will attending closely to presence change your measurement?`,
+        task: `Bring it together: hold a clear, attentive sense of another person's presence and state — or your own — and measure from that finely-tuned attention.`,
+        practice: `Measure while holding that full, attentive reading of presence. Notice how it compares with an ordinary, distracted measurement — and whether your prediction held.`,
+        reflectionPrompt: `Did finely attending to presence change the measurement — and was your prediction right?`,
+        practiceMinutes: 3,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  4 — Human Energy Traditions  (every culture's word for aliveness)
+  // ==========================================================================
+  {
+    id: 'human-energy-traditions',
+    topic: 'aura',
+    title: `Human Energy Traditions`,
+    level: 'Intermediate',
+    cover: 'assets/experiments/human-energy-traditions.jpg',
+    order: 4,
+    summary: `Five days on a remarkable coincidence — or is it? — that cultures all over the world, with no contact between them, each invented a word for the invisible "aliveness" that fills a living being.`,
+    days: [
+      { id: 'd1', title: `A Word for Aliveness`,
+        intro: `There's an obvious, mysterious difference between a living body and a still one — a quality of aliveness we can feel but can't quite point to. Every culture noticed it, and every culture made a word for it. Today you start with the plain fact of your own aliveness.`,
+        task: `Before measuring, simply notice that you are alive — the warmth, the breath, the quiet hum of a living body — the very thing every culture tried to name. Sit with it for a moment, then begin.`,
+        practice: `Measure while staying aware of the simple, felt fact of being alive. Notice what that "aliveness" actually feels like when you attend to it directly.`,
+        reflectionPrompt: `When you attended to it directly, what did your own "aliveness" actually feel like?`,
+        practiceMinutes: 2,
+        measureSeconds: 120 },
+      { id: 'd2', title: `Qi, Prana, Pneuma`,
+        intro: `The names are different, the idea is uncannily alike. In China they called it qi; in India, prana; in Japan, ki; in ancient Greece, pneuma; in Hebrew, ruach; across Polynesia, mana. Cultures that never met each arrived at the same notion: an invisible life-energy animating every living thing. Today you sit with that striking convergence.`,
+        task: `Before measuring, pick whichever of these words appeals to you — qi, prana, ki — and simply hold the idea it points to: the felt vitality in you, right now. Then settle.`,
+        practice: `Measure while holding that idea of a living vitality, by whatever name. Notice whether naming and attending to your aliveness changes how present it feels.`,
+        reflectionPrompt: `Did giving your sense of aliveness a name make it feel any more present?`,
+        practiceMinutes: 2,
+        measureSeconds: 150 },
+      { id: 'd3', title: `Life Is Breath`,
+        intro: `Here's the quiet clue hidden in all those words: so many of them literally mean "breath" or "air". Prana, qi, pneuma, ruach, the Latin spiritus — all trace back to breathing. It makes sense: breath is the most visible sign of life, the thing that stops when life does. Cultures everywhere located aliveness in the breath. Today you do too.`,
+        task: `For a couple of minutes before measuring, simply attend to your breath as the ancients did — not controlling it, just feeling it as the living movement it is. Then come to the wheel.`,
+        practice: `Measure while keeping a gentle awareness of your breath as the sign of life moving in you. Notice whether attending to the breath as "aliveness" feels different from ordinary breathing.`,
+        reflectionPrompt: `Did attending to your breath as the sign of life feel different from ordinary breathing?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Your Own Vitality`,
+        intro: `Set the theories aside and the felt thing remains: some days you feel full of life, other days drained and flat. That fluctuating vitality is real and familiar, whatever we call it or however we explain it. Today you simply read your own, honestly.`,
+        task: `Before measuring, take stock of your vitality right now — high or low, warm or tired, bright or dim — without judging it. Just an honest reading of your own aliveness today. Then settle.`,
+        practice: `Measure while staying aware of your current level of vitality. Notice whether your felt aliveness seems to colour the measurement at all.`,
+        reflectionPrompt: `What was your honest level of vitality today — and did it seem to colour the measurement?`,
+        practiceMinutes: 2,
+        measureSeconds: 150 },
+      { id: 'd5', title: `The Felt Sense of Life`,
+        intro: `Across these days you've met the universal word for aliveness, its many names, its root in the breath, and your own changing vitality. Whatever the truth behind qi and prana, the felt sense of being alive is undeniable — and worth paying attention to. Before you start, predict: will measuring while attending to your own vitality feel different?`,
+        task: `Settle, and bring a full, warm awareness to your own aliveness — breath, warmth, the quiet energy of being a living being. Then measure from within that awareness.`,
+        practice: `Measure while resting in the felt sense of your own vitality. Notice how it compares with a distracted, ordinary measurement — and whether your prediction held.`,
+        reflectionPrompt: `Did measuring while attending to your own vitality feel different — and was your prediction right?`,
+        practiceMinutes: 3,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  5 — The Aura Question  (what does "aura" mean today? — stays OPEN)
+  //  The culmination — honest, demystifying-but-respectful; never a verdict.
+  // ==========================================================================
+  {
+    id: 'the-aura-question',
+    topic: 'aura',
+    title: `The Aura Question`,
+    level: 'Advanced',
+    cover: 'assets/experiments/the-aura-question.jpg',
+    order: 5,
+    summary: `Five days on the modern idea of the aura itself — where the word came from, the honest explanations behind it, and the genuine surprise that some people really do see colours around others. Curiosity, not conclusions.`,
+    days: [
+      { id: 'd1', title: `A Surprisingly Modern Word`,
+        intro: `The word "aura" is ancient — in Greek and Latin it simply meant a breeze or breath. But the modern idea of a colourful energy field around the body, with meanings for each colour, is surprisingly recent: it was largely shaped around 1900 by the Theosophists, especially Charles Leadbeater. Like Reiki, much of what feels timeless here is barely a century old. Today you start with that surprise.`,
+        task: `Before measuring, simply sit with the curiosity that a familiar idea has a traceable, recent history — invented and shaped by particular people, not handed down from the dawn of time. Then begin.`,
+        practice: `Measure with that historical curiosity in mind. Notice what it's like to hold a familiar idea as a piece of recent human history rather than ancient truth.`,
+        reflectionPrompt: `Did learning the modern aura idea is barely a century old change how you think about it?`,
+        measureSeconds: 150 },
+      { id: 'd2', title: `Photographing the Invisible`,
+        intro: `In 1939 a Soviet couple, the Kirlians, discovered they could photograph a glowing outline around objects placed on an electrified plate — and "aura photography" was born. The glow is real, but it's a high-voltage electrical effect: change the moisture, sweat or pressure of a fingertip and the glow changes completely. A genuine phenomenon, with an honest, electrical explanation. Today you hold both at once.`,
+        task: `Before measuring, practise holding two true things together: the image is real and striking, and it has an ordinary physical cause. Carry that both-and curiosity, neither gullible nor dismissive, to the wheel.`,
+        practice: `Measure while holding that balanced, curious stance — open to the phenomenon, clear about the explanation. Notice whether you can stay fascinated and clear-headed at once.`,
+        reflectionPrompt: `Could you hold something as both genuinely striking and ordinarily explained at the same time?`,
+        practiceMinutes: 2,
+        measureSeconds: 180 },
+      { id: 'd3', title: `Some People Really Do See Colours`,
+        intro: `Here's the genuine surprise. A small number of people have synesthesia — their senses cross-wire, so they might taste words or see sounds. In one form, they automatically see colours around people, tied to who the person is and how they feel. Researchers think this may explain some sincere "aura seers": for them, the colours are perfectly real, produced by an unusual brain. Not woo — neurology. Today you stay open to how varied human perception is.`,
+        task: `Before measuring, consider how differently another brain might experience the very same room — colours, halos, sensations you'll never have. Hold that wonder at the range of human perception. Then settle.`,
+        practice: `Measure while holding the genuine strangeness that perception itself varies so much between people. Notice what it's like to accept that others may honestly see what you cannot.`,
+        reflectionPrompt: `What was it like to accept that some people genuinely perceive things you never will?`,
+        practiceMinutes: 2,
+        measureSeconds: 180 },
+      { id: 'd4', title: `Belief and Perception`,
+        intro: `One honest thread runs through everything: what we expect and believe shapes what we perceive. Expect a glow and you may well see one; expect nothing and you may miss what's there. This doesn't make experiences false — perception is always part expectation — but it keeps us humble and curious about our own. Today you watch the watcher.`,
+        task: `Before measuring, notice your own expectations about what you might sense or see — then deliberately hold them lightly, neither chasing nor banishing them. Then measure.`,
+        practice: `Measure while keeping an eye on how your expectations shape your perceptions. Notice how much of what you experience might be coloured by what you expected.`,
+        reflectionPrompt: `How much of what you perceived seemed shaped by what you expected to perceive?`,
+        practiceMinutes: 2,
+        measureSeconds: 210 },
+      { id: 'd5', title: `What Did You Observe?`,
+        intro: `Across this whole topic you've explored how the eye invents, how cultures painted light around people, how we read each other without words, how every people named a life-force, and where the modern aura really comes from. Notice what we never did: tell you what an aura "is". That question stays open, and now it's yours. Before you start, predict, then simply observe.`,
+        task: `Settle into a few minutes of open, curious attention — to your own vitality, or to the presence of another — and then measure, gathering everything this topic gave you into one honest observation.`,
+        practice: `Measure as a curious, open-minded observer of your own experience. Notice what, across this whole journey, you genuinely observed — and whether your prediction held.`,
+        reflectionPrompt: `After this whole journey, what did you honestly observe — and what do you now make of the aura question?`,
+        practiceMinutes: 3,
         measureSeconds: 240 },
     ],
   },
