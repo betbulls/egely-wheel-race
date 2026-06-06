@@ -43,6 +43,7 @@ export const TOPICS = [
   { id: 'rituals-and-tradition', title: `Rituals & Human Tradition`, icon: '🕯️', cover: 'assets/experiments/rituals-and-tradition.jpg', order: 9 },
   { id: 'quantum-healing', title: `Quantum Healing`, icon: '⚛️', cover: 'assets/experiments/quantum-healing.jpg', order: 10 },
   { id: 'yoga', title: `Yoga`, icon: '🪷', cover: 'assets/experiments/yoga.jpg', order: 11 },
+  { id: 'reiki', title: `Reiki`, icon: '👐', cover: 'assets/experiments/reiki.jpg', order: 12 },
 ];
 
 export const EXPERIMENTS = [
@@ -2665,6 +2666,268 @@ export const EXPERIMENTS = [
         task: `Bring it together: a few minutes of gentle, breath-led movement to settle, then stillness and gathered attention — the body as the doorway, the quiet mind as the room you step into. Then measure.`,
         practice: `Measure from that complete, quiet practice. Notice what feels most different now about yoga — and about your own attention — from when you began, and whether your prediction held.`,
         reflectionPrompt: `After this whole journey, what do you understand about yoga — and your own attention — that you didn't before?`,
+        practiceMinutes: 4,
+        measureSeconds: 240 },
+    ],
+  },
+
+  // ##########################################################################
+  //  REIKI TOPIC
+  //  Frame: the CALMEST topic — presence. If Telekinesis's rule was "don't
+  //  prove", Reiki's rule is "DON'T HEAL". Big question: why do millions
+  //  practise Reiki worldwide? About ATTENTION, PRESENCE, INTENTION, CONNECTION
+  //  — never treating disease, diagnosis or cures. LESS science (no lab /
+  //  statistics), MORE human story, origin story and first-person experience.
+  //  AVOID: healing diseases, cures, medical claims, miracle stories. Real
+  //  sources, lightly worn: Mikao Usui (1922, Mount Kurama), the five precepts
+  //  (Gokai), Chujiro Hayashi, Hawayo Takata (Reiki to the West), Carl Rogers &
+  //  high-quality listening, the Penfield homunculus, mudras & laying-on-of-
+  //  hands across cultures. The wheel asks: "is it a different experience to
+  //  measure after a few minutes of giving full presence — to yourself or
+  //  someone else?". FIRST topic with optional SOLO / WITH A PARTNER versions
+  //  (esp. experiment 4) — fits the Session & Human Connection direction and a
+  //  future "Partner Experiments" category. Distinct from Energy Healing (which
+  //  was research-y: oxytocin / Harlow / Holt-Lunstad / Hawthorne / placebo /
+  //  Tronick) — here it is the SPECIFIC practice's story, presence and
+  //  phenomenology. Most days carry practiceMinutes. Closing feeling: "whatever
+  //  Reiki is, giving and receiving full presence is real and worth something."
+  // ##########################################################################
+
+  // ==========================================================================
+  //  1 — The Origins of Reiki  (a surprisingly young, very human story)
+  // ==========================================================================
+  {
+    id: 'the-origins-of-reiki',
+    topic: 'reiki',
+    title: `The Origins of Reiki`,
+    level: 'Beginner',
+    cover: 'assets/experiments/the-origins-of-reiki.jpg',
+    order: 1,
+    summary: `Four short days on a surprising story: where Reiki actually came from, who created it, and how a quiet Japanese practice travelled the world — far more recent, and more human, than most people assume.`,
+    days: [
+      { id: 'd1', title: `A Surprisingly Young Tradition`,
+        intro: `Most people assume Reiki is ancient — thousands of years old, lost in the mists of time. In fact it was created just over a century ago, in 1922, by a single Japanese man named Mikao Usui. It has a real founder, a real beginning, and a documented history. Today you start right at the source.`,
+        task: `Before measuring, simply sit with that surprise — that a practice now used worldwide is barely a hundred years old, with one identifiable person behind it. Carry that curiosity to the wheel.`,
+        practice: `Measure with a curious, open mind toward this young tradition. Notice what it's like to approach something as recent human history rather than ancient mystery.`,
+        reflectionPrompt: `Did learning Reiki is barely a century old change how you think about it?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `The Mountain`,
+        intro: `The story goes that in 1922, Mikao Usui climbed Mount Kurama, a sacred mountain near Kyoto, and spent twenty-one days fasting and meditating in search of insight. He described a moment when a great light seemed to enter him — and he named the experience "Reiki", joining two Japanese words: rei, spirit, and ki, life energy. Whatever happened on that mountain, it began everything. Today you borrow a sliver of that stillness.`,
+        task: `Find a quiet spot and sit for about two minutes in deliberate stillness, as Usui did on his mountain — no goal, just quiet attention. Then come to the wheel.`,
+        practice: `Measure carrying that mountain-quiet with you. Notice whether beginning with a few minutes of stillness changes how the measurement feels.`,
+        reflectionPrompt: `Did beginning with a few minutes of deliberate stillness change the measurement?`,
+        practiceMinutes: 2,
+        measureSeconds: 120 },
+      { id: 'd3', title: `Just for Today`,
+        intro: `At the heart of what Usui taught were not techniques but five simple precepts, recited morning and evening: "Just for today, do not be angry. Do not worry. Be grateful. Work honestly. Be kind to every living thing." He said Reiki was half energy and half these principles. Notice how gentle they are — and that they ask only for today. Today you try one.`,
+        task: `Choose one precept — not angry, not worried, grateful, honest, or kind — and hold it lightly for a couple of minutes as your intention, "just for today". Then settle at the wheel.`,
+        practice: `Measure while quietly holding your chosen precept. Notice whether carrying a simple, kind intention changes your inner state.`,
+        reflectionPrompt: `Did holding one gentle precept "just for today" change how you felt?`,
+        practiceMinutes: 2,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Around the World`,
+        intro: `Reiki might have stayed in Japan if not for Hawayo Takata, a Japanese-American woman who learned it in the 1930s and carried it home to Hawaii, then to the American mainland. From her, it spread across the world — today it's practised by enormous numbers of people and offered, for comfort and calm, in hundreds of hospitals. A mountain near Kyoto, and now the whole globe. Before you start, predict: will knowing this human story change how you measure?`,
+        task: `Bring the whole journey to mind — one man, one mountain, one woman who carried it across an ocean, and millions of quiet hands since. Then measure as one more person in that long line.`,
+        practice: `Measure feeling yourself part of a century-long, worldwide human story. Notice whether sensing that lineage changes the experience — and whether your prediction held.`,
+        reflectionPrompt: `Did feeling part of Reiki's worldwide human story change the measurement — and was your prediction right?`,
+        measureSeconds: 150 },
+    ],
+  },
+
+  // ==========================================================================
+  //  2 — The Power of Presence  (the quietest, most underrated human gift)
+  // ==========================================================================
+  {
+    id: 'the-power-of-presence',
+    topic: 'reiki',
+    title: `The Power of Presence`,
+    level: 'Beginner',
+    cover: 'assets/experiments/the-power-of-presence.jpg',
+    order: 2,
+    summary: `Five days on the quietest and most underrated human gift: being fully present with someone — or yourself. No technique, no doing, just complete, kind attention, then the wheel.`,
+    days: [
+      { id: 'd1', title: `Fully Present`,
+        intro: `Think of the rare feeling of someone being completely present with you — no phone, no glancing away, not just waiting for their turn to speak. It's surprisingly uncommon, and unmistakable when it happens. Reiki, stripped of everything else, is largely this: full presence. Today you give it to yourself.`,
+        task: `For about two minutes before measuring, give yourself your own complete, undistracted attention — just being fully here with yourself, the way a good friend would sit with you. Then begin.`,
+        practice: `Measure from that state of full self-presence. Notice whether giving yourself complete attention first changes how the session feels.`,
+        reflectionPrompt: `Did giving yourself a few minutes of full presence change the measurement?`,
+        practiceMinutes: 2,
+        measureSeconds: 120 },
+      { id: 'd2', title: `The Listener Who Changes You`,
+        intro: `The psychologist Carl Rogers spent his life on a quiet discovery: that being met with warm, non-judgmental attention — what he called unconditional positive regard — lets people relax and open in a way nothing else does. Modern research agrees: simply being truly listened to measurably lifts wellbeing. Presence isn't passive; it changes people. Today you offer yourself that quality of attention.`,
+        task: `For about two minutes, attend to yourself the way Rogers described a good listener — warmly, without judging, simply allowing whatever is there. No fixing, just kind attention. Then settle.`,
+        practice: `Measure while holding that warm, non-judgmental attention toward yourself. Notice whether being met kindly, even by yourself, settles something.`,
+        reflectionPrompt: `Did meeting yourself with warm, non-judgmental attention settle something?`,
+        practiceMinutes: 2,
+        measureSeconds: 150 },
+      { id: 'd3', title: `The Gift of Doing Nothing`,
+        intro: `Presence is strange because it isn't doing anything — there's no task, no technique, nothing to achieve. It's purely a quality of attention. That makes it both the simplest thing in the world and, for busy minds, one of the hardest. Today you practise the art of simply being here.`,
+        task: `For about two minutes, do absolutely nothing but be present — not meditating toward a goal, not relaxing on purpose, just here, attentive, with no task at all. Then come to the wheel.`,
+        practice: `Measure while continuing to simply be present, with nothing to do. Notice how it feels to value attention itself, rather than any action.`,
+        reflectionPrompt: `What was it like to offer pure presence, with nothing to do or achieve?`,
+        practiceMinutes: 2,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Presence Without Words`,
+        intro: `Some of the deepest presence happens in silence — sitting with someone you love and saying nothing, yet feeling completely together. Words can even get in the way. Reiki is almost always wordless, and so is today's practice. Today you let silence do the work.`,
+        task: `For two to three minutes, rest in deliberate, attentive silence — no inner commentary, no planning, just quiet presence. If words arise in your mind, let them pass. Then measure.`,
+        practice: `Measure from that wordless, present silence. Notice whether presence without words feels different from your usual busy quiet.`,
+        reflectionPrompt: `Did wordless, attentive silence feel different from your usual quiet?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+      { id: 'd5', title: `Present With Yourself`,
+        intro: `Across these days you've met full presence, warm attention, the gift of doing nothing, and the depth of silence. None of it required any technique — only the willingness to truly be here. Before you start, predict: will a few minutes of full presence change your measurement compared with diving straight in?`,
+        task: `Give yourself three unhurried minutes of complete, kind, wordless presence — everything you've practised this week, gathered into one quiet sitting. Then measure.`,
+        practice: `Measure from that full, gathered presence. Notice how it compares with measuring cold at the start of this topic — and whether your prediction held.`,
+        reflectionPrompt: `How did measuring after full presence compare with the start of this topic — and was your prediction right?`,
+        practiceMinutes: 3,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  3 — Hands & Awareness  (why humans everywhere give the hands meaning)
+  // ==========================================================================
+  {
+    id: 'hands-and-awareness',
+    topic: 'reiki',
+    title: `Hands & Awareness`,
+    level: 'Intermediate',
+    cover: 'assets/experiments/hands-and-awareness.jpg',
+    order: 3,
+    summary: `Five days on a question almost no one asks: why do humans everywhere use their hands to bless, greet, pray and care? A gentle look at the most expressive, sensitive instruments we own.`,
+    days: [
+      { id: 'd1', title: `Why Hands?`,
+        intro: `Notice how often the hands carry meaning: a blessing, a handshake, hands pressed together in prayer, a palm laid gently on a shoulder. Nearly every culture and tradition gives the hands a special role, and Reiki does too. Before exploring why, today you simply notice your own hands as if for the first time.`,
+        task: `Before measuring, look at your hands as though you'd never seen them — their lines, their movement, their constant quiet usefulness. Then rest them, still, and come to the wheel.`,
+        practice: `Measure with a fresh awareness of your hands resting quietly. Notice how it feels to give attention to a part of you that usually just works, unnoticed.`,
+        reflectionPrompt: `What did you notice about your hands when you really looked at them?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `The Brain's Map`,
+        intro: `There's a reason hands feel so expressive: in the brain's map of the body, the hands take up a huge, disproportionate share — far more than their size suggests. Drawn to scale, this "homunculus" has enormous hands, because so much of our sensation and fine control lives there. Your hands are among the most attention-rich instruments you own. Today you feel that richness.`,
+        task: `For about two minutes, rest your full attention in your hands — the subtle warmth, tingling, pulse and aliveness in the palms and fingertips. Just feel, in detail, what's already there. Then measure.`,
+        practice: `Measure while keeping a quiet awareness in your hands. Notice how much sensation your hands hold once you actually pay attention to them.`,
+        reflectionPrompt: `How much could you feel in your hands once you gave them full attention?`,
+        practiceMinutes: 2,
+        measureSeconds: 150 },
+      { id: 'd3', title: `Gestures Across the World`,
+        intro: `Humans have always spoken with their hands. Buddhist and Hindu statues hold precise mudras — gestures meaning peace, fearlessness, teaching. Priests bless with the laying on of hands; San healers of southern Africa lay hands to draw out sickness. Across unconnected cultures, the hand became a vessel for intention. Today you join that very old habit.`,
+        task: `Choose a simple, deliberate hand position — palms together, palms open and upturned, or one hand resting over the heart — and hold it for about two minutes as a gesture of calm intention. Then settle at the wheel.`,
+        practice: `Measure while holding your chosen gesture, or letting your hands rest from it. Notice whether giving your hands a deliberate, meaningful position changes your state.`,
+        reflectionPrompt: `Did holding a deliberate, meaningful hand gesture change how you felt?`,
+        practiceMinutes: 2,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Feeling Through the Hands`,
+        intro: `Hold your palms a few centimetres apart and many people report something — warmth, a faint buzz, a sense of pressure between the hands. We won't claim what it is; the interesting part is simply how much your hands can sense when you ask them to. Today you explore that sensitivity with an open, honest mind.`,
+        task: `For two to three minutes, slowly bring your palms close together, almost touching, and explore whatever you can feel between and within them — warmth, tingling, texture — without deciding in advance what it means. Then measure.`,
+        practice: `Measure while keeping that fine attention in your hands. Notice, honestly, what you actually sense — and what you might be expecting to sense.`,
+        reflectionPrompt: `What did you honestly feel between your hands — and how much was sensation versus expectation?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+      { id: 'd5', title: `Hands and Attention`,
+        intro: `Across these days you've rediscovered your hands, felt their richness, borrowed the world's gestures, and explored what they can sense. The thread is simple: the hands are a powerful place to focus attention — which is exactly why so many traditions use them. Before you start, predict: will a few minutes of hand-focused attention change your measurement?`,
+        task: `Bring it together: about three minutes resting full, calm attention in your hands — held in a gesture or simply open — as a focus for presence. Then measure.`,
+        practice: `Measure from that hand-focused, present state. Notice how it compares with an ordinary measurement — and whether your prediction held.`,
+        reflectionPrompt: `Did focusing attention through your hands change the measurement — and was your prediction right?`,
+        practiceMinutes: 3,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  4 — Giving & Receiving  (the two halves of care; SOLO / WITH A PARTNER)
+  // ==========================================================================
+  {
+    id: 'giving-and-receiving',
+    topic: 'reiki',
+    title: `Giving & Receiving`,
+    level: 'Intermediate',
+    cover: 'assets/experiments/giving-and-receiving.jpg',
+    order: 4,
+    summary: `Five days on the two halves of every caring exchange — giving attention and receiving it — with both a solo version and an optional partner version each day. This is where Reiki meets real connection.`,
+    days: [
+      { id: 'd1', title: `Two Roles`,
+        intro: `Every act of care has two sides: someone gives attention, and someone receives it. Most of us are far more practised at one than the other — quick to help but awkward to be helped, or the reverse. Reiki is built around this giving and receiving. Today you notice which role feels familiar.`,
+        task: `Solo: for about two minutes, alternate — first give yourself calm attention, then let yourself simply receive it — and notice which feels easier. With a partner: decide who gives and who receives first, and sit together quietly for two minutes. Then measure.`,
+        practice: `Measure afterward, noticing which role — giving or receiving — felt more natural to you. Notice the difference between the two.`,
+        reflectionPrompt: `Which felt more natural to you — giving attention or receiving it?`,
+        practiceMinutes: 2,
+        measureSeconds: 120 },
+      { id: 'd2', title: `Receiving`,
+        intro: `Being on the receiving end of someone's calm, full attention — with nothing asked of you in return — is surprisingly rare, and surprisingly affecting. Many people find it harder to receive than to give. Today you practise simply receiving.`,
+        task: `Solo: for two to three minutes, vividly recall or imagine being held in someone's warm, complete attention, and let yourself fully receive it. With a partner: be the receiver — sit quietly while your partner offers you calm, silent attention. Then measure.`,
+        practice: `Measure while still in the receiver's seat. Notice what it feels like to simply be given attention, with nothing to do in return.`,
+        reflectionPrompt: `What was it like to simply receive attention, asking nothing of yourself?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+      { id: 'd3', title: `Giving`,
+        intro: `Here's something research on listening keeps finding: the giver often benefits as much as the receiver. Offering someone your full, calm attention tends to settle you, too — generosity with presence runs both ways. Today you sit on the giving side.`,
+        task: `Solo: for two to three minutes, hold someone you care about in mind and quietly send them calm, warm attention. With a partner: be the giver — offer your partner steady, silent, caring attention, asking nothing back. Then measure.`,
+        practice: `Measure while still giving that calm attention. Notice whether offering presence to another settles something in you, too.`,
+        reflectionPrompt: `Did offering calm attention to someone else change how you felt?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+      { id: 'd4', title: `The Exchange`,
+        intro: `When giving and receiving flow back and forth — each person taking both roles — something settles in everyone involved. The exchange itself, not either half alone, seems to be where the warmth lives. Today you let it flow both ways.`,
+        task: `Solo: for about three minutes, gently alternate between giving yourself attention and receiving it, letting the two flow into each other. With a partner: take turns — a couple of minutes giving, then swap — so you each both give and receive. Then measure.`,
+        practice: `Measure afterward, holding the sense of that back-and-forth exchange. Notice whether moving through both roles feels different from staying in just one.`,
+        reflectionPrompt: `Did experiencing both giving and receiving feel different from just one role?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+      { id: 'd5', title: `Together or Alone`,
+        intro: `Across these days you've found your familiar role, practised receiving, practised giving, and let them flow together. Whether alone or with another person, the heart of it is the same: full, caring attention, freely given and openly received. Before you start, predict: will a giving-and-receiving practice change your measurement? Then choose your version.`,
+        task: `Solo: three minutes of calm attention flowing between giving to yourself and receiving from a remembered connection. With a partner: three minutes of shared, alternating giving and receiving in quiet presence. Then measure.`,
+        practice: `Measure from that full exchange of presence. Notice how it compares with an ordinary, unconnected measurement — and whether your prediction held.`,
+        reflectionPrompt: `How did measuring after giving and receiving presence compare with an ordinary one — and was your prediction right?`,
+        practiceMinutes: 3,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  5 — The Reiki Experience  (not "is it true?" but "what do you observe?")
+  //  The culmination — neutral phenomenology; never a healing claim.
+  // ==========================================================================
+  {
+    id: 'the-reiki-experience',
+    topic: 'reiki',
+    title: `The Reiki Experience`,
+    level: 'Advanced',
+    cover: 'assets/experiments/the-reiki-experience.jpg',
+    order: 5,
+    summary: `Five days on the honest question at the centre of it all: not "is Reiki true?" but "what do people actually experience — and what can you observe in yourself?" Curiosity, not conclusions.`,
+    days: [
+      { id: 'd1', title: `What People Report`,
+        intro: `Ask people what they feel during Reiki and the answers vary widely: warmth, tingling in the hands, a deep calm, a floating heaviness — and sometimes nothing much at all. We're not here to decide who's right or what it "really" is. We're here for the more interesting question: what do people actually experience? Today you stay curious.`,
+        task: `Before measuring, set aside any verdict — believer or skeptic — and adopt the stance of a curious observer of human experience. Carry that open neutrality to the wheel.`,
+        practice: `Measure as a neutral, curious observer rather than someone trying to prove or disprove anything. Notice how that open stance feels compared with needing an answer.`,
+        reflectionPrompt: `What was it like to stay genuinely curious, rather than for or against?`,
+        measureSeconds: 150 },
+      { id: 'd2', title: `Your Own Report`,
+        intro: `The only experience you can truly study is your own. So today you become both the practitioner and the observer: you'll spend a few quiet minutes in presence and gentle hand attention, then report — honestly — what you actually noticed, whatever it was.`,
+        task: `For about three minutes, sit in calm presence with your hands resting open or near your body, then simply observe what you feel — warmth, tingling, calm, restlessness, or nothing in particular. There's no right answer. Then measure.`,
+        practice: `Measure while honestly noting your own experience, without inflating or dismissing it. Notice what you genuinely felt, as plainly as you can.`,
+        reflectionPrompt: `What did you genuinely notice — honestly, without adding to or subtracting from it?`,
+        practiceMinutes: 3,
+        measureSeconds: 180 },
+      { id: 'd3', title: `Expectation and Experience`,
+        intro: `Here's an honest complication worth holding: what we expect to feel shapes what we do feel. If you expect warmth, warmth is more likely to appear. This doesn't make an experience fake — your experience is real either way — but it keeps us honest and curious about where our sensations come from. Today you watch both at once.`,
+        task: `For about three minutes, sit in quiet presence — but this time notice your expectations alongside your sensations: what did you anticipate feeling, and what actually arrived? Then measure.`,
+        practice: `Measure while holding both your expectations and your actual experience side by side. Notice how much of what you feel might be shaped by what you expected.`,
+        reflectionPrompt: `How much of what you felt seemed shaped by what you expected to feel?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+      { id: 'd4', title: `The Calm That Remains`,
+        intro: `Whatever else people disagree about, one thing comes up again and again in Reiki accounts: a calm that lingers afterward. You don't need to explain it to notice it — and noticing the aftereffect is its own honest experiment. Today you look for what remains.`,
+        task: `For three to four minutes, give yourself a full, quiet practice of presence and hand attention — then stop, and simply notice the state you're left in. Then measure from there.`,
+        practice: `Measure in the quiet that follows the practice. Notice whether any calm or shift lingers afterward — and how long it stays.`,
+        reflectionPrompt: `Did any calm or change linger after the practice — and what was it like?`,
+        practiceMinutes: 4,
+        measureSeconds: 210 },
+      { id: 'd5', title: `What You Observed`,
+        intro: `Across this whole topic you've met Reiki's young history, its precepts, the power of presence, the language of hands, and the dance of giving and receiving. Through all of it we never asked whether Reiki is "true" — only what you could honestly observe. Before you start, predict, then gather everything into one last honest session. Whatever you conclude, the presence and the care were real.`,
+        task: `Bring it together: a few quiet minutes of full presence, hands and calm intention — toward yourself, or with a partner, between you — then settle and measure.`,
+        practice: `Measure from that complete, present state. Notice what, across this whole topic, you actually observed in your own experience — and whether your prediction held.`,
+        reflectionPrompt: `After all this, what did you honestly observe in your own experience — and what feels worth keeping?`,
         practiceMinutes: 4,
         measureSeconds: 240 },
     ],
