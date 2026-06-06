@@ -39,6 +39,7 @@ export const TOPICS = [
   { id: 'crystal-healing', title: `Crystal Healing`, icon: '💎', cover: 'assets/experiments/crystal-healing.jpg', order: 5 },
   { id: 'kundalini-energy', title: `Kundalini Energy`, icon: '🌀', cover: 'assets/experiments/kundalini-energy.jpg', order: 6 },
   { id: 'psi-research', title: `Psi Research`, icon: '🔬', cover: 'assets/experiments/psi-research.jpg', order: 7 },
+  { id: 'intuition', title: `Intuition`, icon: '🧭', cover: 'assets/experiments/intuition.jpg', order: 8 },
 ];
 
 export const EXPERIMENTS = [
@@ -1671,6 +1672,247 @@ export const EXPERIMENTS = [
         task: `Run one last, complete session as the researcher you've become: a prediction, careful observation, honest notes — and then let the verdict stay open, exactly as the real story does.`,
         practice: `Measure, and rather than reaching for an answer, rest in the honest, unfinished question. Notice what it's like to end not with a conclusion, but with genuine, curious uncertainty.`,
         reflectionPrompt: `After all this, what do you actually think — and can you hold the question open, the way the science still does?`,
+        measureSeconds: 240 },
+    ],
+  },
+
+  // ##########################################################################
+  //  INTUITION TOPIC
+  //  Frame: the most PERSONAL topic — SELF-KNOWLEDGE. Not "is intuition
+  //  supernatural" but "how do we sense and use our hunches?". Big question:
+  //  where does the feeling of "I just know this" come from — what happens when
+  //  we know something before we can explain it? Roles so far: Telekinesis =
+  //  focus, Meditation = awareness, Energy Healing = connection, Crystal Healing
+  //  = meaning, Kundalini = inner experience, Psi Research = the researcher,
+  //  Intuition = SELF-KNOWLEDGE. The reader should keep recognising themselves
+  //  ("oh, that's how I work too"), never feel lectured. NOT paranormal — no
+  //  psychic powers, prophecy or future prediction; "prediction" here always
+  //  means a hunch about the session, to test. The wheel's predict->observe
+  //  mechanic fits perfectly: most days start "make a prediction", then
+  //  "observe what actually happens". Real research, lightly worn: thin-slicing
+  //  (Ambady/Gladwell), somatic markers & the Iowa Gambling Task (Damasio), the
+  //  gut "second brain", recognition-primed decision (Gary Klein), Gigerenzer's
+  //  gut feelings, Kahneman's System 1/2 & availability heuristic, the
+  //  Kahneman-Klein conditions for intuitive expertise. ~2 "wow" sources per
+  //  experiment; closing feeling: "I understand my own mind better."
+  // ##########################################################################
+
+  // ==========================================================================
+  //  1 — First Impressions  (how much do we decide in the first seconds?)
+  // ==========================================================================
+  {
+    id: 'first-impressions',
+    topic: 'intuition',
+    title: `First Impressions`,
+    level: 'Beginner',
+    cover: 'assets/experiments/first-impressions.jpg',
+    order: 1,
+    summary: `Four short days on the snap judgments you make before you can think — how much your mind decides in the first couple of seconds, and how often it is onto something.`,
+    days: [
+      { id: 'd1', title: `The First Two Seconds`,
+        intro: `Walk into a room, meet a stranger, hear a new song — and within a second or two, you've already formed an opinion. You didn't reason your way there; it simply arrived. We make a surprising number of judgments this fast, long before we could explain them. Today you catch your own snap judgments in the act, with the wheel.`,
+        task: `Before you switch on the wheel, make a quick gut prediction about the session — will it feel steady or restless, better or worse than usual? Don't deliberate; take the first answer that pops up. Then begin.`,
+        practice: `Measure while holding the snap prediction you made, and simply observe what actually happens. Notice how your instant first impression compares with how the session truly unfolds.`,
+        reflectionPrompt: `How close was your instant first impression to how the session actually went?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `Thin Slices`,
+        intro: `In one striking study, people watched just two seconds of a teacher on silent video — no sound, no context — and their snap ratings closely matched what students thought after a whole semester. Two seconds held almost as much as four months. Malcolm Gladwell called this "thin-slicing": the mind reads a tiny sample and quietly catches the pattern. Today you trust a thin slice of your own.`,
+        task: `Glance at the wheel for just a moment as it starts, and let an immediate impression form — without studying it. Make that snap read your prediction for the session, then settle in.`,
+        practice: `Measure while observing whether your two-second impression held up over the full session. Notice how much information your mind seemed to pull from almost nothing.`,
+        reflectionPrompt: `Did a two-second impression turn out to carry more than you'd expect?`,
+        measureSeconds: 120 },
+      { id: 'd3', title: `Faster Than Thought`,
+        intro: `Here's the strange order of things: the judgment usually comes first, and the reasons arrive afterward. We feel sure, then our mind politely supplies an explanation that sounds logical — as if we'd reasoned our way there all along. Noticing this gap is oddly freeing. Today you watch the feeling beat the reasoning.`,
+        task: `As the wheel runs, catch your very first reaction to how it's going — then notice the explanation your mind rushes in to justify it. Watch which one actually came first.`,
+        practice: `Measure while separating the instant feeling from the after-the-fact reasoning. Notice whether your gut reaction tends to arrive before any logical explanation for it.`,
+        reflectionPrompt: `Did your gut reaction arrive before the reasons your mind gave for it?`,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Your First Read`,
+        intro: `Over three days you've met your snap judgments, trusted a thin slice, and watched feeling outrun reason. None of this is mystical — it's just your brain doing what it does best, reading patterns at speed. Before you start, make your boldest quick prediction yet about this session, and see how good your first read really is.`,
+        task: `Take one fast, confident gut prediction about the whole session — set it before you think twice. Then measure, treating it as a small experiment in trusting your first read.`,
+        practice: `Measure while comparing your confident first read against what actually happens. Notice how reliable your instant impressions have been across these four days.`,
+        reflectionPrompt: `Across these four days, how reliable did your instant first impressions turn out to be?`,
+        measureSeconds: 150 },
+    ],
+  },
+
+  // ==========================================================================
+  //  2 — Gut Feelings  (why does a decision feel right or wrong in the body?)
+  // ==========================================================================
+  {
+    id: 'gut-feelings',
+    topic: 'intuition',
+    title: `Gut Feelings`,
+    level: 'Beginner',
+    cover: 'assets/experiments/gut-feelings.jpg',
+    order: 2,
+    summary: `Five days on the oldest advisor you have — the body — and the real reasons a decision can feel right or wrong in your chest or stomach before you can say why.`,
+    days: [
+      { id: 'd1', title: `A Feeling in the Body`,
+        intro: `Notice the language we use: a "gut" feeling, a decision that sits heavy on the chest, a choice that makes us uneasy. These aren't only metaphors — we genuinely feel our hunches somewhere in the body. Each of us has a private map of where yes and no live. Today you start drawing yours.`,
+        task: `Before measuring, bring a small real decision to mind — anything — and notice where in your body the leaning shows up: chest, stomach, shoulders, throat. Then carry that body-awareness to the wheel.`,
+        practice: `Measure while staying tuned to bodily signals — tension, ease, a flutter, a settling. Notice where in your body your sense of "this is going well" or "not" actually shows up.`,
+        reflectionPrompt: `Where in your body did your sense of how it was going actually appear?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `The Body Decides First`,
+        intro: `In a famous card-game experiment, people's hands began to sweat as they reached toward a risky deck — and the sweating started before they consciously knew which decks were bad. Their bodies had worked out the danger and were sounding a quiet alarm ahead of the mind. The neuroscientist Antonio Damasio called these bodily warnings "somatic markers". Today you listen for yours.`,
+        task: `Before you start, make a prediction about the session, then notice any faint bodily signal that comes with it — a tightening, a lift, a hesitation. Allow that the body may be reading something first.`,
+        practice: `Measure while watching for the body's early signals, the ones that arrive before any clear thought. Notice whether your body seemed to know how things were going before your mind did.`,
+        reflectionPrompt: `Did your body seem to sense how things were going before your mind put it into words?`,
+        measureSeconds: 150 },
+      { id: 'd3', title: `The Second Brain`,
+        intro: `It turns out "gut feeling" is almost literal: your digestive tract is lined with around five hundred million neurons — a network so rich that scientists call it the "second brain". It's in constant conversation with your head through a thick nerve highway. No wonder big decisions are felt in the belly. Today you check in with that second brain.`,
+        task: `With the wheel running, rest your attention gently on your stomach and gut, the way you'd listen for a faint sound. Make a soft prediction about the session and notice whether your gut seems to agree or disagree.`,
+        practice: `Measure while keeping a light awareness on the gut, that second brain. Notice whether it offers any quiet signal of its own as the session unfolds.`,
+        reflectionPrompt: `Did your gut offer any quiet signal of its own during the session?`,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Listening Below Words`,
+        intro: `The hard part of a gut feeling is that it speaks before language — a lean, a pull, a quiet no, with no sentence attached. We often talk right over it, because words are louder than sensations. Learning to listen below the words is a real skill. Today you practise it.`,
+        task: `Before measuring, ask yourself a simple yes-or-no question about the session and wait for the body's answer before any words form. Take the first wordless lean as your prediction, then begin.`,
+        practice: `Measure while trusting that wordless lean, noticing it without rushing to explain it. Notice how it feels to follow a signal that has no sentence attached to it.`,
+        reflectionPrompt: `What was it like to follow a wordless signal, before any explanation arrived?`,
+        measureSeconds: 150 },
+      { id: 'd5', title: `Your Gut, Read Honestly`,
+        intro: `You've mapped where feelings live, met the body's early-warning system, listened to the second brain, and heard the signal below words. None of it is magic — it's your body processing more than your conscious mind can keep up with. Before you start, make a clear gut prediction, and read your body as honestly as you can.`,
+        task: `Set one honest gut prediction about the session, noting exactly how it feels in the body. Then measure, and afterward check the body's read against what actually happened.`,
+        practice: `Measure while tracking your body's signals from start to finish. Notice how trustworthy your gut feelings turned out to be over these five days — honestly, hits and misses both.`,
+        reflectionPrompt: `Honestly, how trustworthy did your gut feelings turn out to be this week?`,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  3 — Pattern Recognition  (what the brain notices before it reaches you)
+  // ==========================================================================
+  {
+    id: 'pattern-recognition',
+    topic: 'intuition',
+    title: `Pattern Recognition`,
+    level: 'Intermediate',
+    cover: 'assets/experiments/pattern-recognition.jpg',
+    order: 3,
+    summary: `Five days on the engine under intuition: a brain that has quietly memorised thousands of patterns, and recognises them long before you can say what it saw.`,
+    days: [
+      { id: 'd1', title: `Knowing Without Knowing How`,
+        intro: `A nurse senses a patient is about to crash before the monitors agree. A parent knows their child's cry means trouble. A mechanic hears the engine and just knows. None of them can fully explain it — yet they're often right. This is intuition as recognition, built quietly from experience. Today you look for your own version.`,
+        task: `Before measuring, think of one area where you just know things — your work, driving, cooking, people. Bring that same recognising mind to the wheel, and make a prediction from it.`,
+        practice: `Measure while trusting your experienced eye, the part of you that recognises without explaining. Notice whether a practised, recognising attention reads the session differently.`,
+        reflectionPrompt: `Where in your life do you "just know" things — and could you bring that same sense here?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `The Firefighter's Sixth Sense`,
+        intro: `A fire commander once ordered his team out of a burning building moments before the floor collapsed — he called it a sixth sense. The researcher Gary Klein studied hundreds of such cases and found something less spooky but more amazing: the commander's trained mind had read subtle wrong-feeling cues — too quiet, too hot — and raised the alarm before he could explain it. Expertise, not magic. Today you trust your trained cues.`,
+        task: `As the wheel runs, watch for the faint "something's off" or "this is right" signals that experience sends up. Don't analyse them — just note them, the way the commander noticed without yet knowing why.`,
+        practice: `Measure while staying alert to those quiet expert cues. Notice whether your mind flags anything as off or right before you can explain the reason.`,
+        reflectionPrompt: `Did your mind flag anything as "off" or "right" before you could explain why?`,
+        measureSeconds: 150 },
+      { id: 'd3', title: `Built From Experience`,
+        intro: `Here's the reassuring truth about intuition: it isn't a gift some people are born with — it's compressed experience. Every situation you've lived through is quietly filed away, and intuition is your brain matching now against all of it, instantly. Which means your hunches are most trustworthy exactly where you have the most experience. Today you lean on your own.`,
+        task: `Before you measure, recall how the wheel has felt across your past sessions, then let that accumulated experience shape a prediction for today. Trust the pattern you've built.`,
+        practice: `Measure while drawing on everything you've learned about the wheel so far. Notice whether your growing experience makes your predictions sharper than at the very start.`,
+        reflectionPrompt: `Did your accumulated experience make today's prediction sharper than your early ones?`,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Less Can Be More`,
+        intro: `The psychologist Gerd Gigerenzer found something counter-intuitive: simple gut rules often beat complicated analysis. Ask someone who knows little about sport which team will win, and "pick the one you've heard of" is right surprisingly often. Sometimes knowing less, and trusting recognition, decides better than drowning in detail. Today you let simple recognition lead.`,
+        task: `Before measuring, make a fast prediction using only your gut sense of recognition — no weighing of pros and cons, just the simple first answer. Then begin.`,
+        practice: `Measure while trusting that lean, simple recognition rather than over-thinking. Notice whether a quick, uncluttered hunch reads the session as well as careful analysis would.`,
+        reflectionPrompt: `Did a quick, simple hunch read the session as well as careful analysis might have?`,
+        measureSeconds: 150 },
+      { id: 'd5', title: `Your Trained Eye`,
+        intro: `You've found where you just know, met the firefighter's trained alarm, seen that intuition is stored experience, and let simple recognition lead. Together they reveal intuition as a skill you've been building your whole life. Before you start, make a prediction straight from your trained eye, and see how good it has become.`,
+        task: `Make one confident prediction drawn purely from your built-up sense of the wheel, then measure. Treat it as a test of the trained eye you've been sharpening all week.`,
+        practice: `Measure while comparing your experienced prediction against the outcome. Notice how much your pattern-reading has sharpened since the start of this topic.`,
+        reflectionPrompt: `How much sharper has your pattern-reading become since this topic began?`,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  4 — Signals & Noise  (when to trust the gut, and when not to)
+  // ==========================================================================
+  {
+    id: 'signals-and-noise',
+    topic: 'intuition',
+    title: `Signals & Noise`,
+    level: 'Intermediate',
+    cover: 'assets/experiments/signals-and-noise.jpg',
+    order: 4,
+    summary: `Five days on the most useful intuition skill of all: telling a true quiet signal apart from the loud static of fear, habit and bias — knowing when to trust the gut and when not to.`,
+    days: [
+      { id: 'd1', title: `Two Speeds of Mind`,
+        intro: `Daniel Kahneman described the mind as two systems. One is fast, automatic and intuitive — it reads faces, senses danger, jumps to conclusions. The other is slow, effortful and logical — it checks, calculates and doubts. Intuition is the fast one talking; wisdom is knowing when to let the slow one answer. Today you meet both.`,
+        task: `Before measuring, make a fast intuitive prediction — then pause and ask your slower, deliberate mind whether it agrees. Notice the two voices, then begin.`,
+        practice: `Measure while listening for both minds: the quick hunch and the slow second-guess. Notice which one you tend to trust, and whether they agreed today.`,
+        reflectionPrompt: `Which mind did you trust more today — the fast hunch or the slow check?`,
+        measureSeconds: 120 },
+      { id: 'd2', title: `When the Gut Misleads`,
+        intro: `Intuition isn't always wise. Ask people what's more dangerous, a shark or a vending machine, and most say shark — though vending machines harm far more people. Vivid, scary, recent images come to mind easily, so we mistake "easy to imagine" for "likely to happen". Kahneman called this the availability trap, and it's fear wearing intuition's clothes. Today you spot the difference.`,
+        task: `Before measuring, notice any prediction driven by worry or a vivid recent memory rather than calm sensing — that's likely noise, not signal. Set it aside, and make a quieter prediction instead.`,
+        practice: `Measure while watching for fear dressed up as a hunch. Notice the difference between a calm intuition and an anxious one demanding to be heard.`,
+        reflectionPrompt: `Could you tell a calm intuition apart from an anxious, fearful one?`,
+        measureSeconds: 150 },
+      { id: 'd3', title: `Fear or Intuition?`,
+        intro: `Real intuition and plain fear can feel maddeningly similar — both arrive as a bodily no. But they tend to have different textures: intuition is often quiet, steady, almost neutral, while fear is loud, urgent and full of vivid stories. Learning their different voices is one of the most useful things you can do. Today you compare them.`,
+        task: `Before you start, summon a genuine quiet hunch and, separately, a worried fearful thought, and feel how each sits in the body. Then make your prediction from the quiet one, not the loud one.`,
+        practice: `Measure while keeping the quiet signal and the loud fear distinct. Notice how a true hunch feels different in the body from anxiety.`,
+        reflectionPrompt: `How did a quiet hunch feel different in your body from loud anxiety?`,
+        measureSeconds: 150 },
+      { id: 'd4', title: `The First-Instinct Trap`,
+        intro: `"Always trust your first instinct" is popular advice — and often wrong. When researchers studied students changing exam answers, switches went from wrong to right about twice as often as the reverse; second thoughts usually helped. We just remember the painful times we changed a right answer and felt burned. The honest lesson: the gut is a brilliant first draft, not the final word. Today you let yours be revised.`,
+        task: `Before measuring, make your gut prediction — then deliberately give your slower mind a chance to revise it, and notice whether it wants to. Go with whichever feels genuinely truer.`,
+        practice: `Measure while staying open to revising your first instinct rather than clinging to it. Notice whether your second thought improved on your first, or not.`,
+        reflectionPrompt: `Did your second thought improve on your first instinct — or was the gut right after all?`,
+        measureSeconds: 150 },
+      { id: 'd5', title: `Sorting Signal From Noise`,
+        intro: `You've met the two minds, caught fear dressed as a hunch, learned the quiet texture of true intuition, and seen that first instincts can be wrong. Together they make a single skill: separating the real signal from the noise around it. Before you start, make a prediction — but this time, sort it: is this a calm signal, or just noise?`,
+        task: `Make a prediction, then judge it honestly: does it feel like a clean, quiet signal, or like fear, habit or wishful thinking? Commit to the version you trust, then measure.`,
+        practice: `Measure while holding your sorted prediction, signal kept and noise discarded. Notice whether filtering out the noise made your intuition more accurate.`,
+        reflectionPrompt: `Did filtering out the noise make your intuition more accurate this time?`,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  5 — Trusting Yourself  (when, and how much, to rely on your own hunches)
+  //  The culmination — closing feeling: "I understand my own mind better."
+  // ==========================================================================
+  {
+    id: 'trusting-yourself',
+    topic: 'intuition',
+    title: `Trusting Yourself`,
+    level: 'Advanced',
+    cover: 'assets/experiments/trusting-yourself.jpg',
+    order: 5,
+    summary: `Five days bringing it together — learning the honest conditions under which your own hunches are worth trusting, and how to grow an inner compass you can actually rely on.`,
+    days: [
+      { id: 'd1', title: `When Intuition Is Trustworthy`,
+        intro: `Two researchers who usually disagreed — Daniel Kahneman, the great skeptic of intuition, and Gary Klein, its great champion — sat down together and, remarkably, agreed on a rule. Intuition can be trusted when two things are true: the situation is regular enough to hold real patterns, and you've had enough practice with honest feedback to learn them. Outside those conditions, a hunch is just a guess. Today you ask where you meet that bar.`,
+        task: `Before measuring, consider: with the wheel, have you had enough honest practice for real intuition to form? Make a prediction, holding that question lightly, then begin.`,
+        practice: `Measure while noticing whether your hunches about the wheel rest on real, repeated experience — or on too little to go on. Notice how that changes your confidence.`,
+        reflectionPrompt: `Do your hunches about the wheel rest on real experience yet — or still too little to trust?`,
+        measureSeconds: 150 },
+      { id: 'd2', title: `Confidence Isn't Accuracy`,
+        intro: `Here's the humbling catch the same researchers found: how confident a hunch feels tells you almost nothing about whether it's right. A strong gut feeling can be dead wrong, and a faint one spot on. Certainty is an emotion, not evidence. The honest intuitive learns to hold even strong hunches lightly. Today you separate confidence from accuracy.`,
+        task: `Before measuring, make a prediction and rate how confident you feel about it. Then measure, and afterward compare your confidence with how accurate you actually were.`,
+        practice: `Measure while paying attention to your level of certainty. Notice whether your most confident predictions were really your most accurate ones — or not.`,
+        reflectionPrompt: `Were your most confident predictions actually your most accurate ones?`,
+        measureSeconds: 180 },
+      { id: 'd3', title: `Calibrating the Inner Compass`,
+        intro: `Intuition gets better the same way any skill does: predict, check the result, and let the gap teach you. Every honest comparison of what you felt against what happened quietly tunes the instrument. This is exactly why you've been predicting before measuring all along. Today you calibrate on purpose.`,
+        task: `Make a clear prediction, measure, and then study the gap between them as useful information, not as a score to feel good or bad about. Let the feedback adjust your inner compass.`,
+        practice: `Measure while treating the difference between hunch and outcome as a lesson. Notice whether deliberately checking your predictions sharpens the next one.`,
+        reflectionPrompt: `Did honestly checking your prediction against reality sharpen your next hunch?`,
+        measureSeconds: 180 },
+      { id: 'd4', title: `Your Own Track Record`,
+        intro: `You don't have to trust your intuition in general — you can trust it where it has earned trust. Most of us have areas where the gut is reliably right, and others where it leads us astray, and the wisdom is knowing which is which. Honest self-knowledge beats blanket confidence or blanket doubt. Today you take stock.`,
+        task: `Before measuring, recall where your wheel predictions have tended to land — close, or wide? Let your real track record, not hope, shape today's prediction. Then measure.`,
+        practice: `Measure while grounding your confidence in your actual history of hits and misses. Notice how it feels to trust your intuition exactly as much as it has earned — no more, no less.`,
+        reflectionPrompt: `Could you trust your intuition exactly as much as your track record has earned?`,
+        measureSeconds: 210 },
+      { id: 'd5', title: `Knowing Your Own Mind`,
+        intro: `Across this whole topic you've watched your snap judgments, listened to your body, recognised your trained patterns, sorted signal from noise, and learned when your gut is worth trusting. Notice what you did not learn: a mystical power. What you gained is quieter and better — a clearer sense of how your own mind actually works. Before you start, make one last prediction, as the more self-aware person you've become.`,
+        task: `Make a final, honest prediction — informed by everything you now know about your own intuition — then measure as your own calm, well-calibrated investigator.`,
+        practice: `Measure while bringing all of it together: the fast read, the body, the trained eye, the honest filter. Notice what feels most different now about how you understand your own mind.`,
+        reflectionPrompt: `After this whole journey, what do you understand about your own mind that you didn't before?`,
         measureSeconds: 240 },
     ],
   },
