@@ -42,6 +42,7 @@ export const TOPICS = [
   { id: 'intuition', title: `Intuition`, icon: '🧭', cover: 'assets/experiments/intuition.jpg', order: 8 },
   { id: 'rituals-and-tradition', title: `Rituals & Human Tradition`, icon: '🕯️', cover: 'assets/experiments/rituals-and-tradition.jpg', order: 9 },
   { id: 'quantum-healing', title: `Quantum Healing`, icon: '⚛️', cover: 'assets/experiments/quantum-healing.jpg', order: 10 },
+  { id: 'yoga', title: `Yoga`, icon: '🪷', cover: 'assets/experiments/yoga.jpg', order: 11 },
 ];
 
 export const EXPERIMENTS = [
@@ -2401,6 +2402,270 @@ export const EXPERIMENTS = [
         task: `Make this final session an act of pure wonder: measure as someone who has looked hard at reality and found it genuinely astonishing, with the biggest questions still gloriously open.`,
         practice: `Measure while resting in open, honest amazement at how strange and rich the world turned out to be. Notice what feels different now from when you began this topic.`,
         reflectionPrompt: `After all this, does the world feel stranger and more interesting than when you started — and how?`,
+        measureSeconds: 240 },
+    ],
+  },
+
+  // ##########################################################################
+  //  YOGA TOPIC
+  //  Frame: the most HANDS-ON, "doing" topic — move, stretch, breathe, THEN
+  //  measure. NOT an asana collection (YouTube has a thousand poses). Big
+  //  question: what was yoga actually trying to achieve? Historically, primarily
+  //  ATTENTION, awareness, self-observation, presence — not flexibility — which
+  //  fits the Egely Wheel perfectly. Practices are VERY simple (doable in a
+  //  hotel, office or living room; no headstands, no advanced asana, no
+  //  flexibility contest). The wheel ALWAYS comes at the END. Per-day pattern:
+  //  short interesting intro -> 2-3 min practice (in `task`) -> wheel measurement
+  //  (`practice`) -> reflection. Each day carries `practiceMinutes` (the
+  //  "Estimated practice time" hint Csaba requested). Real yoga history used
+  //  briefly as "wow" moments: Patanjali & the eight limbs, "yoga = stilling the
+  //  mind" (Sutra 1.2), Hatha Yoga Pradipika, trataka, drishti, and the surprise
+  //  that modern posture-yoga is barely a century old (Singleton). Experiment
+  //  personalities: 1 perception, 2 breath, 3 balance, 4 stillness, 5 the deeper
+  //  goal — a discovery journey, not a yoga class. Closing feeling: "the body
+  //  was only ever the doorway; the real practice was attention."
+  // ##########################################################################
+
+  // ==========================================================================
+  //  1 — Yoga Begins with Awareness  (the real beginning is noticing)
+  // ==========================================================================
+  {
+    id: 'yoga-begins-with-awareness',
+    topic: 'yoga',
+    title: `Yoga Begins with Awareness`,
+    level: 'Beginner',
+    cover: 'assets/experiments/yoga-begins-with-awareness.jpg',
+    order: 1,
+    summary: `Four short days on a surprise hiding inside yoga: before it was ever about stretching, it was about noticing. Gentle movement, then the wheel — the point is awareness, not exercise.`,
+    days: [
+      { id: 'd1', title: `The Real Beginning`,
+        intro: `Most people picture yoga as stretching, but historically it began with something far quieter: simply noticing the body from the inside. No effort, no flexibility — just attention. Today you start exactly where the tradition did, with a gentle body scan, and then you measure.`,
+        task: `Sit comfortably. For about two minutes, slowly move your attention through your body — feet, legs, belly, chest, shoulders, face — noticing each part as you arrive, without changing anything.`,
+        practice: `Then measure, carrying that head-to-toe body awareness with you. Notice whether scanning your body first changes how present you feel at the wheel.`,
+        reflectionPrompt: `Did a slow body scan beforehand change how present you felt while measuring?`,
+        practiceMinutes: 2,
+        measureSeconds: 120 },
+      { id: 'd2', title: `Loosening the Shoulders`,
+        intro: `We carry the whole day in our shoulders without noticing — they slowly creep up toward the ears. A few slow shoulder rolls, and the body quietly reports just how much it was holding. Today you listen to that.`,
+        task: `For about two minutes, slowly roll your shoulders — up, back, and down — big and unhurried, a few times each direction, then let them rest heavy and low.`,
+        practice: `Measure afterward, noticing how your shoulders and upper body feel now. Notice whether releasing held tension changes the quality of your attention.`,
+        reflectionPrompt: `Did releasing your shoulders change how settled or attentive you felt?`,
+        practiceMinutes: 2,
+        measureSeconds: 120 },
+      { id: 'd3', title: `The Weight of the Head`,
+        intro: `Your head weighs roughly as much as a bowling ball, balanced all day on a slim neck. Gentle neck movement reminds you how much quiet effort that takes — and how good it feels to ease it. Today you give it that ease.`,
+        task: `For two to three minutes, slowly and gently move your neck — ear toward shoulder, chin toward chest, slow easy turns — never forcing, just releasing.`,
+        practice: `Measure afterward, attention resting in the released neck and head. Notice whether easing the neck lets your attention settle more easily.`,
+        reflectionPrompt: `Did gently easing your neck help your attention settle?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Noticing, Not Exercising`,
+        intro: `Across three days the point was never the movement — it was the noticing. The first yogis weren't athletes; they were careful observers of their own bodies and minds. Before you start, predict: will a few minutes of gentle noticing change your measurement?`,
+        task: `Combine it: two to three minutes of slow body scan, easy shoulder rolls and gentle neck movement — all as pure noticing, never as a workout. Then settle.`,
+        practice: `Measure from that aware, gently-loosened state. Notice how this compares with measuring cold, without any awareness practice first — and whether your prediction held.`,
+        reflectionPrompt: `How did measuring after gentle awareness practice compare with measuring cold — and was your prediction right?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+    ],
+  },
+
+  // ==========================================================================
+  //  2 — Breath & Movement  (what happens when breath and movement marry)
+  // ==========================================================================
+  {
+    id: 'breath-and-movement',
+    topic: 'yoga',
+    title: `Breath & Movement`,
+    level: 'Beginner',
+    cover: 'assets/experiments/breath-and-movement.jpg',
+    order: 2,
+    summary: `Five days on the quiet heart of yoga: what happens when breath and movement stop being separate and start moving as one. Simple motion, led by the breath, then the wheel.`,
+    days: [
+      { id: 'd1', title: `Moving With the Breath`,
+        intro: `In yoga, movement and breath are wedded — you don't just move, you move on the breath. It's a small shift that changes everything, turning exercise into something closer to meditation. Today you try it.`,
+        task: `Sit tall. For about two minutes, raise your arms slowly as you breathe in, and lower them slowly as you breathe out — letting the breath lead the movement, not the other way around.`,
+        practice: `Measure afterward, keeping breath and attention gently linked. Notice whether letting the breath lead leaves you calmer than ordinary movement would.`,
+        reflectionPrompt: `Did letting your breath lead the movement leave you calmer?`,
+        practiceMinutes: 2,
+        measureSeconds: 120 },
+      { id: 'd2', title: `The Cat and the Cow`,
+        intro: `One of yoga's oldest gentle movements flows the spine between two shapes — arching and rounding — in time with the breath. It's called cat-cow, and it wakes up the whole back without any strain at all. Today you flow it.`,
+        task: `On hands and knees, or seated if easier, for two to three minutes: breathe in and gently arch, lifting your gaze; breathe out and round your back, dropping your head. Slow and smooth, led by the breath.`,
+        practice: `Measure afterward, spine awake and breath settled. Notice whether moving the spine with the breath changes how your body feels at rest.`,
+        reflectionPrompt: `Did flowing your spine with the breath change how your body felt afterward?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+      { id: 'd3', title: `Why Yogis Breathe`,
+        intro: `The old texts spend far less time on poses than on breath. The fifteenth-century Hatha Yoga Pradipika devotes itself to pranayama — breath control — because the yogis noticed something simple and powerful: steady the breath, and the mind steadies too. Today you borrow that ancient discovery.`,
+        task: `For two to three minutes, do simple seated stretches — reach up, gentle side bends — but make each one slow, smooth and matched to a long, even breath. The breath is the real practice; the stretch just follows it.`,
+        practice: `Measure with that slow, even breath continuing. Notice whether steadying the breath also steadies your mind, as the old yogis claimed.`,
+        reflectionPrompt: `Did steadying your breath also steady your mind?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Finding Your Rhythm`,
+        intro: `Every body has its own natural pace. When movement and breath find a shared rhythm, effort falls away and the practice almost moves itself — like a rower who stops fighting the boat. Today you look for that rhythm.`,
+        task: `For about three minutes, repeat one simple movement — arms rising and lowering, or gentle seated twists — with the breath, until the two settle into an easy, repeating rhythm of their own.`,
+        practice: `Measure while that rhythm still hums in you. Notice whether finding a breath-and-movement rhythm leaves you more settled than effortful movement does.`,
+        reflectionPrompt: `Did finding an easy breath-and-movement rhythm leave you more settled?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+      { id: 'd5', title: `Breath as the Thread`,
+        intro: `Across these days the breath has been the thread tying everything together — fittingly, the word "yoga" comes from a root meaning "to yoke", to join, and the breath is how movement and mind get joined. Before you start, predict: will a few minutes of breath-led movement change your measurement?`,
+        task: `Combine it: about three minutes of simple movement, every motion led by a slow, even breath, until body, breath and attention move as one. Then settle.`,
+        practice: `Measure from that joined, breath-led state. Notice how it compares with Day 1 of this topic — and whether your prediction held.`,
+        reflectionPrompt: `How did measuring after breath-led movement compare with the start of this topic — and was your prediction right?`,
+        practiceMinutes: 3,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  3 — Balance & Stability  (balance is attention made visible)
+  // ==========================================================================
+  {
+    id: 'balance-and-stability',
+    topic: 'yoga',
+    title: `Balance & Stability`,
+    level: 'Intermediate',
+    cover: 'assets/experiments/balance-and-stability.jpg',
+    order: 3,
+    summary: `Five days on why the gentle balance poses teach more than the dramatic strong ones — because balance, it turns out, is simply attention you can see. Balance a little, then measure.`,
+    days: [
+      { id: 'd1', title: `Standing on One Foot`,
+        intro: `Try standing on one foot and watch what happens: the very moment your attention wanders, you wobble. Balance, it turns out, has less to do with strong legs than with steady attention. Today you test that for yourself.`,
+        task: `Stand near a wall or chair for safety. For about two minutes, balance on one foot, then the other, simply noticing what your body does to stay upright. Wobbling is completely fine — that's the lesson.`,
+        practice: `Measure afterward, attention sharpened by the balancing. Notice whether a couple of minutes of balancing leaves your focus keener.`,
+        reflectionPrompt: `Did balancing on one foot leave your attention sharper?`,
+        practiceMinutes: 2,
+        measureSeconds: 120 },
+      { id: 'd2', title: `A Thousand Tiny Corrections`,
+        intro: `Standing still on one leg looks like doing nothing, but inside, your brain is blending signals from your inner ear, your eyes and sensors in your muscles, firing constant tiny corrections to your ankle and hip. Balance is a furious, hidden act of attention. Today you feel it happening.`,
+        task: `For two to three minutes, balance on one foot and try to feel the tiny constant adjustments — the flickers in your ankle, the little sways and catches. Don't try to stop them; just notice them.`,
+        practice: `Measure afterward, aware of how much quiet adjusting your body is always doing. Notice whether tuning into your body's micro-corrections changes your attention at the wheel.`,
+        reflectionPrompt: `Could you feel the constant tiny corrections your body makes to stay balanced?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+      { id: 'd3', title: `The Steady Gaze`,
+        intro: `Yogis discovered a trick: fix your eyes on one unmoving point and the whole body steadies. They call it drishti, a focused gaze, and every balance pose has one. Where the eyes settle, the body — and the mind — tend to follow. Today you use it.`,
+        task: `Balance on one foot — try Tree Pose, resting the sole of one foot against the other leg — and fix your gaze on a single still point ahead. Hold for two to three minutes, returning your eyes whenever they drift.`,
+        practice: `Measure afterward, keeping a soft, steady gaze. Notice whether a fixed point of focus steadies your attention the way it steadied your balance.`,
+        reflectionPrompt: `Did a steady gaze point steady your attention as well as your balance?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Falling and Returning`,
+        intro: `Here's the real secret of balance: you never actually hold still. You're always tipping slightly and catching yourself — balance is a constant falling-and-returning, exactly the way attention wanders and comes back. The skill isn't never wobbling; it's returning, kindly, each time.`,
+        task: `For about three minutes, balance and treat every wobble not as a failure but as a chance to return — gently catch yourself and re-center, over and over, without any frustration.`,
+        practice: `Measure afterward, carrying that patient "wobble and return" attitude into your attention. Notice whether treating wandering as normal makes returning easier.`,
+        reflectionPrompt: `Did treating each wobble as a chance to return, not a failure, change how it felt?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+      { id: 'd5', title: `Balance as Attention`,
+        intro: `Across these days you've felt the truth the yogis built whole practices on: balance is attention made visible. A steady body and a steady mind turn out to be the very same skill. Before you start, predict: will a few minutes of balancing change your measurement?`,
+        task: `Combine it: about three minutes of balancing on one foot, holding a steady drishti gaze, returning patiently from every wobble. Then settle.`,
+        practice: `Measure from that balanced, focused state. Notice how it compares with measuring without the balance practice — and whether your prediction held.`,
+        reflectionPrompt: `How did measuring after balance practice compare with measuring without it — and was your prediction right?`,
+        practiceMinutes: 3,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  4 — The Art of Stillness  (why is it so hard to sit still?)
+  // ==========================================================================
+  {
+    id: 'the-art-of-stillness',
+    topic: 'yoga',
+    title: `The Art of Stillness`,
+    level: 'Intermediate',
+    cover: 'assets/experiments/the-art-of-stillness.jpg',
+    order: 4,
+    summary: `Five days on the hardest posture in all of yoga — sitting perfectly still — and what the restlessness it reveals can teach you. A few minutes of stillness, then the wheel.`,
+    days: [
+      { id: 'd1', title: `The Hardest Pose`,
+        intro: `Of all of yoga's postures, the hardest isn't a backbend or a headstand — it's sitting perfectly still. Within seconds an itch appears, a leg wants to shift, the body quietly begs to move. Today you meet that restlessness head-on.`,
+        task: `Sit comfortably and, for about two minutes, simply don't move. When the urge to fidget, scratch or shift arrives — and it will — just notice it, and stay still anyway.`,
+        practice: `Measure afterward, holding that same stillness. Notice how strong the urge to move really is once you decide not to.`,
+        reflectionPrompt: `How strong was the urge to move once you decided to stay perfectly still?`,
+        practiceMinutes: 2,
+        measureSeconds: 120 },
+      { id: 'd2', title: `Why the Yogis Sat`,
+        intro: `For thousands of years, yogis sat motionless for hours — not as punishment, but because they had discovered that when the body grows still, the mind slowly follows. Stillness was the doorway, not the goal. Today you crack that door open.`,
+        task: `Sit still for two to three minutes, and each time the body settles a little deeper, notice whether the mind quietens too — testing the old yogic claim for yourself.`,
+        practice: `Measure while holding that settled stillness. Notice whether a still body really does let the mind grow quieter.`,
+        reflectionPrompt: `As your body grew still, did your mind grow quieter too?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+      { id: 'd3', title: `The Restless Mind`,
+        intro: `When the body finally stops, you notice the other restlessness — the mind's. Thoughts the day's busyness kept hidden suddenly get loud. This isn't failure; it's the first time you're really hearing how active the mind has been all along. Today you listen.`,
+        task: `Sit still for two to three minutes and turn your attention to the mind's activity — the thoughts, plans and jumps — simply watching them arrive and go, without chasing or stopping them.`,
+        practice: `Measure while watching the mind from that still seat. Notice how busy the mind turns out to be once the body stops distracting you from it.`,
+        reflectionPrompt: `Once your body was still, how busy did your mind turn out to be?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+      { id: 'd4', title: `A Single Point`,
+        intro: `One classic yogic remedy for a restless mind is trataka — resting the gaze softly on a single point, such as a candle flame, until the mind grows quiet around it. Giving the restlessness one place to settle works better than fighting it. Today you try it.`,
+        task: `Place one small object or point in front of you — a candle, a dot on the wall, a small mark. For two to three minutes, rest a soft, steady gaze on it, returning gently whenever you drift.`,
+        practice: `Measure while keeping that quiet, single-pointed attention. Notice whether giving the mind one point to rest on calms the restlessness.`,
+        reflectionPrompt: `Did resting your gaze on a single point calm your restless mind?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+      { id: 'd5', title: `Comfortable Stillness`,
+        intro: `Patanjali's whole definition of a posture was just two words: steady and comfortable. Across these days you've found that stillness isn't rigid holding — it's a relaxed, alert settledness the body can actually rest in. Before you start, predict: will a few minutes of stillness change your measurement?`,
+        task: `Sit for about three minutes in stillness that is both steady and comfortable — alert but at ease, neither rigid nor slumping — letting body and mind settle together. Then begin.`,
+        practice: `Measure from that steady, comfortable stillness. Notice how it compares with the restless start of this topic — and whether your prediction held.`,
+        reflectionPrompt: `How did comfortable stillness compare with the restlessness you started with — and was your prediction right?`,
+        practiceMinutes: 3,
+        measureSeconds: 180 },
+    ],
+  },
+
+  // ==========================================================================
+  //  5 — Yoga Beyond Postures  (the deeper goal: a quiet mind)
+  //  The culmination — closing feeling: "the body was only ever the doorway."
+  // ==========================================================================
+  {
+    id: 'yoga-beyond-postures',
+    topic: 'yoga',
+    title: `Yoga Beyond Postures`,
+    level: 'Advanced',
+    cover: 'assets/experiments/yoga-beyond-postures.jpg',
+    order: 5,
+    summary: `Five days on the part of yoga the cameras never show — its real, ancient goal. Why did people practise this for thousands of years? Gentle practice, then the wheel, then the bigger picture.`,
+    days: [
+      { id: 'd1', title: `Only One of Eight`,
+        intro: `The poses everyone pictures as "yoga" are, in the original system, just one of eight parts. Patanjali laid out eight limbs — ethics, breath, the senses, concentration, meditation and more — and physical posture was a single rung on a tall ladder. Today you glimpse the bigger picture.`,
+        task: `Before measuring, do two to three minutes of any gentle movement or stretch you've learned so far — but hold in mind that this posture is only one small limb of a much larger practice.`,
+        practice: `Measure afterward, sensing yourself as part of something larger than the poses. Notice whether seeing posture as just one piece changes how you approach it.`,
+        reflectionPrompt: `Did realising posture is just one of yoga's eight limbs change how you saw the practice?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+      { id: 'd2', title: `What Yoga Actually Meant`,
+        intro: `Here is the sentence that defines the whole tradition. Around two thousand years ago, Patanjali wrote that yoga is "the stilling of the fluctuations of the mind". Not stretching, not fitness — a quiet mind. Everything else, the poses included, was only ever preparation for that. Today you aim straight at it.`,
+        task: `Do a minute or two of gentle movement to settle the body, then sit and spend the rest simply aiming at a quieter mind — the real target of all yoga.`,
+        practice: `Measure while reaching, gently, for that stilling of the mind's chatter. Notice whether approaching the practice as "quieting the mind" feels different from approaching it as exercise.`,
+        reflectionPrompt: `Did aiming for a quiet mind, rather than a stretch, change the whole practice for you?`,
+        practiceMinutes: 3,
+        measureSeconds: 180 },
+      { id: 'd3', title: `The Yoga on Your Screen Is New`,
+        intro: `Here's a genuine surprise: the athletic, posture-heavy yoga all over social media is barely a century old. Scholars like Mark Singleton have shown it was shaped in the early 1900s by blending older yoga with Western gymnastics. The ancient practice was far quieter and far more inward. Today you practise the older way.`,
+        task: `Skip anything athletic. For two to three minutes do only the gentlest movement and breath, then grow still — much closer to how yoga was actually practised for most of its long history.`,
+        practice: `Measure from that quiet, inward, old-style practice. Notice whether the slower, gentler version reaches something the athletic kind might miss.`,
+        reflectionPrompt: `Did a quieter, gentler practice reach something a workout-style one might miss?`,
+        practiceMinutes: 3,
+        measureSeconds: 150 },
+      { id: 'd4', title: `Concentration Becomes Meditation`,
+        intro: `Deep in Patanjali's ladder sit two neighbouring rungs: dharana, holding attention on one thing, and dhyana, the moment that holding becomes effortless and turns into meditation. The first you do; the second happens to you. Today you walk from one toward the other.`,
+        task: `Settle, then for three to four minutes hold your attention on one simple thing — the breath, a point, a sensation — returning each time it slips, until holding it starts to feel less like effort.`,
+        practice: `Measure while resting in that gathered attention. Notice whether concentration, held long enough, ever softens into something more effortless.`,
+        reflectionPrompt: `Did holding your attention long enough ever start to feel effortless rather than forced?`,
+        practiceMinutes: 4,
+        measureSeconds: 210 },
+      { id: 'd5', title: `The Real Practice`,
+        intro: `Across this whole topic you've moved, breathed, balanced and grown still — and discovered that none of it was really about the body. The body was always the doorway; the real practice was attention, awareness, a quiet mind. That is what people have sought in yoga for thousands of years. Before you start, predict, then practise it whole.`,
+        task: `Bring it together: a few minutes of gentle, breath-led movement to settle, then stillness and gathered attention — the body as the doorway, the quiet mind as the room you step into. Then measure.`,
+        practice: `Measure from that complete, quiet practice. Notice what feels most different now about yoga — and about your own attention — from when you began, and whether your prediction held.`,
+        reflectionPrompt: `After this whole journey, what do you understand about yoga — and your own attention — that you didn't before?`,
+        practiceMinutes: 4,
         measureSeconds: 240 },
     ],
   },

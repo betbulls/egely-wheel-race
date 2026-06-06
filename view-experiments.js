@@ -212,6 +212,7 @@ export function mountExperimentDetail(el, experimentId){
       <div class="panel xp-day">
         <div class="xp-day-eyebrow">Day ${dayNumber(exp, day)}${day.title ? ' · ' + esc(day.title) : ''}</div>
         ${day.intro ? `<p class="xp-day-text">${esc(day.intro)}</p>` : ''}
+        ${typeof day.practiceMinutes === 'number' ? `<p class="xp-day-text" style="opacity:.7;font-size:.9em;margin:0 0 10px">⏱ Estimated practice time: about ${day.practiceMinutes} minute${day.practiceMinutes === 1 ? '' : 's'}</p>` : ''}
         ${day.task ? `<div class="xp-day-block"><span class="xp-day-label">Try this</span><p>${esc(day.task)}</p></div>` : ''}
         ${day.practice ? `<div class="xp-day-block"><span class="xp-day-label">While you measure</span><p>${esc(day.practice)}</p></div>` : ''}
         <div id="xpMeasureHost"></div>
