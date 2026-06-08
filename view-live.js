@@ -20,17 +20,24 @@ const STATUS = {
 };
 const SORT = { measuring: 0, session: 1, connected: 2, online: 3 };   // most "alive" first
 
-// Tiny sparkline (last N live values, 0–24 scaled) as an inline SVG polyline.
-function sparkline(values){
-  const w = 60, h = 22, max = 24;
-  if(!values || values.length < 2) return `<svg class="live-spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"></svg>`;
-  const n = values.length;
-  const pts = values.map((v, i) => {
-    const x = (i / (n - 1)) * w;
-    const y = h - (Math.max(0, Math.min(max, v)) / max) * (h - 2) - 1;
-    return x.toFixed(1) + ',' + y.toFixed(1);
-  }).join(' ');
-  return `<svg class="live-spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+// Live vitality curve — same look as the session per-racer curve (drawCurve):
+// a coloured line on a dark rounded panel, no axes, no zone strip.
+function drawLiveCurve(canvas, series, color){
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if(!w || !h) return;
+  const dpr = window.devicePixelRatio || 1;
+  if(canvas.width !== Math.round(w * dpr)){ canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  const n = series.length;
+  if(n < 2) return;
+  const pad = 4;
+  const xOf = i => (i / (n - 1)) * w;
+  const yOf = led => h - (Math.max(0, Math.min(24, led)) / 24) * (h - pad * 2) - pad;
+  ctx.beginPath();
+  series.forEach((v, i) => { const x = xOf(i), y = yOf(v); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+  ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.stroke();
 }
 
 export function mount(el){
@@ -62,41 +69,41 @@ export function mount(el){
     listEl.innerHTML = sorted.map(p => {
       const st = STATUS[p.status] || STATUS.online;
       const isMe = myId && p.uid === myId;
-      // Any connected wheel shows its live value + sparkline (no avg/peak here).
-      const valueArea = st.live
-        ? `<div class="live-value"><span class="live-spark-wrap" data-spark></span><span class="live-led" data-led>·</span></div>`
-        : '';
+      const value = st.live ? `<div class="live-value"><span class="live-led" data-led>·</span></div>` : '';
+      const curve = st.live ? `<canvas class="live-wheel-curve" data-curve></canvas>` : '';
       return `
         <div class="live-card ${st.cls}" data-uid="${esc(p.uid)}">
-          <div class="live-avatar">${avatarHtml(p.avatar, p.name)}</div>
-          <div class="live-main">
-            <div class="live-name">${esc(p.name || 'Explorer')}${isMe ? ' <span class="live-you">You</span>' : ''}</div>
-            <div class="live-status"><span class="live-pill ${st.cls}">${esc(st.label)}</span></div>
+          <div class="live-row">
+            <div class="live-avatar">${avatarHtml(p.avatar, p.name)}</div>
+            <div class="live-main">
+              <div class="live-name">${esc(p.name || 'Explorer')}${isMe ? ' <span class="live-you">You</span>' : ''}</div>
+              <div class="live-status"><span class="live-pill ${st.cls}">${esc(st.label)}</span></div>
+            </div>
+            ${value}
           </div>
-          ${valueArea}
+          ${curve}
         </div>`;
     }).join('');
     refreshValues();
   }
 
-  // Update the live wheel number + sparkline on every card that has a connected
-  // wheel (ticks arrive ~2x/sec; getLive returns null once a value goes stale).
+  // Update the live number + curve on every card with a connected wheel (ticks
+  // arrive ~2x/sec; getLive returns null once a value goes stale).
   function refreshValues(){
-    listEl.querySelectorAll('.live-card .live-value').forEach(box => {
-      const card = box.closest('.live-card');
+    listEl.querySelectorAll('.live-card').forEach(card => {
+      const ledEl = card.querySelector('[data-led]');
+      const canvas = card.querySelector('[data-curve]');
+      if(!ledEl && !canvas) return;
       const uid = card.dataset.uid;
-      const ledEl = box.querySelector('[data-led]');
-      const sparkEl = box.querySelector('[data-spark]');
       const led = presence.getLive(uid);
       if(led == null){
-        ledEl.textContent = '·'; ledEl.style.color = ''; ledEl.classList.add('waiting');
-        sparkEl.innerHTML = ''; sparkEl.style.color = '';
+        if(ledEl){ ledEl.textContent = '·'; ledEl.style.color = ''; ledEl.classList.add('waiting'); }
+        if(canvas){ const ctx = canvas.getContext('2d'); ctx && ctx.clearRect(0, 0, canvas.width, canvas.height); }
         return;
       }
       const color = vitalityColor(led);
-      ledEl.textContent = String(led); ledEl.style.color = color; ledEl.classList.remove('waiting');
-      sparkEl.style.color = color;
-      sparkEl.innerHTML = sparkline(presence.getLiveSeries(uid));
+      if(ledEl){ ledEl.textContent = String(led); ledEl.style.color = color; ledEl.classList.remove('waiting'); }
+      if(canvas) drawLiveCurve(canvas, presence.getLiveSeries(uid), color);
     });
   }
 

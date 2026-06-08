@@ -64,7 +64,9 @@ function list(){
   return [...byUid.values()];
 }
 
-function emit(){ const l = list(); listeners.forEach(cb => { try { cb(l); } catch {} }); }
+const sig = l => l.map(p => p.uid + ':' + p.status).sort().join('|');
+let lastSig = '';
+function emit(){ const l = list(); lastSig = sig(l); listeners.forEach(cb => { try { cb(l); } catch {} }); }
 
 async function applyTrack(){
   if(!channel) return;
@@ -114,6 +116,22 @@ export function init(){
     if(bleConnected) startTicks(); else stopTicks();
   });
   ble.subscribeFrames(f => { lastLed = f.led; });
+
+  // Safety net: presence diff events (sync/join/leave) can be missed on flaky
+  // networks or when a mobile tab backgrounds. Re-read the synced state on a timer
+  // and re-render only when it actually changed — so connect/disconnect/leave shows
+  // up without a manual page refresh.
+  setInterval(() => {
+    const l = list();
+    const s = sig(l);
+    if(s !== lastSig){ lastSig = s; listeners.forEach(cb => { try { cb(l); } catch {} }); }
+  }, 1500);
+  // Returning to the tab: re-assert our presence and refresh the wall immediately.
+  if(typeof document !== 'undefined'){
+    document.addEventListener('visibilitychange', () => {
+      if(document.visibilityState === 'visible'){ applyTrack(); emit(); }
+    });
+  }
 }
 
 // Effective status. measuring/session imply a connected wheel.
