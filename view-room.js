@@ -1,6 +1,7 @@
 import { supabase } from './db.js';
 import * as ble from './ble.js';
 import * as auth from './auth.js';
+import * as presence from './presence.js';
 import { computeStats, CATEGORIES, METRIC_HELP, icon, trendLabel, vitalityColor, downsample } from './analytics.js';
 import { drawTrio } from './chart.js';
 
@@ -151,7 +152,7 @@ export function mount(el, sessionId){
     $('roomBody').hidden = false;
     joinChannel();
 
-    unsubStatus = ble.subscribeStatus(s => { bleConnected = s.connected; updateHint(); });
+    unsubStatus = ble.subscribeStatus(s => { bleConnected = s.connected; updateHint(); presence.setSession(s.connected); });
     unsubFrames = ble.subscribeFrames(frame => {
       myLed = frame.led;
       if(inWindow()){
@@ -701,6 +702,7 @@ export function mount(el, sessionId){
     flushSamples();
     if(unsubFrames) unsubFrames();
     if(unsubStatus) unsubStatus();
+    presence.setSession(false);
     if(channel) supabase.removeChannel(channel);
     window.removeEventListener('resize', render);
   };

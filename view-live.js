@@ -1,6 +1,6 @@
 // view-live.js — the Live presence wall. A read-only view onto presence.js:
 // who is in the ecosystem right now. Cards are intentionally NOT clickable —
-// the point is simply to feel that others are here.
+// the point is simply to feel that others are here, and to see their wheel spin.
 import * as auth from './auth.js';
 import * as presence from './presence.js';
 import { vitalityColor } from './analytics.js';
@@ -13,11 +13,25 @@ function avatarHtml(url, name){
 }
 
 const STATUS = {
-  online:    { label: 'Online',          cls: 'online' },
-  connected: { label: 'Wheel connected', cls: 'connected' },
-  measuring: { label: 'Measuring',       cls: 'measuring' },
+  online:    { label: 'Online',          cls: 'online',    live: false },
+  connected: { label: 'Wheel connected', cls: 'connected', live: true },
+  measuring: { label: 'Measuring',       cls: 'measuring', live: true },
+  session:   { label: 'In a session',    cls: 'session',   live: true },
 };
-const SORT = { measuring: 0, connected: 1, online: 2 };   // most "alive" first
+const SORT = { measuring: 0, session: 1, connected: 2, online: 3 };   // most "alive" first
+
+// Tiny sparkline (last N live values, 0–24 scaled) as an inline SVG polyline.
+function sparkline(values){
+  const w = 60, h = 22, max = 24;
+  if(!values || values.length < 2) return `<svg class="live-spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"></svg>`;
+  const n = values.length;
+  const pts = values.map((v, i) => {
+    const x = (i / (n - 1)) * w;
+    const y = h - (Math.max(0, Math.min(max, v)) / max) * (h - 2) - 1;
+    return x.toFixed(1) + ',' + y.toFixed(1);
+  }).join(' ');
+  return `<svg class="live-spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+}
 
 export function mount(el){
   el.innerHTML = `
@@ -34,7 +48,7 @@ export function mount(el){
   function render(people){
     const myId = auth.getState().user?.id || null;
     const sorted = [...people].sort((a, b) => {
-      const r = (SORT[a.status] ?? 3) - (SORT[b.status] ?? 3);
+      const r = (SORT[a.status] ?? 4) - (SORT[b.status] ?? 4);
       return r !== 0 ? r : (a.name || '').localeCompare(b.name || '');
     });
 
@@ -42,13 +56,16 @@ export function mount(el){
     headEl.innerHTML = `<span class="live-dot"></span><span><b>${n}</b> ${n === 1 ? 'person' : 'people'} online now</span>`;
 
     if(!sorted.length){
-      listEl.innerHTML = `<div class="empty">No one's here right now. Connect your Egely Wheel and start a measurement — others will see you light up.</div>`;
+      listEl.innerHTML = `<div class="empty">No one's here right now. Connect your Egely Wheel — others will see it spin.</div>`;
       return;
     }
     listEl.innerHTML = sorted.map(p => {
       const st = STATUS[p.status] || STATUS.online;
       const isMe = myId && p.uid === myId;
-      const valueArea = p.status === 'measuring' ? `<div class="live-value"><span class="live-led waiting">…</span></div>` : '';
+      // Any connected wheel shows its live value + sparkline (no avg/peak here).
+      const valueArea = st.live
+        ? `<div class="live-value"><span class="live-spark-wrap" data-spark></span><span class="live-led" data-led>·</span></div>`
+        : '';
       return `
         <div class="live-card ${st.cls}" data-uid="${esc(p.uid)}">
           <div class="live-avatar">${avatarHtml(p.avatar, p.name)}</div>
@@ -62,15 +79,24 @@ export function mount(el){
     refreshValues();
   }
 
-  // Update the live wheel number on each measuring card (polls presence; ticks
-  // arrive ~2x/sec, and getLive() returns null once a value goes stale).
+  // Update the live wheel number + sparkline on every card that has a connected
+  // wheel (ticks arrive ~2x/sec; getLive returns null once a value goes stale).
   function refreshValues(){
-    listEl.querySelectorAll('.live-card.measuring').forEach(card => {
-      const el = card.querySelector('.live-led');
-      if(!el) return;
-      const led = presence.getLive(card.dataset.uid);
-      if(led == null){ el.textContent = '…'; el.classList.add('waiting'); el.style.color = ''; }
-      else { el.textContent = String(led); el.classList.remove('waiting'); el.style.color = vitalityColor(led); }
+    listEl.querySelectorAll('.live-card .live-value').forEach(box => {
+      const card = box.closest('.live-card');
+      const uid = card.dataset.uid;
+      const ledEl = box.querySelector('[data-led]');
+      const sparkEl = box.querySelector('[data-spark]');
+      const led = presence.getLive(uid);
+      if(led == null){
+        ledEl.textContent = '·'; ledEl.style.color = ''; ledEl.classList.add('waiting');
+        sparkEl.innerHTML = ''; sparkEl.style.color = '';
+        return;
+      }
+      const color = vitalityColor(led);
+      ledEl.textContent = String(led); ledEl.style.color = color; ledEl.classList.remove('waiting');
+      sparkEl.style.color = color;
+      sparkEl.innerHTML = sparkline(presence.getLiveSeries(uid));
     });
   }
 
