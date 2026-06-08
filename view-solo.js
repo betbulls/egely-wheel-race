@@ -7,11 +7,12 @@ import { computeStats, vitalityLevel, vitalityColor as vColor, downsample } from
 
 const SAMPLE_MS = 250;        // how often the curve is sampled while measuring
 const LIVE_WINDOW_MS = 60000; // idle live-preview window
-// Verified rule (relaxed): a real reading changes slowly; a single odd frame
-// shouldn't doom the whole measurement. Flag "unverified" only when there are
-// several large frame-to-frame jumps (sustained shaking/blowing). The de-spiked
-// signal (ble.js) already removes the 24-rail glitches before we get here.
-const JUMP_DELTA = 10, MAX_JUMPS = 3; // cheat detection (same as rooms)
+// Verified rule: a real reading is steady (any level); hand-waving/blowing makes
+// the value SWING. We look at the range (max−min) inside a short window — this
+// catches a spike however it ramps — and count distinct swings (rising edges), so
+// one swing = one count. Two swings → "unverified". A single blip stays verified.
+// The de-spiked signal (ble.js) already removes the 24-rail glitches first.
+const CHEAT_WINDOW_MS = 2000, SWING_LIMIT = 7, MAX_SWINGS = 2; // cheat detection (same as rooms)
 
 const racerId = name => name.trim().toLowerCase().replace(/\s+/g, '_');
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
@@ -23,7 +24,7 @@ export function mount(el){
   let samples = [];           // led values recorded during the measurement
   let liveHistory = [];       // {t, led} rolling buffer for the idle preview
   let curLed = 0, connected = false;
-  let prevCheatLed = null, bigJumps = 0, cheatDetected = false;
+  let swingWin = [], swings = 0, wasSwing = false, cheatDetected = false;
   let lastStats = null, saved = false;   // held until the user clicks Save
   let sampleTimer = null, uiTimer = null, unsubFrames = null, unsubStatus = null;
   let liveChannels = [];   // realtime channels to my linked practitioners (live broadcast)
@@ -215,7 +216,7 @@ export function mount(el){
   function startMeasurement(){
     duration = Math.max(5, Math.min(600, parseInt($('sDur').value, 10) || 60));
     if(!connected){ setMsg('Connect your Egely Wheel (top right) first.', 'err'); return; }
-    samples = []; prevCheatLed = null; bigJumps = 0; cheatDetected = false; finished = false; lastStats = null; saved = false;
+    samples = []; swingWin = []; swings = 0; wasSwing = false; cheatDetected = false; finished = false; lastStats = null; saved = false;
     measuring = true; startMs = Date.now(); endMs = startMs + duration * 1000;
     $('sEval').hidden = true;
     $('sStart').textContent = 'Stop';
@@ -304,10 +305,12 @@ export function mount(el){
     liveHistory.push({ t: now, led: frame.led });
     liveHistory = liveHistory.filter(p => now - p.t <= LIVE_WINDOW_MS);
     if(measuring){
-      if(prevCheatLed !== null && Math.abs(frame.led - prevCheatLed) >= JUMP_DELTA){
-        if(++bigJumps >= MAX_JUMPS) cheatDetected = true;
-      }
-      prevCheatLed = frame.led;
+      swingWin.push({ t: now, led: frame.led });
+      swingWin = swingWin.filter(f => now - f.t <= CHEAT_WINDOW_MS);
+      const leds = swingWin.map(f => f.led);
+      const swingNow = (Math.max(...leds) - Math.min(...leds)) >= SWING_LIMIT;
+      if(swingNow && !wasSwing && ++swings >= MAX_SWINGS) cheatDetected = true;
+      wasSwing = swingNow;
     }
   });
 

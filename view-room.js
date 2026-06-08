@@ -10,10 +10,10 @@ const RENDER_MS = 250;      // how often the board repaints
 
 // Cheat detection: genuine readings drift slowly. If the LED moves by >= 4
 // within any 1-second window, it's hand-spun => not verified.
-// Verified rule (relaxed) — see view-solo.js. The de-spiked signal (ble.js) has
-// already removed the 24-rail glitches; here we only flag sustained large swings.
-const JUMP_DELTA = 10;
-const MAX_JUMPS = 3;
+// Verified rule — see view-solo.js. Range (max−min) inside a short window catches
+// a swing however it ramps; two distinct swings → "unverified". The de-spiked
+// signal (ble.js) has already removed the 24-rail glitches.
+const CHEAT_WINDOW_MS = 2000, SWING_LIMIT = 7, MAX_SWINGS = 2;
 
 // Mounts the Session Room view. Returns a cleanup function.
 export function mount(el, sessionId){
@@ -36,8 +36,8 @@ export function mount(el, sessionId){
   let groupSaved = false;    // host writes session group_avg once, at the end
   let myResultSaved = false; // each client writes its own result row once, at the end
 
-  let prevCheatLed = null, bigJumps = 0;   // cheat detection: count of large frame-to-frame jumps
-  let cheatDetected = false; // latched once enough irregular jumps are seen
+  let swingWin = [], swings = 0, wasSwing = false;   // cheat detection: count of distinct swings
+  let cheatDetected = false; // latched once enough swings are seen
 
   const racerId = name => name.trim().toLowerCase().replace(/\s+/g, '_');
   const inWindow = () => { const n = Date.now(); return n >= startMs && n <= endMs; };
@@ -158,10 +158,13 @@ export function mount(el, sessionId){
     unsubFrames = ble.subscribeFrames(frame => {
       myLed = frame.led;
       if(inWindow()){
-        if(prevCheatLed !== null && Math.abs(frame.led - prevCheatLed) >= JUMP_DELTA && !cheatDetected){
-          if(++bigJumps >= MAX_JUMPS){ cheatDetected = true; updateHint(); }
-        }
-        prevCheatLed = frame.led;
+        const now = Date.now();
+        swingWin.push({ t: now, led: frame.led });
+        swingWin = swingWin.filter(f => now - f.t <= CHEAT_WINDOW_MS);
+        const leds = swingWin.map(f => f.led);
+        const swingNow = (Math.max(...leds) - Math.min(...leds)) >= SWING_LIMIT;
+        if(swingNow && !wasSwing && !cheatDetected && ++swings >= MAX_SWINGS){ cheatDetected = true; updateHint(); }
+        wasSwing = swingNow;
       }
     });
 

@@ -18,7 +18,7 @@ function firstUnfinished(progByExp){
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
 const SAMPLE_MS = 250;
-const JUMP_DELTA = 10, MAX_JUMPS = 3;   // same relaxed anti-cheat as Solo / rooms (de-spiked signal)
+const CHEAT_WINDOW_MS = 2000, SWING_LIMIT = 7, MAX_SWINGS = 2;   // same anti-cheat as Solo / rooms (de-spiked signal)
 const SUBSCRIBE_URL = 'https://egelywheel.com/products/ewr-subscription';
 
 const durLabel = s => s >= 60 ? `${Math.round(s / 60)} min` : `${s}s`;
@@ -274,17 +274,20 @@ function setupMeasure(host, exp, day, onSaved){
   let connected = ble.getState().connected;
   let curLed = ble.getState().lastFrame ? ble.getState().lastFrame.led : 0;
   let measuring = false, finished = false;
-  let samples = [], prevCheatLed = null, bigJumps = 0, cheat = false, endMs = 0, stats = null;
+  let samples = [], swingWin = [], swings = 0, wasSwing = false, cheat = false, endMs = 0, stats = null;
   let sampleTimer = null, uiTimer = null;
 
   const unsubStatus = ble.subscribeStatus(s => { connected = s.connected; if(!measuring && !finished) renderIdle(); });
   const unsubFrames = ble.subscribeFrames(f => {
     curLed = f.led;
     if(measuring){
-      if(prevCheatLed !== null && Math.abs(f.led - prevCheatLed) >= JUMP_DELTA){
-        if(++bigJumps >= MAX_JUMPS) cheat = true;
-      }
-      prevCheatLed = f.led;
+      const now = Date.now();
+      swingWin.push({ t: now, led: f.led });
+      swingWin = swingWin.filter(x => now - x.t <= CHEAT_WINDOW_MS);
+      const leds = swingWin.map(x => x.led);
+      const swingNow = (Math.max(...leds) - Math.min(...leds)) >= SWING_LIMIT;
+      if(swingNow && !wasSwing && ++swings >= MAX_SWINGS) cheat = true;
+      wasSwing = swingNow;
     }
   });
 
@@ -350,7 +353,7 @@ function setupMeasure(host, exp, day, onSaved){
 
   function start(){
     if(gate() !== 'ready') { renderIdle(); return; }
-    samples = []; prevCheatLed = null; bigJumps = 0; cheat = false; finished = false; stats = null;
+    samples = []; swingWin = []; swings = 0; wasSwing = false; cheat = false; finished = false; stats = null;
     measuring = true;
     endMs = Date.now() + day.measureSeconds * 1000;
     wakeLock.acquire();
