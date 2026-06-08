@@ -15,6 +15,23 @@ let status = 'idle';          // 'idle' | 'connecting' | 'connected' | 'error'
 let errorMsg = null;
 let lastFrame = null;         // last parsed frame
 
+// --- Spike filter -----------------------------------------------------------
+// Known PIC hardware glitch: the wheel (often when idle) suddenly reports the
+// top rail (24) for a few frames, then drops back to baseline. A real reading
+// never teleports into the top zone in one ~700ms frame — it ramps through the
+// middle. So: hold the last clean value through any sudden jump INTO the rail,
+// and resume once the signal returns to a plausible value. The drop back to a
+// low value is always accepted, so the filter can never get stuck high.
+const SPIKE_RAIL = 22;        // top zone the glitch pins to
+const SPIKE_JUMP = 10;        // a single-frame jump this big into the rail = glitch
+let cleanLed = null;          // last accepted (de-spiked) LED value
+function despike(raw){
+  if(cleanLed === null){ cleanLed = raw; return cleanLed; }
+  const glitch = raw >= SPIKE_RAIL && (raw - cleanLed) >= SPIKE_JUMP;
+  if(!glitch) cleanLed = raw;
+  return cleanLed;
+}
+
 const statusListeners = new Set();
 const frameListeners = new Set();
 
@@ -84,7 +101,7 @@ export async function connect(){
     txChar = await service.getCharacteristic(TX_CHAR_UUID);
     await txChar.startNotifications();
     txChar.addEventListener('characteristicvaluechanged', onData);
-    buffer = '';
+    buffer = ''; cleanLed = null;     // fresh spike-filter state for the new session
     status = 'connected'; emitStatus();
   } catch(err){
     // Cancelling the device picker (or no device chosen) isn't an error — just
@@ -104,7 +121,7 @@ export function disconnect(){
 }
 
 function onDisconnect(){
-  device = null; txChar = null; buffer = '';
+  device = null; txChar = null; buffer = ''; cleanLed = null;
   status = 'idle';
   emitStatus();
 }
@@ -118,6 +135,8 @@ function onData(event){
     buffer = buffer.slice(idx + 1);
     const frame = parseLine(line);
     if(frame){
+      frame.rawLed = frame.led;        // keep the raw value (debugging)
+      frame.led = despike(frame.led);  // everything downstream uses the de-spiked value
       lastFrame = frame;
       frameListeners.forEach(cb => cb(frame));
     }

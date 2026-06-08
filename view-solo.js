@@ -7,7 +7,11 @@ import { computeStats, vitalityLevel, vitalityColor as vColor, downsample } from
 
 const SAMPLE_MS = 250;        // how often the curve is sampled while measuring
 const LIVE_WINDOW_MS = 60000; // idle live-preview window
-const CHANGE_WINDOW_MS = 1000, CHANGE_LIMIT = 4; // cheat detection (same as rooms)
+// Verified rule (relaxed): a real reading changes slowly; a single odd frame
+// shouldn't doom the whole measurement. Flag "unverified" only when there are
+// several large frame-to-frame jumps (sustained shaking/blowing). The de-spiked
+// signal (ble.js) already removes the 24-rail glitches before we get here.
+const JUMP_DELTA = 10, MAX_JUMPS = 3; // cheat detection (same as rooms)
 
 const racerId = name => name.trim().toLowerCase().replace(/\s+/g, '_');
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
@@ -19,7 +23,7 @@ export function mount(el){
   let samples = [];           // led values recorded during the measurement
   let liveHistory = [];       // {t, led} rolling buffer for the idle preview
   let curLed = 0, connected = false;
-  let recentFrames = [], cheatDetected = false;
+  let prevCheatLed = null, bigJumps = 0, cheatDetected = false;
   let lastStats = null, saved = false;   // held until the user clicks Save
   let sampleTimer = null, uiTimer = null, unsubFrames = null, unsubStatus = null;
   let liveChannels = [];   // realtime channels to my linked practitioners (live broadcast)
@@ -211,7 +215,7 @@ export function mount(el){
   function startMeasurement(){
     duration = Math.max(5, Math.min(600, parseInt($('sDur').value, 10) || 60));
     if(!connected){ setMsg('Connect your Egely Wheel (top right) first.', 'err'); return; }
-    samples = []; recentFrames = []; cheatDetected = false; finished = false; lastStats = null; saved = false;
+    samples = []; prevCheatLed = null; bigJumps = 0; cheatDetected = false; finished = false; lastStats = null; saved = false;
     measuring = true; startMs = Date.now(); endMs = startMs + duration * 1000;
     $('sEval').hidden = true;
     $('sStart').textContent = 'Stop';
@@ -300,10 +304,10 @@ export function mount(el){
     liveHistory.push({ t: now, led: frame.led });
     liveHistory = liveHistory.filter(p => now - p.t <= LIVE_WINDOW_MS);
     if(measuring){
-      recentFrames.push({ t: now, led: frame.led });
-      recentFrames = recentFrames.filter(f => now - f.t <= CHANGE_WINDOW_MS);
-      const vals = recentFrames.map(f => f.led);
-      if(Math.max(...vals) - Math.min(...vals) >= CHANGE_LIMIT) cheatDetected = true;
+      if(prevCheatLed !== null && Math.abs(frame.led - prevCheatLed) >= JUMP_DELTA){
+        if(++bigJumps >= MAX_JUMPS) cheatDetected = true;
+      }
+      prevCheatLed = frame.led;
     }
   });
 

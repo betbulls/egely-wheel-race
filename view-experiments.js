@@ -18,7 +18,7 @@ function firstUnfinished(progByExp){
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
 const SAMPLE_MS = 250;
-const CHANGE_WINDOW_MS = 1000, CHANGE_LIMIT = 4;   // same anti-cheat as Solo / rooms
+const JUMP_DELTA = 10, MAX_JUMPS = 3;   // same relaxed anti-cheat as Solo / rooms (de-spiked signal)
 const SUBSCRIBE_URL = 'https://egelywheel.com/products/ewr-subscription';
 
 const durLabel = s => s >= 60 ? `${Math.round(s / 60)} min` : `${s}s`;
@@ -274,18 +274,17 @@ function setupMeasure(host, exp, day, onSaved){
   let connected = ble.getState().connected;
   let curLed = ble.getState().lastFrame ? ble.getState().lastFrame.led : 0;
   let measuring = false, finished = false;
-  let samples = [], recent = [], cheat = false, endMs = 0, stats = null;
+  let samples = [], prevCheatLed = null, bigJumps = 0, cheat = false, endMs = 0, stats = null;
   let sampleTimer = null, uiTimer = null;
 
   const unsubStatus = ble.subscribeStatus(s => { connected = s.connected; if(!measuring && !finished) renderIdle(); });
   const unsubFrames = ble.subscribeFrames(f => {
     curLed = f.led;
     if(measuring){
-      const now = Date.now();
-      recent.push({ t: now, led: f.led });
-      recent = recent.filter(x => now - x.t <= CHANGE_WINDOW_MS);
-      const vals = recent.map(x => x.led);
-      if(Math.max(...vals) - Math.min(...vals) >= CHANGE_LIMIT) cheat = true;
+      if(prevCheatLed !== null && Math.abs(f.led - prevCheatLed) >= JUMP_DELTA){
+        if(++bigJumps >= MAX_JUMPS) cheat = true;
+      }
+      prevCheatLed = f.led;
     }
   });
 
@@ -351,7 +350,7 @@ function setupMeasure(host, exp, day, onSaved){
 
   function start(){
     if(gate() !== 'ready') { renderIdle(); return; }
-    samples = []; recent = []; cheat = false; finished = false; stats = null;
+    samples = []; prevCheatLed = null; bigJumps = 0; cheat = false; finished = false; stats = null;
     measuring = true;
     endMs = Date.now() + day.measureSeconds * 1000;
     wakeLock.acquire();

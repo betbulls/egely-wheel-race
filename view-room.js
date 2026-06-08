@@ -10,8 +10,10 @@ const RENDER_MS = 250;      // how often the board repaints
 
 // Cheat detection: genuine readings drift slowly. If the LED moves by >= 4
 // within any 1-second window, it's hand-spun => not verified.
-const CHANGE_WINDOW_MS = 1000;
-const CHANGE_LIMIT = 4;
+// Verified rule (relaxed) — see view-solo.js. The de-spiked signal (ble.js) has
+// already removed the 24-rail glitches; here we only flag sustained large swings.
+const JUMP_DELTA = 10;
+const MAX_JUMPS = 3;
 
 // Mounts the Session Room view. Returns a cleanup function.
 export function mount(el, sessionId){
@@ -34,8 +36,8 @@ export function mount(el, sessionId){
   let groupSaved = false;    // host writes session group_avg once, at the end
   let myResultSaved = false; // each client writes its own result row once, at the end
 
-  let recentFrames = [];     // {t, led} within the last second (cheat detection)
-  let cheatDetected = false; // latched once an irregular change is seen in-window
+  let prevCheatLed = null, bigJumps = 0;   // cheat detection: count of large frame-to-frame jumps
+  let cheatDetected = false; // latched once enough irregular jumps are seen
 
   const racerId = name => name.trim().toLowerCase().replace(/\s+/g, '_');
   const inWindow = () => { const n = Date.now(); return n >= startMs && n <= endMs; };
@@ -156,13 +158,10 @@ export function mount(el, sessionId){
     unsubFrames = ble.subscribeFrames(frame => {
       myLed = frame.led;
       if(inWindow()){
-        const now = Date.now();
-        recentFrames.push({ t: now, led: frame.led });
-        recentFrames = recentFrames.filter(f => now - f.t <= CHANGE_WINDOW_MS);
-        const vals = recentFrames.map(f => f.led);
-        if(Math.max(...vals) - Math.min(...vals) >= CHANGE_LIMIT && !cheatDetected){
-          cheatDetected = true; updateHint();
+        if(prevCheatLed !== null && Math.abs(frame.led - prevCheatLed) >= JUMP_DELTA && !cheatDetected){
+          if(++bigJumps >= MAX_JUMPS){ cheatDetected = true; updateHint(); }
         }
+        prevCheatLed = frame.led;
       }
     });
 
