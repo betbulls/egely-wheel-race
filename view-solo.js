@@ -2,6 +2,7 @@ import { supabase } from './db.js';
 import * as ble from './ble.js';
 import * as auth from './auth.js';
 import * as wakeLock from './wake-lock.js';
+import * as presence from './presence.js';
 import { computeStats, vitalityLevel, vitalityColor as vColor, downsample } from './analytics.js';
 
 const SAMPLE_MS = 250;        // how often the curve is sampled while measuring
@@ -219,6 +220,7 @@ export function mount(el){
     updateVerify();
     sampleTimer = setInterval(() => samples.push(curLed), SAMPLE_MS);
     openLive();   // fire and forget; channels become ready within ~1s
+    presence.setMeasuring(true);   // show me as "measuring" on the Live wall
     wakeLock.acquire();
   }
 
@@ -234,6 +236,7 @@ export function mount(el){
     lastStats = computeStats(samples);
     if(lastStats) showEval(lastStats);
     closeLive();
+    presence.setMeasuring(false);
     wakeLock.release();
   }
 
@@ -314,6 +317,7 @@ export function mount(el){
     if(unsubFrames) unsubFrames();
     if(unsubStatus) unsubStatus();
     closeLive();
+    presence.setMeasuring(false);
     wakeLock.release();
     window.removeEventListener('resize', drawChart);
   };

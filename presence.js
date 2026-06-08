@@ -11,8 +11,10 @@
 // measurement values will ride on a separate broadcast in a later phase.
 import { supabase } from './db.js';
 import * as auth from './auth.js';
+import * as ble from './ble.js';
 
 const RANK = { online: 0, connected: 1, measuring: 2 };
+const TICK_MS = 500;            // live-value broadcast cadence while measuring
 
 let inited = false;
 let channel = null;
@@ -21,6 +23,12 @@ let lastTrackedJson = null;          // guards against redundant / racing re-tra
 const myKey = 'tab-' + Math.random().toString(36).slice(2);   // stable per-tab presence key
 let myStatus = 'online';            // 'online' | 'connected' | 'measuring'
 const listeners = new Set();         // view-live subscribers: cb(list)
+
+let bleConnected = false;
+let measuring = false;
+let lastLed = 0;
+let tickTimer = null;
+const liveValues = new Map();        // uid -> { led, ts } — newest live wheel value
 
 // Track only once the PROFILE has loaded. Otherwise the first track would use the
 // email-fallback name, and a second track milliseconds later (when the profile
@@ -75,6 +83,11 @@ function buildChannel(){
   channel.on('presence', { event: 'sync' }, emit);
   channel.on('presence', { event: 'join' }, emit);
   channel.on('presence', { event: 'leave' }, emit);
+  // Live wheel values from people who are measuring (high-frequency, ephemeral).
+  channel.on('broadcast', { event: 'live-tick' }, ({ payload }) => {
+    if(!payload || !payload.uid) return;
+    liveValues.set(payload.uid, { led: payload.led, ts: Date.now() });
+  });
   channel.subscribe(async (status) => { if(status === 'SUBSCRIBED') await applyTrack(); });
 }
 
@@ -88,13 +101,42 @@ export function init(){
   // just (re-)track or untrack. A re-track also refreshes the name once the profile
   // finishes loading (email-fallback → real display name).
   auth.subscribeAuth(() => applyTrack());
+  // BLE drives the connected/online status; frames feed the live value.
+  ble.subscribeStatus(s => { bleConnected = s.connected; refreshStatus(); });
+  ble.subscribeFrames(f => { lastLed = f.led; });
 }
 
-// Coarse status setter (used by BLE + measurement hooks in later phases).
-export function setStatus(status){
-  if(status === myStatus) return;
-  myStatus = status;
-  applyTrack();
+// Effective status = measuring > connected > online.
+function deriveStatus(){ return measuring ? 'measuring' : (bleConnected ? 'connected' : 'online'); }
+function refreshStatus(){ const s = deriveStatus(); if(s !== myStatus){ myStatus = s; applyTrack(); } }
+
+// Measurement views (solo / experiment) call this on start/stop. While measuring
+// we also broadcast the live wheel value so others see the number move.
+export function setMeasuring(on){
+  on = !!on;
+  if(on === measuring) return;
+  measuring = on;
+  refreshStatus();
+  if(measuring) startTicks(); else stopTicks();
+}
+
+function startTicks(){
+  if(tickTimer) return;
+  tickTimer = setInterval(() => {
+    const uid = auth.getState().user?.id;
+    if(!measuring || !tracking || !uid || !channel) return;
+    const led = ble.getState().lastFrame?.led ?? lastLed ?? 0;
+    liveValues.set(uid, { led, ts: Date.now() });   // our own value (broadcast is self:false)
+    try { channel.send({ type: 'broadcast', event: 'live-tick', payload: { uid, led } }); } catch {}
+  }, TICK_MS);
+}
+function stopTicks(){ if(tickTimer){ clearInterval(tickTimer); tickTimer = null; } }
+
+// Latest live wheel value for a user, or null if none / stale (>4s).
+export function getLive(uid){
+  const v = liveValues.get(uid);
+  if(!v || Date.now() - v.ts > 4000) return null;
+  return v.led;
 }
 
 // Subscribe to the live list. Fires immediately with the current list.

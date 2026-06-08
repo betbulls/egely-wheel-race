@@ -3,6 +3,7 @@
 // the point is simply to feel that others are here.
 import * as auth from './auth.js';
 import * as presence from './presence.js';
+import { vitalityColor } from './analytics.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
@@ -47,17 +48,33 @@ export function mount(el){
     listEl.innerHTML = sorted.map(p => {
       const st = STATUS[p.status] || STATUS.online;
       const isMe = myId && p.uid === myId;
+      const valueArea = p.status === 'measuring' ? `<div class="live-value"><span class="live-led waiting">…</span></div>` : '';
       return `
-        <div class="live-card ${st.cls}">
+        <div class="live-card ${st.cls}" data-uid="${esc(p.uid)}">
           <div class="live-avatar">${avatarHtml(p.avatar, p.name)}</div>
           <div class="live-main">
             <div class="live-name">${esc(p.name || 'Explorer')}${isMe ? ' <span class="live-you">You</span>' : ''}</div>
             <div class="live-status"><span class="live-pill ${st.cls}">${esc(st.label)}</span></div>
           </div>
+          ${valueArea}
         </div>`;
     }).join('');
+    refreshValues();
+  }
+
+  // Update the live wheel number on each measuring card (polls presence; ticks
+  // arrive ~2x/sec, and getLive() returns null once a value goes stale).
+  function refreshValues(){
+    listEl.querySelectorAll('.live-card.measuring').forEach(card => {
+      const el = card.querySelector('.live-led');
+      if(!el) return;
+      const led = presence.getLive(card.dataset.uid);
+      if(led == null){ el.textContent = '…'; el.classList.add('waiting'); el.style.color = ''; }
+      else { el.textContent = String(led); el.classList.remove('waiting'); el.style.color = vitalityColor(led); }
+    });
   }
 
   const unsub = presence.subscribe(render);
-  return () => unsub();
+  const valTimer = setInterval(refreshValues, 400);
+  return () => { unsub(); clearInterval(valTimer); };
 }
