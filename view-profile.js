@@ -151,6 +151,21 @@ export function mount(el){
       <span class="form-msg" id="pfMsg"></span>
     </div>
 
+    <div class="panel">
+      <h2>Measurement marks</h2>
+      <p class="page-sub" style="margin:-8px 0 16px">Every saved measurement carries one of these.</p>
+      <div class="verify-help">
+        <div class="verify-row">
+          <span class="verify-mark"><span class="v-badge verified">✓</span></span>
+          <div><b>Verified</b> — your wheel turned smoothly and steadily, so the reading counts as genuine. Verified measurements unlock the verification badges and raise your Verified score.</div>
+        </div>
+        <div class="verify-row">
+          <span class="verify-mark"><span class="v-badge unverified">unverified</span></span>
+          <div><b>Irregular</b> — the value swung around too much to be a steady reading. It's still saved and counts toward your overall progress — it just doesn't earn the verification marks.</div>
+        </div>
+      </div>
+    </div>
+
     <div id="pfLinkPanel"></div>
     <div id="pfFollowing"></div>`;
 
