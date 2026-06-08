@@ -27,8 +27,7 @@ let myStatus = 'online';            // 'online' | 'connected' | 'measuring' | 's
 const listeners = new Set();         // view-live subscribers: cb(list)
 
 let bleConnected = false;
-let measuring = false;               // solo / experiment measurement running
-let inSession = false;               // present in a group session room (with a wheel)
+let activity = null;                 // null | 'solo' | 'experiment' | 'session'
 let lastLed = 0;
 let tickTimer = null;
 const liveValues = new Map();        // uid -> { led, ts } — newest live wheel value
@@ -134,18 +133,25 @@ export function init(){
   }
 }
 
-// Effective status. measuring/session imply a connected wheel.
+// Effective status. An activity (solo/experiment/session) implies a connected wheel.
 function deriveStatus(){
-  if(inSession) return 'session';
-  if(measuring) return 'measuring';
+  if(activity === 'session') return 'session';
+  if(activity === 'experiment') return 'experiment';
+  if(activity === 'solo') return 'measuring';
   return bleConnected ? 'connected' : 'online';
 }
 function refreshStatus(){ const s = deriveStatus(); if(s !== myStatus){ myStatus = s; applyTrack(); } }
 
-// Solo / experiment measurement start/stop.
-export function setMeasuring(on){ on = !!on; if(on === measuring) return; measuring = on; refreshStatus(); }
-// Present in a group session room (with a wheel).
-export function setSession(on){ on = !!on; if(on === inSession) return; inSession = on; refreshStatus(); }
+// Activity hooks called by the measurement views. Only one activity at a time.
+function setActivity(kind, on){
+  const next = on ? kind : (activity === kind ? null : activity);
+  if(next === activity) return;
+  activity = next;
+  refreshStatus();
+}
+export function setMeasuring(on){ setActivity('solo', on); }        // solo measurement
+export function setExperiment(on){ setActivity('experiment', on); } // structured experiment
+export function setSession(on){ setActivity('session', on); }       // group session room
 
 // Broadcast the live wheel value while connected (so others see it spin), and feed
 // our own value locally (broadcast is self:false, so we don't receive our own).

@@ -16,11 +16,12 @@ function avatarHtml(url, name){
 }
 
 const STATUS = {
-  connected: { label: 'Wheel connected', cls: 'connected', live: true },
-  measuring: { label: 'Measuring',       cls: 'measuring', live: true },
-  session:   { label: 'In a session',    cls: 'session',   live: true },
-  online:    { label: 'Online',          cls: 'online',    live: false },
-  offline:   { label: 'Offline',         cls: 'offline',   live: false },
+  connected:  { label: 'Wheel connected', cls: 'connected',  live: true },
+  measuring:  { label: 'Measuring',       cls: 'measuring',  live: true },
+  experiment: { label: 'In an experiment',cls: 'experiment', live: true },
+  session:    { label: 'In a session',    cls: 'session',    live: true },
+  online:     { label: 'Online',          cls: 'online',     live: false },
+  offline:    { label: 'Offline',         cls: 'offline',    live: false },
 };
 // Group order: me first (handled separately), then connected wheels, online, offline.
 function groupRank(status){

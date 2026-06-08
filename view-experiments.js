@@ -355,7 +355,7 @@ function setupMeasure(host, exp, day, onSaved){
     measuring = true;
     endMs = Date.now() + day.measureSeconds * 1000;
     wakeLock.acquire();
-    presence.setMeasuring(true);   // show me as "measuring" on the Live wall
+    presence.setExperiment(true);   // show me as "in an experiment" on the Live wall
     sampleTimer = setInterval(() => samples.push(curLed), SAMPLE_MS);
     uiTimer = setInterval(() => { if(measuring){ if(Date.now() >= endMs) finish(); else renderMeasuring(); } }, 250);
     renderMeasuring();
@@ -364,7 +364,7 @@ function setupMeasure(host, exp, day, onSaved){
   function cleanupTimers(){
     if(sampleTimer){ clearInterval(sampleTimer); sampleTimer = null; }
     if(uiTimer){ clearInterval(uiTimer); uiTimer = null; }
-    presence.setMeasuring(false);
+    presence.setExperiment(false);
     wakeLock.release();
   }
 
