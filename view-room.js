@@ -539,73 +539,79 @@ export function mount(el, sessionId){
     body.hidden = false;
     body.innerHTML = '<div class="empty">Loading results…</div>';
 
-    const { data, error } = await supabase.from('measurements')
-      .select('racer_name, led_value')
-      .eq('session_id', Number(sessionId))
-      .order('created_at', { ascending: true });
+    // Source from the results rows: they carry the time-anchored curve, the
+    // authoritative summary stats, the verified verdict and the host flag.
+    const { data: rows, error } = await supabase.from('results')
+      .select('racer_name, user_id, avg, peak, steadiness, zone_green, zone_yellow, zone_red, trend, green_streak, curve, is_host, verified')
+      .eq('session_id', Number(sessionId));
     if(error){ body.innerHTML = `<div class="empty">Could not load results: ${esc(error.message)}</div>`; return; }
 
-    const byRacer = new Map();
-    for(const row of (data || [])){
-      if(!byRacer.has(row.racer_name)) byRacer.set(row.racer_name, []);
-      byRacer.get(row.racer_name).push(row.led_value);
-    }
-    if(byRacer.size === 0){
-      body.innerHTML = '<div class="empty">No measurements were recorded for this session.</div>';
-      return;
-    }
+    const myUserId = auth.getState().user?.id || null;
+    const statsOf = r => ({
+      avg: Number(r.avg) || 0, peak: r.peak || 0, steadiness: r.steadiness || 0,
+      zone: { red: Number(r.zone_red) || 0, yellow: Number(r.zone_yellow) || 0, green: Number(r.zone_green) || 0 },
+      trendTotal: Number(r.trend) || 0, greenStreak: r.green_streak || 0,
+    });
+    const all = (rows || []).map(r => ({
+      name: r.racer_name || 'Racer',
+      host: r.is_host != null ? !!r.is_host : isHostName(r.racer_name),
+      verified: r.verified,
+      mine: !!((myUserId && r.user_id === myUserId) || (myName && r.racer_name === myName)),
+      curve: Array.isArray(r.curve) ? r.curve : [],
+      stats: statsOf(r),
+    }));
 
-    const results = [...byRacer.entries()]
-      .map(([name, leds]) => ({ name, leds, stats: computeStats(leds), host: isHostName(name) }))
-      .filter(r => r.stats);
-
-    // Verified verdicts from the results table; filter when the session is verified-only.
-    const { data: vRows } = await supabase.from('results')
-      .select('racer_name, verified').eq('session_id', Number(sessionId));
-    const vMap = new Map((vRows || []).map(r => [r.racer_name, r.verified]));
-    results.forEach(r => { r.verified = vMap.has(r.name) ? vMap.get(r.name) : null; });
-
+    // The leaderboard / group counts only what qualifies (verified, when the host
+    // chose verified-only) — but the viewer ALWAYS sees their own measurement,
+    // marked, even when it did not make the leaderboard.
     const verifiedOnly = !!session.verified_only;
-    const shown = (verifiedOnly ? results.filter(r => r.verified === true) : results)
+    const counted = (verifiedOnly ? all.filter(r => r.verified === true) : all)
       .sort((a, b) => b.stats.avg - a.stats.avg);
+    const myRow = all.find(r => r.mine) || null;
+    const myExcluded = !!(myRow && !counted.includes(myRow));
 
-    if(shown.length === 0){
+    if(counted.length === 0 && !myRow){
       body.innerHTML = verifiedOnly
-        ? '<div class="empty">No verified measurements in this session.</div>'
+        ? '<div class="empty">No verified measurements were recorded for this session.</div>'
         : '<div class="empty">No measurements were recorded for this session.</div>';
       return;
     }
 
-    // ---- Build histories for the Session Pulse trio (Host / Group / You) ----
-    // The per-tick group curve is also our source of truth for the Group AVG —
-    // so the big "GROUP AVERAGE" number matches the blue line on the chart.
-    const maxLen = shown.reduce((m, r) => Math.max(m, r.leds.length), 0);
+    // Time-anchored history from a stored curve: map each bucket to its real session
+    // time and drop the empty (null) buckets, so the line shows only where measured.
+    const ledsToHist = leds => {
+      const n = leds.length;
+      return leds.map((v, k) => ({ t: n > 1 ? (k / (n - 1)) * durationMs : 0, led: v }))
+                 .filter(p => p.led != null);
+    };
+
+    // Group curve: per-bucket average across the counted racers (null where nobody).
+    // It is also the source of truth for the big GROUP AVERAGE, so the number matches
+    // the blue line on the chart.
+    const maxLen = counted.reduce((m, r) => Math.max(m, r.curve.length), 0);
     const groupLeds = [];
     for(let i = 0; i < maxLen; i++){
       let sum = 0, n = 0;
-      for(const r of shown){
-        if(i < r.leds.length){ sum += r.leds[i]; n++; }
-      }
-      if(n > 0) groupLeds.push(sum / n);
+      for(const r of counted){ const v = r.curve[i]; if(v != null){ sum += v; n++; } }
+      groupLeds.push(n ? sum / n : null);
     }
-    const groupAvg = groupLeds.length
-      ? groupLeds.reduce((s, v) => s + v, 0) / groupLeds.length
-      : 0;
-    const ledsToHist = leds => {
-      const n = leds.length;
-      return leds.map((v, k) => ({ t: n > 1 ? (k / (n - 1)) * durationMs : 0, led: v }));
-    };
-    const hostResult = shown.find(r => r.host);
-    const meResult = shown.find(r => r.name === myName);
+    const groupReal = groupLeds.filter(v => v != null);
+    const groupAvg = groupReal.length ? groupReal.reduce((s, v) => s + v, 0) / groupReal.length : 0;
+
+    const hostResult = counted.find(r => r.host);
     const pulseHist = {
-      host: hostResult ? ledsToHist(hostResult.leds) : [],
+      host: hostResult ? ledsToHist(hostResult.curve) : [],
       group: ledsToHist(groupLeds),
-      me: meResult ? ledsToHist(meResult.leds) : [],
+      me: myRow ? ledsToHist(myRow.curve) : [],   // your own line always shows
     };
+    const groupStats = counted.length
+      ? { avg: groupAvg, peak: Math.max(0, ...counted.map(r => r.stats.peak)),
+          steadiness: Math.round(counted.reduce((s, r) => s + r.stats.steadiness, 0) / counted.length) }
+      : null;
     const pulseStats = {
       host: hostResult ? hostResult.stats : null,
-      group: groupLeds.length ? computeStats(groupLeds) : null,
-      me: meResult ? meResult.stats : null,
+      group: groupStats,
+      me: myRow ? myRow.stats : null,
     };
     const fmtAvg = s => s ? s.avg.toFixed(1) : '–';
     const fmtPeak = s => s ? s.peak : '–';
@@ -630,37 +636,22 @@ export function mount(el, sessionId){
             <div class="sp-stats"><div class="ss"><div class="ss-val">${fmtAvg(pulseStats.group)}</div><div class="ss-lbl">Avg</div></div>
             <div class="ss"><div class="ss-val">${fmtPeak(pulseStats.group)}</div><div class="ss-lbl">Peak</div></div>
             <div class="ss"><div class="ss-val">${pulseStats.group ? pulseStats.group.steadiness : '–'}</div><div class="ss-lbl">Steady</div></div></div></div>
-          <div class="sp-col"><div class="sp-col-head leg-me"><i class="leg-dot"></i><span class="sp-col-name">${meResult ? 'You' : 'You (not joined)'}</span></div>
+          <div class="sp-col"><div class="sp-col-head leg-me"><i class="leg-dot"></i><span class="sp-col-name">${myRow ? 'You' : 'You (not joined)'}</span></div>
             <div class="sp-stats"><div class="ss"><div class="ss-val">${fmtAvg(pulseStats.me)}</div><div class="ss-lbl">Avg</div></div>
             <div class="ss"><div class="ss-val">${fmtPeak(pulseStats.me)}</div><div class="ss-lbl">Peak</div></div>
             <div class="ss"><div class="ss-val">${pulseStats.me ? pulseStats.me.steadiness : '–'}</div><div class="ss-lbl">Steady</div></div></div></div>
         </div>
       </div>`;
 
-    const winners = CATEGORIES.map(cat => {
-      let best = null;
-      for(const r of shown){ const v = cat.value(r.stats); if(best === null || v > best.v) best = { name: r.name, v }; }
-      return { cat, best };
-    });
-
-    const catCards = winners.map(w => `
-      <div class="cat-card">
-        <div class="cat-icon">${icon(w.cat.icon)}</div>
-        <div class="cat-name">${esc(w.cat.name)}</div>
-        <div class="cat-desc">${esc(w.cat.desc)}</div>
-        <div class="cat-winner">${w.best ? `${esc(w.best.name)} · ${esc(w.cat.fmt(w.best.v))}` : '—'}</div>
-      </div>`).join('');
-
-    const vBadge = r => r.verified === true
-      ? '<span class="v-badge verified">✓</span>'
+    const vBadge = r => r.verified === true ? '<span class="v-badge verified">✓</span>'
       : r.verified === false ? '<span class="v-badge unverified">unverified</span>' : '';
-
-    const racerCards = shown.map((r, i) => `
-      <div class="res-card">
-        <div class="res-rank">${i + 1}</div>
+    const racerCard = (r, rankLabel, canvasId, note) => `
+      <div class="res-card${r.mine ? ' mine' : ''}">
+        <div class="res-rank">${rankLabel}</div>
         <div class="res-main">
           <div class="racer-name-row"><span class="racer-name">${esc(r.name)}</span>${r.host ? '<span class="host-tag">Host</span>' : ''}${vBadge(r)}</div>
-          <canvas class="res-curve" id="rc${i}"></canvas>
+          ${note ? `<div class="res-note" style="font-size:12px;color:#e9b84a;margin:2px 0 6px">${esc(note)}</div>` : ''}
+          <canvas class="res-curve" id="${canvasId}"></canvas>
           ${zoneBar(r.stats.zone)}
         </div>
         <div class="res-stats">
@@ -669,21 +660,54 @@ export function mount(el, sessionId){
           <div class="rs"><div class="rs-val">${r.stats.steadiness}</div><div class="rs-lbl">Steady</div></div>
           <div class="rs"><div class="rs-val rs-trend">${esc(trendLabel(r.stats.trendTotal))}</div><div class="rs-lbl">Trend</div></div>
         </div>
-      </div>`).join('');
+      </div>`;
+
+    // Leaderboard (group average + category winners + ranked racers) — only what counts.
+    let leaderboardHtml = '';
+    if(counted.length){
+      const winners = CATEGORIES.map(cat => {
+        let best = null;
+        for(const r of counted){ const v = cat.value(r.stats); if(best === null || v > best.v) best = { name: r.name, v }; }
+        return { cat, best };
+      });
+      const catCards = winners.map(w => `
+        <div class="cat-card">
+          <div class="cat-icon">${icon(w.cat.icon)}</div>
+          <div class="cat-name">${esc(w.cat.name)}</div>
+          <div class="cat-desc">${esc(w.cat.desc)}</div>
+          <div class="cat-winner">${w.best ? `${esc(w.best.name)} · ${esc(w.cat.fmt(w.best.v))}` : '—'}</div>
+        </div>`).join('');
+      const countedCards = counted.map((r, i) => racerCard(r, String(i + 1), 'rc' + i)).join('');
+      leaderboardHtml = `
+        <div class="res-group">
+          <div class="res-group-val" style="color:${vitalityColor(Math.round(groupAvg))}">${groupAvg.toFixed(1)}</div>
+          <div class="res-group-lbl">Group average · ${counted.length} racer${counted.length > 1 ? 's' : ''} · finished${verifiedOnly ? ' · verified only' : ''}</div>
+        </div>
+
+        <h2 class="res-h">Category winners</h2>
+        <div class="cat-grid">${catCards}</div>
+
+        <h2 class="res-h">All racers <span class="res-h-sub">ranked by average</span></h2>
+        <div class="res-list">${countedCards}</div>`;
+    }
+
+    // The viewer's own measurement, shown even if it did not make a verified-only board.
+    let mineHtml = '';
+    if(myExcluded){
+      mineHtml = `
+        <h2 class="res-h">Your measurement <span class="res-h-sub">${counted.length ? 'not counted on the leaderboard' : 'recorded'}</span></h2>
+        <div class="res-list">${racerCard(myRow, '–', 'rcMine', 'Recorded, but marked unverified — so it is not ranked in this verified-only session.')}</div>`;
+    }
+
+    const emptyNote = counted.length === 0
+      ? '<p class="room-hint">No verified measurements made the leaderboard yet.</p>'
+      : '';
 
     body.innerHTML = `
       ${pulsePanel}
-
-      <div class="res-group">
-        <div class="res-group-val" style="color:${vitalityColor(Math.round(groupAvg))}">${groupAvg.toFixed(1)}</div>
-        <div class="res-group-lbl">Group average · ${shown.length} racer${shown.length > 1 ? 's' : ''} · finished${verifiedOnly ? ' · verified only' : ''}</div>
-      </div>
-
-      <h2 class="res-h">Category winners</h2>
-      <div class="cat-grid">${catCards}</div>
-
-      <h2 class="res-h">All racers <span class="res-h-sub">ranked by average</span></h2>
-      <div class="res-list">${racerCards}</div>
+      ${emptyNote}
+      ${leaderboardHtml}
+      ${mineHtml}
 
       <div class="metric-legend">
         <div><b>Avg</b> — ${esc(METRIC_HELP.avg)}</div>
@@ -697,13 +721,14 @@ export function mount(el, sessionId){
       <p class="room-hint"><a href="#/sessions" class="link">← Back to sessions</a></p>
     `;
 
-    shown.forEach((r, i) => {
+    counted.forEach((r, i) => {
       const cv = body.querySelector('#rc' + i);
-      if(!cv) return;
-      const n = r.leds.length;
-      const hist = r.leds.map((v, k) => ({ t: n > 1 ? (k / (n - 1)) * durationMs : 0, led: v }));
-      drawCurve(cv, hist, vitalityColor(Math.round(r.stats.avg)));
+      if(cv) drawCurve(cv, ledsToHist(r.curve), vitalityColor(Math.round(r.stats.avg)));
     });
+    if(myExcluded){
+      const cv = body.querySelector('#rcMine');
+      if(cv) drawCurve(cv, ledsToHist(myRow.curve), vitalityColor(Math.round(myRow.stats.avg)));
+    }
 
     drawTrio(body.querySelector('#spChartRes'), pulseHist, { durationMs });
   }
