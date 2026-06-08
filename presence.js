@@ -15,8 +15,10 @@ import * as auth from './auth.js';
 import * as ble from './ble.js';
 
 const TICK_MS = 500;            // live-value broadcast cadence while the wheel is connected
+const BEAT_MS = 2500;           // status heartbeat cadence (covers online users + flaky presence)
 const SERIES_MAX = 120;         // live-curve history (~60s at 500ms, like the solo preview)
 const STALE_MS = 4000;          // a live value older than this is treated as gone
+const STATUS_STALE_MS = 7000;   // a broadcast status older than this falls back to presence
 
 let inited = false;
 let channel = null;
@@ -32,6 +34,7 @@ let lastLed = 0;
 let tickTimer = null;
 const liveValues = new Map();        // uid -> { led, ts } — newest live wheel value
 const liveSeries = new Map();        // uid -> number[] — recent values for the sparkline
+const liveStatus = new Map();        // uid -> { status, ts } — status via broadcast (reliable when presence updates aren't)
 
 function visible(){
   const a = auth.getState();
@@ -60,7 +63,33 @@ function list(){
       if(!cur || (e.ts || 0) > (cur.ts || 0)) byUid.set(e.uid, e);
     }
   }
-  return [...byUid.values()];
+  // Overlay the broadcast status (reliable on flaky networks) over the presence
+  // status, which doesn't always propagate on re-tracks.
+  return [...byUid.values()].map(e => {
+    const ls = liveStatusOf(e.uid);
+    return ls ? { ...e, status: ls } : e;
+  });
+}
+
+function liveStatusOf(uid){
+  const v = liveStatus.get(uid);
+  if(!v || Date.now() - v.ts > STATUS_STALE_MS) return null;
+  return v.status;
+}
+
+// Record a broadcast status; re-render the wall if it actually changed.
+function noteStatus(uid, status){
+  const prev = liveStatus.get(uid);
+  liveStatus.set(uid, { status, ts: Date.now() });
+  if(!prev || prev.status !== status) emit();
+}
+
+// Broadcast my current status (heartbeat + on every change) — the reliable path.
+function beat(){
+  const uid = auth.getState().user?.id;
+  if(!tracking || !uid || !channel) return;
+  liveStatus.set(uid, { status: myStatus, ts: Date.now() });   // keep own fresh (broadcast is self:false)
+  try { channel.send({ type: 'broadcast', event: 'live-beat', payload: { uid, status: myStatus } }); } catch {}
 }
 
 const sig = l => l.map(p => p.uid + ':' + p.status).sort().join('|');
@@ -95,6 +124,12 @@ function buildChannel(){
   channel.on('broadcast', { event: 'live-tick' }, ({ payload }) => {
     if(!payload || !payload.uid) return;
     recordLive(payload.uid, payload.led);
+    if(payload.status) noteStatus(payload.uid, payload.status);
+  });
+  // Status heartbeat — the reliable status channel (presence re-tracks can be missed).
+  channel.on('broadcast', { event: 'live-beat' }, ({ payload }) => {
+    if(!payload || !payload.uid || !payload.status) return;
+    noteStatus(payload.uid, payload.status);
   });
   channel.subscribe(async (status) => { if(status === 'SUBSCRIBED') await applyTrack(); });
 }
@@ -125,6 +160,9 @@ export function init(){
     const s = sig(l);
     if(s !== lastSig){ lastSig = s; listeners.forEach(cb => { try { cb(l); } catch {} }); }
   }, 1500);
+  // Status heartbeat — broadcast my status periodically so others stay in sync even
+  // when presence re-tracks don't propagate (the curve/value broadcast is reliable).
+  setInterval(beat, BEAT_MS);
   // Returning to the tab: re-assert our presence and refresh the wall immediately.
   if(typeof document !== 'undefined'){
     document.addEventListener('visibilitychange', () => {
@@ -140,7 +178,7 @@ function deriveStatus(){
   if(activity === 'solo') return 'measuring';
   return bleConnected ? 'connected' : 'online';
 }
-function refreshStatus(){ const s = deriveStatus(); if(s !== myStatus){ myStatus = s; applyTrack(); } }
+function refreshStatus(){ const s = deriveStatus(); if(s !== myStatus){ myStatus = s; applyTrack(); beat(); } }
 
 // Activity hooks called by the measurement views. Only one activity at a time.
 function setActivity(kind, on){
@@ -162,7 +200,8 @@ function startTicks(){
     if(!bleConnected || !tracking || !uid || !channel) return;
     const led = ble.getState().lastFrame?.led ?? lastLed ?? 0;
     recordLive(uid, led);
-    try { channel.send({ type: 'broadcast', event: 'live-tick', payload: { uid, led } }); } catch {}
+    liveStatus.set(uid, { status: myStatus, ts: Date.now() });
+    try { channel.send({ type: 'broadcast', event: 'live-tick', payload: { uid, led, status: myStatus } }); } catch {}
   }, TICK_MS);
 }
 function stopTicks(){
