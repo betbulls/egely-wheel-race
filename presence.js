@@ -17,7 +17,7 @@ const RANK = { online: 0, connected: 1, measuring: 2 };
 let inited = false;
 let channel = null;
 let tracking = false;
-let presenceKey = null;
+const myKey = 'tab-' + Math.random().toString(36).slice(2);   // stable per-tab presence key
 let myStatus = 'online';            // 'online' | 'connected' | 'measuring'
 const listeners = new Set();         // view-live subscribers: cb(list)
 
@@ -59,28 +59,15 @@ async function applyTrack(){
 }
 
 function buildChannel(){
-  const a = auth.getState();
-  presenceKey = a.user ? a.user.id : ('anon-' + Math.random().toString(36).slice(2));
   channel = supabase.channel('live-presence', {
-    config: { presence: { key: presenceKey }, broadcast: { self: false } },
+    config: { presence: { key: myKey }, broadcast: { self: false } },
   });
+  // Re-render on ANY presence change — sync (full state) plus join/leave diffs —
+  // so a new person showing up updates the wall live, without a refresh.
   channel.on('presence', { event: 'sync' }, emit);
+  channel.on('presence', { event: 'join' }, emit);
+  channel.on('presence', { event: 'leave' }, emit);
   channel.subscribe(async (status) => { if(status === 'SUBSCRIBED') await applyTrack(); });
-}
-
-function onAuth(){
-  const id = auth.getState().user?.id || null;
-  const keyId = (presenceKey && !presenceKey.startsWith('anon-')) ? presenceKey : null;
-  if(id !== keyId){
-    // Identity changed (login/logout): the presence key is fixed at creation, so
-    // rebuild the channel under the correct key.
-    const old = channel;
-    channel = null; tracking = false;
-    if(old){ try { supabase.removeChannel(old); } catch {} }
-    buildChannel();
-  } else {
-    applyTrack();   // same identity — maybe the visibility toggle changed
-  }
 }
 
 // Call once at app startup.
@@ -88,7 +75,11 @@ export function init(){
   if(inited) return;
   inited = true;
   buildChannel();
-  auth.subscribeAuth(onAuth);
+  // The presence key is a stable per-tab id (people are deduped by the uid in the
+  // payload, not by the key), so login/logout never needs a channel rebuild — we
+  // just (re-)track or untrack. A re-track also refreshes the name once the profile
+  // finishes loading (email-fallback → real display name).
+  auth.subscribeAuth(() => applyTrack());
 }
 
 // Coarse status setter (used by BLE + measurement hooks in later phases).
