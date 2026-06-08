@@ -12,6 +12,8 @@ import { mount as mountClients } from './view-clients.js';
 import { mount as mountLeaderboard } from './view-leaderboard.js';
 import { mount as mountSessionNew } from './view-session-new.js';
 import { mountExperiments, mountExperimentDetail } from './view-experiments.js';
+import { mount as mountLive } from './view-live.js';
+import * as presence from './presence.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
@@ -39,6 +41,7 @@ function router(){
     a.classList.toggle('active', a.dataset.route === path);
   });
   if(path === '/room') setView(mountRoom, param);
+  else if(path === '/live') setView(mountLive);
   else if(path === '/experiments') setView(mountExperiments, param);
   else if(path === '/experiment') setView(mountExperimentDetail, param);
   else if(path === '/solo') setView(mountSolo);
@@ -341,6 +344,7 @@ if(fab && fabMenu){
 }
 
 // ---- Boot -------------------------------------------------------------------
+presence.init();   // app-level Live presence (joins the shared channel)
 window.addEventListener('hashchange', router);
 if(!location.hash) location.hash = '#/home';
 router();

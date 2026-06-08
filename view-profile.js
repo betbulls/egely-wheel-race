@@ -119,6 +119,11 @@ export function mount(el){
         <input type="checkbox" id="pfPract" ${s.isPractitioner ? 'checked' : ''}>
         I'm a Spiritual Maker (follow your members' measurements)
       </label>
+      <label class="check" style="margin-top:14px;display:flex;align-items:center;gap:9px;cursor:pointer">
+        <input type="checkbox" id="pfLive" ${s.showOnLive ? 'checked' : ''}>
+        Show me on Live page
+      </label>
+      <p class="page-sub" style="margin:6px 0 0;font-size:13px">When enabled, other users can see that you are online and, if you are measuring, your live Egely Wheel values.</p>
     </div>
 
     <div class="panel">
@@ -179,6 +184,7 @@ export function mount(el){
       bio: $('pfBio').value.trim() || null,
       is_practitioner: $('pfPract').checked,
       coupon_code: $('pfCoupon').value.trim() || null,
+      show_on_live: $('pfLive').checked,
     };
     // Validate + normalise every URL field (all optional; empty is fine).
     for(const [col, id, label] of URL_FIELDS){

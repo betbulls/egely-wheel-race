@@ -28,6 +28,8 @@ function state(){
     facebook: profile?.facebook_url || '',
     affiliateLink: profile?.affiliate_link || '',
     couponCode: profile?.coupon_code || '',
+    // Live presence visibility — default ON unless the user explicitly turned it off.
+    showOnLive: profile?.show_on_live !== false,
   };
 }
 function emit(){ const s = state(); listeners.forEach(cb => cb(s)); }
