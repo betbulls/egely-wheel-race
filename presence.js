@@ -17,13 +17,18 @@ const RANK = { online: 0, connected: 1, measuring: 2 };
 let inited = false;
 let channel = null;
 let tracking = false;
+let lastTrackedJson = null;          // guards against redundant / racing re-tracks
 const myKey = 'tab-' + Math.random().toString(36).slice(2);   // stable per-tab presence key
 let myStatus = 'online';            // 'online' | 'connected' | 'measuring'
 const listeners = new Set();         // view-live subscribers: cb(list)
 
+// Track only once the PROFILE has loaded. Otherwise the first track would use the
+// email-fallback name, and a second track milliseconds later (when the profile
+// arrives) gets dropped by Realtime — leaving the wrong name on the wall. Waiting
+// for the profile means a single, correctly-named track.
 function visible(){
   const a = auth.getState();
-  return !!(a.user && a.showOnLive);
+  return !!(a.user && a.profile && a.showOnLive);
 }
 
 // Flatten presenceState() into one entry per user (highest-rank status wins,
@@ -49,11 +54,14 @@ async function applyTrack(){
   if(!channel) return;
   if(visible()){
     const a = auth.getState();
-    try { await channel.track({ uid: a.user.id, name: a.displayName || 'Explorer', avatar: a.avatarUrl || null, status: myStatus }); tracking = true; }
+    const payload = { uid: a.user.id, name: a.displayName || 'Explorer', avatar: a.avatarUrl || null, status: myStatus };
+    const json = JSON.stringify(payload);
+    if(json === lastTrackedJson) return;          // nothing changed — avoid a redundant track
+    try { await channel.track(payload); tracking = true; lastTrackedJson = json; }
     catch {}
   } else if(tracking){
     try { await channel.untrack(); } catch {}
-    tracking = false;
+    tracking = false; lastTrackedJson = null;
   }
   emit();
 }
