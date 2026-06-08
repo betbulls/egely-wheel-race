@@ -15,7 +15,7 @@ import * as auth from './auth.js';
 import * as ble from './ble.js';
 
 const TICK_MS = 500;            // live-value broadcast cadence while the wheel is connected
-const SERIES_MAX = 24;          // sparkline history length (~12s at 500ms)
+const SERIES_MAX = 120;         // live-curve history (~60s at 500ms, like the solo preview)
 const STALE_MS = 4000;          // a live value older than this is treated as gone
 
 let inited = false;
