@@ -13,6 +13,7 @@ import { mount as mountLeaderboard } from './view-leaderboard.js';
 import { mount as mountSessionNew } from './view-session-new.js';
 import { mountExperiments, mountExperimentDetail } from './view-experiments.js';
 import { mount as mountLive } from './view-live.js';
+import { mount as mountJourney } from './view-journey.js';
 import * as presence from './presence.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
@@ -42,6 +43,7 @@ function router(){
   });
   if(path === '/room') setView(mountRoom, param);
   else if(path === '/live') setView(mountLive);
+  else if(path === '/journey') setView(mountJourney);
   else if(path === '/experiments') setView(mountExperiments, param);
   else if(path === '/experiment') setView(mountExperimentDetail, param);
   else if(path === '/solo') setView(mountSolo);

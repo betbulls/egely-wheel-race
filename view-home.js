@@ -319,7 +319,8 @@ function renderLevel(s){
              <div class="lj-title-sm">${esc(nextLevel.title)}</div>
              <div class="lj-meta">Unlocks at ${nextLevel.threshold} XP</div>`}
       </div>
-    </section>`;
+    </section>
+    <a class="lj-link" href="#/journey">What do the levels mean? <span>→</span></a>`;
 }
 
 // ---- Stats -----------------------------------------------------------------
