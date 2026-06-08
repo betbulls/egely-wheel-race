@@ -34,7 +34,13 @@ export function drawVitalityChart(canvas, leds, durationSeconds){
   if(!leds || leds.length < 2) return;
   const n = leds.length;
   ctx.beginPath();
-  leds.forEach((v, i) => { const x = x0 + (i / (n - 1)) * plotW, y = ledToY(v); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+  let pen = false;   // pen up over null buckets so the line breaks at gaps (not measured)
+  leds.forEach((v, i) => {
+    if(v == null){ pen = false; return; }
+    const x = x0 + (i / (n - 1)) * plotW, y = ledToY(v);
+    if(pen) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+    pen = true;
+  });
   ctx.strokeStyle = '#e8e6ff'; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
 }
 
@@ -80,9 +86,12 @@ export function drawTrio(canvas, series, opts){
   const drawLine = (hist, color, lineWidth) => {
     if(!hist || hist.length < 2) return;
     ctx.beginPath();
-    hist.forEach((pt, i) => {
+    let pen = false;   // break the line over null points (gaps where nobody measured)
+    hist.forEach(pt => {
+      if(pt.led == null){ pen = false; return; }
       const x = xOf(pt.t), y = ledToY(pt.led);
-      if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      if(pen) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+      pen = true;
     });
     ctx.strokeStyle = color; ctx.lineWidth = lineWidth; ctx.lineJoin = 'round'; ctx.stroke();
   };

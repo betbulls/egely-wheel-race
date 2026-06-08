@@ -2,7 +2,7 @@ import { supabase } from './db.js';
 import * as ble from './ble.js';
 import * as auth from './auth.js';
 import * as presence from './presence.js';
-import { computeStats, CATEGORIES, METRIC_HELP, icon, trendLabel, vitalityColor, downsample } from './analytics.js';
+import { computeStats, CATEGORIES, METRIC_HELP, icon, trendLabel, vitalityColor } from './analytics.js';
 import { drawTrio } from './chart.js';
 
 const BROADCAST_MS = 500;   // how often each client samples + broadcasts its LED
@@ -33,6 +33,7 @@ export function mount(el, sessionId){
 
   let pendingSamples = [];   // buffered measurement rows, flushed in batches
   let mySamples = [];        // my own LED values (in-window) for my result row
+  let mySampleTimes = [];    // matching real-time offsets (ms from session start), for time-anchoring the curve
   let groupSaved = false;    // host writes session group_avg once, at the end
   let myResultSaved = false; // each client writes its own result row once, at the end
 
@@ -215,6 +216,7 @@ export function mount(el, sessionId){
       mySum += myLed; myCount++;
       myPeak = Math.max(myPeak, myLed);
       mySamples.push(myLed);
+      mySampleTimes.push(Date.now() - startMs);
       pendingSamples.push({
         session_id: Number(sessionId), user_id: auth.getState().user?.id || null,
         racer_id: racerId(myName), racer_name: myName, led_value: myLed,
@@ -251,6 +253,19 @@ export function mount(el, sessionId){
       .then(({ error }) => { if(error) console.warn('group save error:', error.message); });
   }
 
+  // Build the saved curve aligned to the full session window: each sample lands in
+  // its real time bucket, so the stored curve shows WHEN you measured (no stretching).
+  // Buckets where you weren't measuring stay null — drawn as a gap, not a value.
+  function anchoredCurve(samples, times, span, n = 80){
+    const curve = new Array(n).fill(null);
+    if(!span) return curve;
+    for(let i = 0; i < samples.length; i++){
+      const k = Math.max(0, Math.min(n - 1, Math.floor((times[i] / span) * n)));
+      curve[k] = samples[i];   // last sample in a bucket wins
+    }
+    return curve;
+  }
+
   // Each measuring client writes its own summarised result once the session ends.
   function maybeSaveMyResult(){
     if(myResultSaved || Date.now() <= endMs || mySamples.length === 0) return;
@@ -265,7 +280,7 @@ export function mount(el, sessionId){
       zone_red: Number(s.zone.red.toFixed(1)),
       trend: Number(s.trendTotal.toFixed(2)), green_streak: s.greenStreak,
       samples: s.n, is_host: isHostName(myName), verified: !cheatDetected,
-      curve: downsample(mySamples, 80), duration_seconds: (session.duration_minutes || 0) * 60,
+      curve: anchoredCurve(mySamples, mySampleTimes, durationMs), duration_seconds: (session.duration_minutes || 0) * 60,
     }).then(({ error }) => { if(error) console.warn('result save error:', error.message); });
   }
 

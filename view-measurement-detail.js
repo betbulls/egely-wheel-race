@@ -1,6 +1,6 @@
 import { supabase } from './db.js';
 import * as auth from './auth.js';
-import { vitalityLevel, vitalityColor as vColor, trendLabel, computeStats } from './analytics.js';
+import { vitalityLevel, vitalityColor as vColor, trendLabel } from './analytics.js';
 import { drawVitalityChart, drawTrio } from './chart.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
@@ -61,33 +61,46 @@ export function mount(el, id){
     // ---- Session Pulse: Host + Group + You for a finished session row ------
     if(!solo){
       const { data: sessRows } = await supabase.from('results')
-        .select('id, curve, racer_name, is_host, duration_seconds')
+        .select('id, curve, racer_name, is_host, duration_seconds, avg, peak, steadiness')
         .eq('session_id', r.session_id);
       if(sessRows && sessRows.length){
         const durationMs = (r.duration_seconds || 60) * 1000;
         const maxLen = sessRows.reduce((m, rw) => Math.max(m, Array.isArray(rw.curve) ? rw.curve.length : 0), 0);
-        const groupLeds = [];
+        const groupLeds = [];   // full-length; null where nobody was measuring (a gap)
         for(let i = 0; i < maxLen; i++){
           let sum = 0, n = 0;
           for(const rw of sessRows){
-            if(Array.isArray(rw.curve) && i < rw.curve.length){ sum += rw.curve[i]; n++; }
+            const v = Array.isArray(rw.curve) ? rw.curve[i] : null;
+            if(v != null){ sum += v; n++; }
           }
-          if(n) groupLeds.push(sum / n);
+          groupLeds.push(n ? sum / n : null);
         }
         const hostRow = sessRows.find(rw => rw.is_host);
+        // Map each bucket to its real time across the session, then drop the empty
+        // (null) buckets so the line is drawn only where the racer actually measured.
         const ledsToHist = leds => {
           const n = leds.length;
-          return leds.map((v, k) => ({ t: n > 1 ? (k / (n - 1)) * durationMs : 0, led: v }));
+          return leds.map((v, k) => ({ t: n > 1 ? (k / (n - 1)) * durationMs : 0, led: v }))
+                     .filter(p => p.led != null);
         };
         const pulseHist = {
           host: hostRow && Array.isArray(hostRow.curve) ? ledsToHist(hostRow.curve) : [],
           group: groupLeds.length ? ledsToHist(groupLeds) : [],
           me: Array.isArray(r.curve) ? ledsToHist(r.curve) : [],
         };
-        const safeStats = leds => (Array.isArray(leds) && leds.length) ? computeStats(leds) : null;
-        const hostStats = hostRow ? safeStats(hostRow.curve) : null;
-        const groupStats = safeStats(groupLeds);
-        const meStats = safeStats(r.curve);
+        // Per-racer stats come from the stored summary columns (computed from the full
+        // sample set at save time) — authoritative, and unaffected by the curve's time
+        // bucketing. The curve drives only the drawn lines, not these numbers.
+        const rowStats = rw => (rw && rw.avg != null)
+          ? { avg: Number(rw.avg), peak: rw.peak, steadiness: rw.steadiness } : null;
+        const hostStats = rowStats(hostRow);
+        const meStats = rowStats(r);
+        const withStats = sessRows.filter(rw => rw.avg != null);
+        const groupStats = withStats.length ? {
+          avg: withStats.reduce((s, rw) => s + Number(rw.avg), 0) / withStats.length,
+          peak: Math.max(...withStats.map(rw => rw.peak || 0)),
+          steadiness: Math.round(withStats.reduce((s, rw) => s + (rw.steadiness || 0), 0) / withStats.length),
+        } : null;
         const fmtAvg = s => s ? s.avg.toFixed(1) : '–';
         const fmtPeak = s => s ? s.peak : '–';
         const fmtSteady = s => s ? s.steadiness : '–';

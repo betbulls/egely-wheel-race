@@ -12,7 +12,8 @@
       "WebSearch",
       "Bash(node --input-type=module -e ' *)",
       "Bash(npx --version)",
-      "Bash(py --version)"
+      "Bash(py --version)",
+      "PowerShell($n = Get-Command node -ErrorAction SilentlyContinue; if \\($n\\) { Write-Output $n.Source; node --version } else { Write-Output 'node NOT found' })"
     ]
   }
 }
