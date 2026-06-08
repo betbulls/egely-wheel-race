@@ -15,10 +15,10 @@ function stampUTC(d){
 export function sessionEvent(session){
   const start = new Date(session.scheduled_start);
   const end = new Date(start.getTime() + (session.duration_minutes || 0) * 60000);
-  const title = (session.name || 'Group Session') + ' — Egely Wheel Race';
+  const title = (session.name || 'Group Session') + ' — EWR Live';
   const url = location.origin + location.pathname + '#/room/' + session.id;
   const host = session._hostName ? `Hosted by ${session._hostName}. ` : '';
-  const details = `${host}Join the live group measurement in Egely Wheel Race.\n\n${url}`;
+  const details = `${host}Join the live group measurement in EWR Live.\n\n${url}`;
   return { title, start, end, url, details };
 }
 
@@ -38,7 +38,7 @@ export function icsText(ev){
   const e = s => String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
   const uid = (ev.url.replace(/[^a-zA-Z0-9]/g, '') || 'ewr') + '@egely-wheel-race';
   return [
-    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Egely Wheel Race//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//EWR Live//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
     'BEGIN:VEVENT',
     'UID:' + uid,
     'DTSTAMP:' + stampUTC(new Date()),

@@ -52,7 +52,7 @@ export function mount(el){
     if(!userId){
       el.innerHTML = `
         <div class="view-head">
-          <h1 class="page-title">Egely Wheel Race</h1>
+          <h1 class="page-title">EWR Live</h1>
           <p class="page-sub">Track your vitality, your way.</p>
         </div>
         <div class="panel">
