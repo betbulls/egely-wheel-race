@@ -222,7 +222,11 @@ export function mount(el, sessionId){
         racer_id: racerId(myName), racer_name: myName, led_value: myLed,
       });
     }
-    const avg = myCount ? mySum / myCount : 0;
+    // Average over the session window so far (absent time counts as 0) — keeps the live
+    // figure consistent with the saved, full-window result. The board still sorts by the
+    // current LED, so a real spinner still rises live; only the average is windowed.
+    const slots = Math.max(myCount, Math.round((Math.min(Date.now(), endMs) - startMs) / BROADCAST_MS));
+    const avg = slots > 0 ? mySum / slots : 0;
     const verified = !cheatDetected;
     upsertRacer(myName, { led: myLed, avg, count: myCount, peak: myPeak, host: isHostName(myName), verified });
     if(channel){
@@ -266,11 +270,27 @@ export function mount(el, sessionId){
     return curve;
   }
 
+  // Full-window sample series for a timed session: each real sample sits in its time
+  // slot, every other slot is 0 (you weren't contributing then). The result stats are
+  // computed over THIS, so the group race is fair over the whole session — a short late
+  // burst can't out-average someone who sustained vitality the entire time. Peak is the
+  // max, so it stays your true best moment (zeros never raise a maximum).
+  function fullWindowSamples(samples, times, span){
+    const slots = Math.max(samples.length, Math.round((span || 0) / BROADCAST_MS));
+    if(slots <= 0) return samples.slice();
+    const arr = new Array(slots).fill(0);
+    for(let i = 0; i < samples.length; i++){
+      const k = Math.max(0, Math.min(slots - 1, Math.floor((times[i] / span) * slots)));
+      arr[k] = samples[i];   // last sample in a slot wins
+    }
+    return arr;
+  }
+
   // Each measuring client writes its own summarised result once the session ends.
   function maybeSaveMyResult(){
     if(myResultSaved || Date.now() <= endMs || mySamples.length === 0) return;
     myResultSaved = true;
-    const s = computeStats(mySamples);
+    const s = computeStats(fullWindowSamples(mySamples, mySampleTimes, durationMs));
     supabase.from('results').insert({
       session_id: Number(sessionId), user_id: auth.getState().user?.id || null,
       racer_id: racerId(myName), racer_name: myName,
@@ -279,7 +299,7 @@ export function mount(el, sessionId){
       zone_yellow: Number(s.zone.yellow.toFixed(1)),
       zone_red: Number(s.zone.red.toFixed(1)),
       trend: Number(s.trendTotal.toFixed(2)), green_streak: s.greenStreak,
-      samples: s.n, is_host: isHostName(myName), verified: !cheatDetected,
+      samples: mySamples.length, is_host: isHostName(myName), verified: !cheatDetected,
       curve: anchoredCurve(mySamples, mySampleTimes, durationMs), duration_seconds: (session.duration_minutes || 0) * 60,
     }).then(({ error }) => { if(error) console.warn('result save error:', error.message); });
   }
