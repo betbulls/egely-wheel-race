@@ -99,7 +99,14 @@ export function mount(el){
     </div>
 
     <div class="panel">
-      <h2>Basic Profile</h2>
+      <div class="panel-head">
+        <h2>Basic Profile</h2>
+        <label class="toggle" title="When on, others can see that you're online — and your live wheel values while you measure.">
+          <span class="toggle-label">Show on Live</span>
+          <input type="checkbox" id="pfLive" ${s.showOnLive ? 'checked' : ''}>
+          <span class="toggle-track"><span class="toggle-knob"></span></span>
+        </label>
+      </div>
       <div class="profile-row">
         <div class="profile-avatar" id="pfAvatar">${avatarHtml(avatarUrl, s.displayName)}</div>
         <div class="field" style="flex:1">
@@ -115,15 +122,6 @@ export function mount(el){
         <label for="pfBio">Short bio</label>
         <textarea id="pfBio" maxlength="400" rows="3" placeholder="A few words about you — shown on your connection page.">${esc(s.bio || '')}</textarea>
       </div>
-      <label class="check" style="margin-top:16px;display:flex;align-items:center;gap:9px;cursor:pointer">
-        <input type="checkbox" id="pfPract" ${s.isPractitioner ? 'checked' : ''}>
-        I'm a Spiritual Maker (follow your members' measurements)
-      </label>
-      <label class="check" style="margin-top:14px;display:flex;align-items:center;gap:9px;cursor:pointer">
-        <input type="checkbox" id="pfLive" ${s.showOnLive ? 'checked' : ''}>
-        Show me on Live page
-      </label>
-      <p class="page-sub" style="margin:6px 0 0;font-size:13px">When enabled, other users can see that you are online and, if you are measuring, your live Egely Wheel values.</p>
     </div>
 
     <div class="panel">
@@ -197,7 +195,7 @@ export function mount(el){
     const payload = {
       display_name, avatar_url: avatarUrl || null,
       bio: $('pfBio').value.trim() || null,
-      is_practitioner: $('pfPract').checked,
+      is_practitioner: true,   // everyone can be a Spiritual Maker / gather members
       coupon_code: $('pfCoupon').value.trim() || null,
       show_on_live: $('pfLive').checked,
     };

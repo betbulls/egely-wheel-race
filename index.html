@@ -172,7 +172,7 @@
   .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   .field{display:flex;flex-direction:column;gap:6px}
   .field.full{grid-column:1 / -1}
-  .form-actions{margin-top:18px;display:flex;align-items:center;gap:14px}
+  .form-actions{margin-top:18px;margin-bottom:22px;display:flex;align-items:center;gap:14px}
   .form-msg{font-size:13px;color:var(--muted)}
   .form-msg.ok{color:#3ddc84}
   .form-msg.err{color:#ff7c7c}
@@ -205,14 +205,14 @@
   .organizer-note .sess-avatar{width:24px;height:24px;font-size:11px}
   .organizer-note .organizer-label{color:var(--faint)}
   .organizer-note b{color:var(--white);font-weight:600}
-  .session-right{display:flex;align-items:center;gap:14px}
+  .session-right{display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:flex-end}
   .badge{font-size:10px;letter-spacing:0.12em;text-transform:uppercase;
     padding:4px 9px;border-radius:20px;font-weight:600}
   .badge.upcoming{background:rgba(0,51,255,0.2);color:#9db4ff}
   .badge.live{background:var(--accent);color:var(--white)}
   .badge.finished{background:rgba(255,255,255,0.1);color:var(--muted)}
   .countdown{font-family:'Montserrat',sans-serif;font-size:18px;font-weight:500;
-    font-variant-numeric:tabular-nums;min-width:78px;text-align:right}
+    font-variant-numeric:tabular-nums;min-width:78px;text-align:right;white-space:nowrap}
   .countdown.live{color:#3ddc84}
   .btn-join{
     font-family:'Inter',sans-serif;text-decoration:none;font-size:13px;font-weight:600;
@@ -241,6 +241,14 @@
     font-family:'Inter',sans-serif;font-size:14px;font-weight:500;color:#fff;text-decoration:none;
     background:none;border:none;cursor:pointer}
   .cal-opt:hover{background:rgba(155,109,255,0.16)}
+  /* On phones the session card is tight: shrink the calendar button to its icon
+     and let the countdown breathe so Join never falls off the edge. */
+  @media (max-width:600px){
+    .cal-btn span{display:none}
+    .cal-btn{padding:8px 11px}
+    .countdown{min-width:0;font-size:16px}
+    .session-right{gap:10px}
+  }
 
   /* Live presence wall */
   .live-head{display:flex;align-items:center;gap:9px;font-size:14px;color:var(--muted);margin-bottom:18px}
@@ -628,6 +636,12 @@
   .rs-val{font-family:'Montserrat',sans-serif;font-size:20px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
   .rs-trend{font-size:13px}
   .rs-lbl{font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);margin-top:6px}
+  /* On phones, drop the 4 stats onto their own full-width row so they aren't cramped. */
+  @media (max-width:600px){
+    .res-card{flex-wrap:wrap}
+    .res-stats{width:100%;justify-content:space-between;gap:8px;margin-top:4px}
+    .rs{min-width:0}
+  }
   .metric-legend{margin-top:18px;padding:16px;background:var(--panel);border:1px solid var(--panel-border);border-radius:12px;font-size:12px;color:var(--muted);line-height:1.7}
   .metric-legend b{color:var(--white)}
 
@@ -642,6 +656,17 @@
   .verify-row{display:flex;align-items:flex-start;gap:14px;font-size:14px;color:var(--muted);line-height:1.5}
   .verify-row b{color:var(--white);font-weight:600}
   .verify-mark{flex-shrink:0;width:78px;display:flex;justify-content:flex-start;padding-top:1px}
+  /* Panel header with a control on the right (e.g. a toggle) */
+  .panel-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:18px}
+  .panel-head h2{margin-bottom:0}
+  /* Two-state toggle switch */
+  .toggle{display:inline-flex;align-items:center;gap:9px;cursor:pointer;user-select:none}
+  .toggle-label{font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+  .toggle > input{position:absolute;opacity:0;width:0;height:0}
+  .toggle-track{position:relative;width:40px;height:22px;border-radius:20px;background:rgba(255,255,255,0.15);transition:background .2s;flex-shrink:0}
+  .toggle-knob{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .2s}
+  .toggle > input:checked + .toggle-track{background:var(--accent)}
+  .toggle > input:checked + .toggle-track .toggle-knob{transform:translateX(18px)}
   .check-field .check{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--white);
     text-transform:none;letter-spacing:0;cursor:pointer}
   .check-field .check input{width:16px;height:16px;accent-color:var(--accent)}
@@ -1269,7 +1294,7 @@
 <body>
 
 <header class="app-header">
-  <div class="wordmark">egely wheel</div>
+  <div class="wordmark">EWR Live</div>
   <nav class="nav">
     <a href="#/home" data-route="/home">Home</a>
     <a href="#/live" data-route="/live">Live</a>
