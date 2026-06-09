@@ -229,11 +229,50 @@ export async function isConnectedTo(practitionerId){
   return !!(data && data.status === 'active');
 }
 
+// Shrink + center-crop an avatar to a small square JPEG, entirely in the browser, so a
+// multi-MB phone photo becomes ~tens of KB and loads fast everywhere it's shown.
+// Cross-browser: a plain <img> element (universal) + canvas.toBlob, with a toDataURL
+// fallback for old engines. Any failure resolves to the ORIGINAL file, so upload still
+// works. The centre square is kept — the standard avatar crop.
+function processAvatar(file, size = 320, quality = 0.82){
+  return new Promise(resolve => {
+    if(!file || !/^image\//.test(file.type || '')){ resolve(file); return; }   // not an image → as-is
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.onload = () => {
+      try {
+        const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+        if(!w || !h){ URL.revokeObjectURL(url); resolve(file); return; }
+        const s = Math.min(w, h);                          // centre square (cover crop)
+        const canvas = document.createElement('canvas');
+        canvas.width = size; canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, (w - s) / 2, (h - s) / 2, s, s, 0, 0, size, size);
+        URL.revokeObjectURL(url);
+        const done = blob => resolve(blob || file);
+        if(canvas.toBlob){ canvas.toBlob(done, 'image/jpeg', quality); return; }
+        // Old-engine fallback: toDataURL → Blob.
+        try {
+          const b64 = canvas.toDataURL('image/jpeg', quality).split(',')[1];
+          const bin = atob(b64), arr = new Uint8Array(bin.length);
+          for(let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+          done(new Blob([arr], { type: 'image/jpeg' }));
+        } catch { resolve(file); }
+      } catch { URL.revokeObjectURL(url); resolve(file); }
+    };
+    img.src = url;
+  });
+}
+
 export async function uploadAvatar(file){
   if(!user) return { error: { message: 'Not logged in' } };
-  const ext = (file.name.split('.').pop() || 'png').toLowerCase();
+  const blob = await processAvatar(file);
+  const processed = blob !== file;   // processed → jpeg; otherwise keep the original type
+  const ext = processed ? 'jpg' : (file.name.split('.').pop() || 'png').toLowerCase();
   const path = `${user.id}/avatar.${ext}`;
-  const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type });
+  const contentType = processed ? 'image/jpeg' : (file.type || 'image/jpeg');
+  const { error } = await supabase.storage.from('avatars').upload(path, blob, { upsert: true, contentType });
   if(error) return { error };
   const { data } = supabase.storage.from('avatars').getPublicUrl(path);
   return { url: data.publicUrl + '?t=' + Date.now() };
