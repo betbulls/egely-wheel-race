@@ -14,7 +14,10 @@
       "Bash(npx --version)",
       "Bash(py --version)",
       "PowerShell($n = Get-Command node -ErrorAction SilentlyContinue; if \\($n\\) { Write-Output $n.Source; node --version } else { Write-Output 'node NOT found' })",
-      "PowerShell($conns = Get-NetTCPConnection -LocalPort 8765 -State Listen -ErrorAction SilentlyContinue; if \\($conns\\) { $conns | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { try { $p = Get-Process -Id $_ -ErrorAction Stop; Write-Output \"Killing PID $\\($p.Id\\) \\($\\($p.ProcessName\\)\\)\"; Stop-Process -Id $p.Id -Force } catch {} } } else { Write-Output \"Nothing listening on 8765\" })"
+      "PowerShell($conns = Get-NetTCPConnection -LocalPort 8765 -State Listen -ErrorAction SilentlyContinue; if \\($conns\\) { $conns | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { try { $p = Get-Process -Id $_ -ErrorAction Stop; Write-Output \"Killing PID $\\($p.Id\\) \\($\\($p.ProcessName\\)\\)\"; Stop-Process -Id $p.Id -Force } catch {} } } else { Write-Output \"Nothing listening on 8765\" })",
+      "PowerShell(python \"C:\\\\Users\\\\User\\\\Downloads\\\\_csv_inspect.py\")",
+      "Bash(pip install *)",
+      "Bash(python -c \"import openpyxl; print\\('openpyxl OK', openpyxl.__version__\\)\")"
     ]
   }
 }

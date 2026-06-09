@@ -57,19 +57,41 @@ function drawLiveCurve(canvas, series, color){
   ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.stroke();
 }
 
+// Injected once: green ONLINE pill + glowing dot, the search box, and the "show more"
+// button. Self-contained — no index.html edits.
+function injectStyles(){
+  if(document.getElementById('liveExtraStyles')) return;
+  const st = document.createElement('style');
+  st.id = 'liveExtraStyles';
+  st.textContent = `
+  .live-pill.online{background:rgba(60,201,138,.16);border:1px solid rgba(60,201,138,.5);color:#6fe6ad}
+  .live-pill.online::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;background:#3ddc84;box-shadow:0 0 7px 1px rgba(61,220,132,.85);animation:liveOnlineBlink 1.6s ease-in-out infinite}
+  @keyframes liveOnlineBlink{0%,100%{opacity:1}50%{opacity:.4}}
+  .live-search{width:100%;box-sizing:border-box;background:rgba(0,0,0,.22);border:1px solid var(--panel-border);border-radius:11px;color:#fff;font-family:'Inter',sans-serif;font-size:15px;padding:12px 14px;margin:4px 0 16px}
+  .live-search::placeholder{color:var(--muted)}
+  .live-search:focus{outline:none;border-color:rgba(155,140,255,.6)}
+  .live-more{display:block;width:100%;margin:14px 0 4px;padding:13px;border-radius:11px;cursor:pointer;font-family:'Inter',sans-serif;font-size:14px;font-weight:600;color:#cdbcff;background:rgba(255,255,255,.05);border:1px solid var(--panel-border);transition:filter .15s}
+  .live-more:hover{filter:brightness(1.25)}`;
+  document.head.appendChild(st);
+}
+
 export function mount(el){
+  injectStyles();
   el.innerHTML = `
     <div class="view-head">
       <h1 class="page-title">Live</h1>
       <p class="page-sub">Who's in the Egely Wheel ecosystem right now.</p>
     </div>
     <div class="live-head" id="liveHead"></div>
+    <input class="live-search" id="liveSearch" type="search" placeholder="Search members…" autocomplete="off">
     <div class="live-list" id="liveList"><div class="empty">Connecting…</div></div>`;
 
   const headEl = el.querySelector('#liveHead');
   const listEl = el.querySelector('#liveList');
   const expanded = new Set();      // uids whose full chart is open (kept across re-renders)
   let roster = [];                 // all registered, visible profiles: {uid, name, avatar}
+  const PAGE = 50;                 // people rendered per "page" (the wall can be hundreds)
+  let shown = PAGE, search = '', io = null;
 
   // Merge the full roster with the live presence list → everyone, with a status.
   function buildPeople(presenceList){
@@ -81,21 +103,25 @@ export function mount(el){
 
   function render(presenceList){
     const myId = auth.getState().user?.id || null;
-    const people = buildPeople(presenceList);
-    people.sort((a, b) => {
+    const all = buildPeople(presenceList);
+    all.sort((a, b) => {
       const ra = a.uid === myId ? -1 : groupRank(a.status);
       const rb = b.uid === myId ? -1 : groupRank(b.status);
       return ra !== rb ? ra - rb : (a.name || '').localeCompare(b.name || '');
     });
 
-    const onlineN = people.filter(p => p.status !== 'offline').length;
-    headEl.innerHTML = `<span class="live-dot"></span><span><b>${onlineN}</b> ${onlineN === 1 ? 'person' : 'people'} online now</span>`;
+    const onlineN = all.filter(p => p.status !== 'offline').length;
+    headEl.innerHTML = `<span class="live-dot"></span><span><b>${onlineN}</b> online now`
+      + ` · ${all.length} member${all.length === 1 ? '' : 's'}</span>`;
+
+    const q = search.trim().toLowerCase();
+    const people = q ? all.filter(p => (p.name || '').toLowerCase().includes(q)) : all;
 
     if(!people.length){
-      listEl.innerHTML = `<div class="empty">No one's here yet.</div>`;
+      listEl.innerHTML = `<div class="empty">${q ? 'No members match your search.' : 'No one is here yet.'}</div>`;
       return;
     }
-    listEl.innerHTML = people.map(p => {
+    listEl.innerHTML = people.slice(0, shown).map(p => {
       const st = STATUS[p.status] || STATUS.online;
       const isMe = myId && p.uid === myId;
       const isOpen = expanded.has(p.uid);
@@ -117,8 +143,12 @@ export function mount(el){
           ${curve}
           ${big}
         </div>`;
-    }).join('');
+    }).join('')
+      + (people.length > shown
+        ? `<button type="button" class="live-more" data-more>Show more · ${people.length - shown} more</button>`
+        : '');
     refreshValues();
+    observeMore();
   }
 
   // Redraw the live number + curves on each connected-wheel card.
@@ -143,9 +173,20 @@ export function mount(el){
     });
   }
 
-  // Expand / collapse a card's full chart (toggles the card class; state kept in
-  // `expanded` so it survives list re-renders).
+  // Auto-load the next page when the "show more" button scrolls into view (infinite scroll).
+  function observeMore(){
+    if(!('IntersectionObserver' in window)) return;
+    if(!io) io = new IntersectionObserver(ents => {
+      if(ents.some(e => e.isIntersecting)){ shown += PAGE; render(presence.getList()); }
+    }, { rootMargin: '200px' });
+    io.disconnect();
+    // Observe only after layout settles, so the button isn't briefly "in view" mid-render.
+    requestAnimationFrame(() => { const btn = listEl.querySelector('[data-more]'); if(btn) io.observe(btn); });
+  }
+
+  // Clicks: "show more" pages in; the chevron expands a card's full chart.
   listEl.addEventListener('click', (e) => {
+    if(e.target.closest('[data-more]')){ shown += PAGE; render(presence.getList()); return; }
     const btn = e.target.closest('[data-expand]');
     if(!btn) return;
     const card = btn.closest('.live-card');
@@ -153,6 +194,11 @@ export function mount(el){
     if(expanded.has(uid)){ expanded.delete(uid); card.classList.remove('expanded'); btn.setAttribute('aria-expanded', 'false'); }
     else { expanded.add(uid); card.classList.add('expanded'); btn.setAttribute('aria-expanded', 'true'); }
     refreshValues();
+  });
+
+  // Search filters by name; reset to the first page on each keystroke.
+  el.querySelector('#liveSearch').addEventListener('input', (e) => {
+    search = e.target.value; shown = PAGE; render(presence.getList());
   });
 
   // Load the full roster (everyone who hasn't hidden themselves), then render.
@@ -165,5 +211,5 @@ export function mount(el){
 
   const unsub = presence.subscribe(render);
   const valTimer = setInterval(refreshValues, 400);
-  return () => { unsub(); clearInterval(valTimer); };
+  return () => { unsub(); clearInterval(valTimer); if(io) io.disconnect(); };
 }
