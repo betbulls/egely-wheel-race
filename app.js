@@ -247,7 +247,7 @@ function renderAuthArea(){
     });
     authArea.querySelector('#logoutBtn').addEventListener('click', () => auth.signOut());
   } else {
-    authArea.innerHTML = '<a class="auth-btn" href="#/login">Log in</a>';
+    authArea.innerHTML = '<a class="auth-btn" href="#/login">Log in / Sign up</a>';
   }
   updateBleButton();
 }
@@ -263,14 +263,22 @@ function needsWelcome(a){
   return (!name || name === emailPrefix) && !a.avatarUrl;
 }
 
+let prevUid = null;   // tracks login/logout transitions so the view refreshes on logout
 auth.subscribeAuth(a => {
+  const uid = a.user?.id || null;
   if(a.user && location.hash === '#/login'){
     let pending = null;
     try { pending = localStorage.getItem('ewr_pending_connect'); } catch {}
     if(pending) location.hash = '#/connect/' + pending;
     else if(a.profile) location.hash = needsWelcome(a) ? '#/welcome' : '#/home';
     // profile not loaded yet → wait for the next auth emit (fires once it loads)
+  } else if(prevUid && !uid){
+    // Logged out: the current screen may still show logged-in content, so refresh it.
+    // Land on Home, which has a proper logged-out state.
+    if(location.hash === '#/home') router();   // already there → re-render in place
+    else location.hash = '#/home';             // navigate → hashchange re-renders
   }
+  prevUid = uid;
   renderAuthArea();
 });
 

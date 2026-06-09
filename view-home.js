@@ -56,9 +56,9 @@ export function mount(el){
           <p class="page-sub">Track your vitality, your way.</p>
         </div>
         <div class="panel">
-          <p class="placeholder">Log in to see your journey, achievements, and personal progress.</p>
+          <p class="placeholder">New here? Create your free account — just your email, no password — to track your journey, earn achievements, and join the Live community. No Egely Wheel needed to start.</p>
           <div class="form-actions" style="margin-top:14px;flex-wrap:wrap">
-            <a class="btn-join" href="#/login">Log in</a>
+            <a class="btn-join" href="#/login">Log in or sign up</a>
             <a class="btn-secondary" href="#/subscribe">Subscribe to measure</a>
           </div>
         </div>`;
