@@ -59,7 +59,7 @@ export function mount(el){
           <p class="placeholder">Log in to see your journey, achievements, and personal progress.</p>
           <div class="form-actions" style="margin-top:14px;flex-wrap:wrap">
             <a class="btn-join" href="#/login">Log in</a>
-            <a class="btn-secondary" href="https://egelywheel.com/products/ewr-subscription" target="_blank" rel="noopener">Subscribe to measure</a>
+            <a class="btn-secondary" href="#/subscribe">Subscribe to measure</a>
           </div>
         </div>`;
       return;

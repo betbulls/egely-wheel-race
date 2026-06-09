@@ -19,7 +19,6 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>
 
 const SAMPLE_MS = 250;
 const CHEAT_WINDOW_MS = 2000, SWING_LIMIT = 7, MAX_SWINGS = 2;   // same anti-cheat as Solo / rooms (de-spiked signal)
-const SUBSCRIBE_URL = 'https://egelywheel.com/products/ewr-subscription';
 
 const durLabel = s => s >= 60 ? `${Math.round(s / 60)} min` : `${s}s`;
 
@@ -403,7 +402,7 @@ function setupMeasure(host, exp, day, onSaved){
     const t = e.target.closest('[data-m]'); if(!t) return;
     const act = t.dataset.m;
     if(act === 'login') location.hash = '#/login';
-    else if(act === 'subscribe') window.open(SUBSCRIBE_URL, '_blank');
+    else if(act === 'subscribe') location.hash = '#/subscribe';
     else if(act === 'start') start();
     else if(act === 'stop') abort();
     else if(act === 'discard') { finished = false; renderIdle(); }
