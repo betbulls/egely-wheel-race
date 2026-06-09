@@ -44,11 +44,27 @@ async function refreshSubscriber(){
 async function refreshProfile(){
   if(!user){ profile = null; return; }
   const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
-  if(data){ profile = data; return; }
-  // First-time profile — seed display_name from the email's local part so a
-  // practitioner can identify the user before they finish setting up their profile.
+  if(data){
+    // Everyone is a Spiritual Maker: backfill a connection handle for existing members
+    // who don't have one yet, so their share link appears without saving the profile.
+    if(!data.practitioner_handle){
+      const handle = await ensureHandle(data.display_name || (user.email || '').split('@')[0] || 'spiritual-maker');
+      const { data: updated } = await supabase.from('profiles')
+        .update({ is_practitioner: true, practitioner_handle: handle })
+        .eq('id', user.id).select().maybeSingle();
+      profile = updated || data;
+    } else {
+      profile = data;
+    }
+    return;
+  }
+  // First-time profile — seed display_name from the email's local part, and give the new
+  // member a connection handle right away so their share link exists from day one.
   const fallback = (user.email || '').split('@')[0] || 'User';
-  const { data: created } = await supabase.from('profiles').insert({ id: user.id, display_name: fallback }).select().maybeSingle();
+  const handle = await ensureHandle(fallback);
+  const { data: created } = await supabase.from('profiles')
+    .insert({ id: user.id, display_name: fallback, is_practitioner: true, practitioner_handle: handle })
+    .select().maybeSingle();
   profile = created || null;
 }
 
@@ -81,9 +97,9 @@ const slugify = s => String(s || '').toLowerCase().trim()
   .normalize('NFD').replace(/[̀-ͯ]/g, '')   // strip accents
   .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'spiritual-maker';
 
-// A practitioner needs a shareable handle for their connection link.
+// Generate a fresh, unique connection handle from a name. Callers decide WHEN to call
+// it (only when the profile has no handle yet) — so it always returns a new unique slug.
 async function ensureHandle(displayName){
-  if(profile?.practitioner_handle) return profile.practitioner_handle;
   const base = slugify(displayName);
   for(let i = 0; i < 6; i++){
     const candidate = i === 0 ? base : `${base}-${Math.random().toString(36).slice(2, 6)}`;
