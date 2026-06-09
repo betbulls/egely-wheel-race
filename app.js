@@ -15,6 +15,7 @@ import { mountExperiments, mountExperimentDetail } from './view-experiments.js';
 import { mount as mountLive } from './view-live.js';
 import { mount as mountJourney } from './view-journey.js';
 import { mount as mountSubscribe } from './view-subscribe.js';
+import { mount as mountWelcome } from './view-welcome.js';
 import * as presence from './presence.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
@@ -46,6 +47,7 @@ function router(){
   else if(path === '/live') setView(mountLive);
   else if(path === '/journey') setView(mountJourney);
   else if(path === '/subscribe') setView(mountSubscribe);
+  else if(path === '/welcome') setView(mountWelcome);
   else if(path === '/experiments') setView(mountExperiments, param);
   else if(path === '/experiment') setView(mountExperimentDetail, param);
   else if(path === '/solo') setView(mountSolo);
@@ -67,8 +69,8 @@ function router(){
 function mountLogin(el){
   el.innerHTML = `
     <div class="view-head">
-      <h1 class="page-title">Log in</h1>
-      <p class="page-sub">Log in with your email to measure. Watching is free — no login needed.</p>
+      <h1 class="page-title">Log in or sign up</h1>
+      <p class="page-sub">Just your email — we send a 6-digit code, no password. New here? Entering your email creates your account.</p>
     </div>
     <div class="panel">
       <div class="field full">
@@ -84,36 +86,25 @@ function mountLogin(el){
         <button id="liVerify" hidden>Verify &amp; log in</button>
         <span class="form-msg" id="liMsg"></span>
       </div>
-      <div class="subscribe-note" id="liSubscribe" hidden></div>
-    </div>`;
+    </div>
+    <p class="page-sub" style="text-align:center;margin-top:16px">
+      Watching is always free. Want to measure with your own Egely Wheel?
+      <a href="#/subscribe" style="color:#cdbcff;font-weight:600;text-decoration:none">See the options →</a>
+    </p>`;
   const msg = el.querySelector('#liMsg');
   const emailInput = el.querySelector('#liEmail');
   const codeWrap = el.querySelector('#liCodeWrap');
   const codeInput = el.querySelector('#liCode');
   const sendBtn = el.querySelector('#liSend');
   const verifyBtn = el.querySelector('#liVerify');
-  const subNote = el.querySelector('#liSubscribe');
 
   sendBtn.addEventListener('click', async () => {
     const email = emailInput.value.trim();
     if(!email){ msg.className = 'form-msg err'; msg.textContent = 'Enter your email.'; return; }
-    msg.className = 'form-msg'; msg.textContent = 'Checking…';
+    // Registration is open to everyone — anyone can create an account and appear on
+    // Live. Subscription only gates connecting the wheel (the Connect button + RLS).
+    msg.className = 'form-msg'; msg.textContent = 'Sending…';
     sendBtn.disabled = true;
-    subNote.hidden = true;
-
-    // Only send a login code to active subscribers.
-    const sub = await auth.isSubscriberEmail(email);
-    if(sub === false){
-      sendBtn.disabled = false;
-      msg.textContent = '';
-      subNote.hidden = false;
-      subNote.innerHTML = `
-        <p>This email isn't an active subscriber yet. Subscribe to measure — watching always stays free:</p>
-        <a class="btn-join" href="#/subscribe">Subscribe to Egely Wheel</a>`;
-      return;
-    }
-
-    msg.textContent = 'Sending…';
     const { error } = await auth.signIn(email);
     sendBtn.disabled = false;
     if(error){ msg.className = 'form-msg err'; msg.textContent = 'Error: ' + error.message; return; }
@@ -261,11 +252,24 @@ function renderAuthArea(){
   updateBleButton();
 }
 
+// A brand-new member lands on a light onboarding (name + photo) right after their
+// first login — but only while their profile is still un-personalized (the email-
+// fallback name, no photo) and they have not already done/skipped it on this device.
+function needsWelcome(a){
+  if(!a.user || !a.profile) return false;
+  try { if(localStorage.getItem('ewr_welcomed_' + a.user.id)) return false; } catch {}
+  const emailPrefix = (a.email || '').split('@')[0].trim().toLowerCase();
+  const name = (a.displayName || '').trim().toLowerCase();
+  return (!name || name === emailPrefix) && !a.avatarUrl;
+}
+
 auth.subscribeAuth(a => {
   if(a.user && location.hash === '#/login'){
     let pending = null;
     try { pending = localStorage.getItem('ewr_pending_connect'); } catch {}
-    location.hash = pending ? '#/connect/' + pending : '#/home';
+    if(pending) location.hash = '#/connect/' + pending;
+    else if(a.profile) location.hash = needsWelcome(a) ? '#/welcome' : '#/home';
+    // profile not loaded yet → wait for the next auth emit (fires once it loads)
   }
   renderAuthArea();
 });
