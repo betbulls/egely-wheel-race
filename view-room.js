@@ -4,6 +4,7 @@ import * as auth from './auth.js';
 import * as presence from './presence.js';
 import { computeStats, CATEGORIES, METRIC_HELP, icon, trendLabel, vitalityColor } from './analytics.js';
 import { drawTrio } from './chart.js';
+import { flagUrl } from './countries.js';
 
 const BROADCAST_MS = 500;   // how often each client samples + broadcasts its LED
 const RENDER_MS = 250;      // how often the board repaints
@@ -15,8 +16,40 @@ const RENDER_MS = 250;      // how often the board repaints
 // signal (ble.js) has already removed the 24-rail glitches.
 const CHEAT_WINDOW_MS = 2000, SWING_LIMIT = 7, MAX_SWINGS = 2;
 
+// Country flag images (render on every OS, unlike flag emoji on Windows). The 2-letter
+// code rides on the broadcast tick (live) or comes from the racer's profile (results).
+function flagImg(cc){      // flex child — the row's gap handles spacing
+  if(!cc || !/^[A-Za-z]{2}$/.test(cc)) return '';
+  const u = cc.toUpperCase();
+  return `<img src="${flagUrl(cc)}" alt="${u}" title="${u}" loading="lazy" style="width:20px;height:14px;border-radius:3px;object-fit:cover;flex-shrink:0;box-shadow:0 0 0 1px rgba(255,255,255,0.18)">`;
+}
+function flagInline(cc){   // inline within a text line (category winners)
+  if(!cc || !/^[A-Za-z]{2}$/.test(cc)) return '';
+  const u = cc.toUpperCase();
+  return `<img src="${flagUrl(cc)}" alt="${u}" title="${u}" loading="lazy" style="width:17px;height:12px;border-radius:2px;object-fit:cover;vertical-align:middle;margin-left:6px;box-shadow:0 0 0 1px rgba(255,255,255,0.18)">`;
+}
+function flagNode(cc){     // DOM node for the live racer card
+  if(!cc || !/^[A-Za-z]{2}$/.test(cc)) return null;
+  const img = document.createElement('img');
+  img.src = flagUrl(cc); img.alt = cc.toUpperCase(); img.title = cc.toUpperCase(); img.loading = 'lazy';
+  img.style.cssText = 'width:20px;height:14px;border-radius:3px;object-fit:cover;flex-shrink:0;box-shadow:0 0 0 1px rgba(255,255,255,0.18)';
+  return img;
+}
+
+// Injected once: on small screens, wrap the live racer card's metrics onto their own row
+// so the name (+ flag + tags) always has room and never collapses. Self-contained — no
+// index.html edits.
+function injectRoomStyles(){
+  if(document.getElementById('roomMobileStyles')) return;
+  const st = document.createElement('style');
+  st.id = 'roomMobileStyles';
+  st.textContent = '@media (max-width:600px){.racer{flex-wrap:wrap}.racer .metrics{flex-basis:100%;width:100%;justify-content:space-around;margin-top:6px}}';
+  document.head.appendChild(st);
+}
+
 // Mounts the Session Room view. Returns a cleanup function.
 export function mount(el, sessionId){
+  injectRoomStyles();
   let session = null;
   let startMs = 0, endMs = 0, durationMs = 0;
   let myName = (auth.getState().displayName || localStorage.getItem('ewr_name') || '').trim();
@@ -192,18 +225,19 @@ export function mount(el, sessionId){
 
   function applyTick(p){
     if(!p || !p.name) return;
-    upsertRacer(p.name, { led: p.led, avg: p.avg, count: p.count, peak: p.peak, host: isHostName(p.name), verified: p.verified });
+    upsertRacer(p.name, { led: p.led, avg: p.avg, count: p.count, peak: p.peak, host: isHostName(p.name), verified: p.verified, country: p.country });
   }
 
-  function upsertRacer(name, { led, avg, count, peak, host, verified }){
+  function upsertRacer(name, { led, avg, count, peak, host, verified, country }){
     let r = racers.get(name);
     if(!r){
-      r = { name, led: 0, avg: 0, count: 0, peak: 0, host, verified: true, history: [], el: null };
+      r = { name, led: 0, avg: 0, count: 0, peak: 0, host, verified: true, country: null, history: [], el: null };
       racers.set(name, r);
     }
     r.led = led; r.avg = avg; r.count = count; r.host = host;
     r.peak = Math.max(r.peak || 0, peak || 0);
     if(verified !== undefined) r.verified = verified;
+    if(country) r.country = country;
     const t = Math.max(0, Date.now() - startMs);
     r.history.push({ t, led });
     if(r.history.length > 2400) r.history.shift();
@@ -228,10 +262,11 @@ export function mount(el, sessionId){
     const slots = Math.max(myCount, Math.round((Math.min(Date.now(), endMs) - startMs) / BROADCAST_MS));
     const avg = slots > 0 ? mySum / slots : 0;
     const verified = !cheatDetected;
-    upsertRacer(myName, { led: myLed, avg, count: myCount, peak: myPeak, host: isHostName(myName), verified });
+    const myCountry = auth.getState().country || null;
+    upsertRacer(myName, { led: myLed, avg, count: myCount, peak: myPeak, host: isHostName(myName), verified, country: myCountry });
     if(channel){
       channel.send({ type: 'broadcast', event: 'tick',
-        payload: { name: myName, led: myLed, avg, count: myCount, peak: myPeak, verified } });
+        payload: { name: myName, led: myLed, avg, count: myCount, peak: myPeak, verified, country: myCountry } });
     }
   }
 
@@ -326,6 +361,7 @@ export function mount(el, sessionId){
     name.className = 'racer-name';
     name.textContent = r.name;
     nameRow.append(name);
+    const flag = flagNode(r.country); if(flag) nameRow.append(flag);
     if(r.host){
       const tag = document.createElement('span');
       tag.className = 'host-tag';
@@ -567,6 +603,16 @@ export function mount(el, sessionId){
     if(error){ body.innerHTML = `<div class="empty">Could not load results: ${esc(error.message)}</div>`; return; }
 
     const myUserId = auth.getState().user?.id || null;
+
+    // Country per racer (for the flag): look up the profiles of everyone with a result.
+    // Defensive — if the country column doesn't exist yet, we just skip the flags.
+    const uids = [...new Set((rows || []).map(r => r.user_id).filter(Boolean))];
+    let countryByUid = new Map();
+    if(uids.length){
+      const { data: profs, error: cErr } = await supabase.from('profiles').select('id, country').in('id', uids);
+      if(!cErr) countryByUid = new Map((profs || []).map(p => [p.id, p.country]));
+    }
+
     const statsOf = r => ({
       avg: Number(r.avg) || 0, peak: r.peak || 0, steadiness: r.steadiness || 0,
       zone: { red: Number(r.zone_red) || 0, yellow: Number(r.zone_yellow) || 0, green: Number(r.zone_green) || 0 },
@@ -577,6 +623,7 @@ export function mount(el, sessionId){
       host: r.is_host != null ? !!r.is_host : isHostName(r.racer_name),
       verified: r.verified,
       mine: !!((myUserId && r.user_id === myUserId) || (myName && r.racer_name === myName)),
+      country: countryByUid.get(r.user_id) || null,
       curve: Array.isArray(r.curve) ? r.curve : [],
       stats: statsOf(r),
     }));
@@ -669,7 +716,7 @@ export function mount(el, sessionId){
       <div class="res-card${r.mine ? ' mine' : ''}">
         <div class="res-rank">${rankLabel}</div>
         <div class="res-main">
-          <div class="racer-name-row"><span class="racer-name">${esc(r.name)}</span>${r.host ? '<span class="host-tag">Host</span>' : ''}${vBadge(r)}</div>
+          <div class="racer-name-row"><span class="racer-name">${esc(r.name)}</span>${flagImg(r.country)}${r.host ? '<span class="host-tag">Host</span>' : ''}${vBadge(r)}</div>
           ${note ? `<div class="res-note" style="font-size:12px;color:#e9b84a;margin:2px 0 6px">${esc(note)}</div>` : ''}
           <canvas class="res-curve" id="${canvasId}"></canvas>
           ${zoneBar(r.stats.zone)}
@@ -687,7 +734,7 @@ export function mount(el, sessionId){
     if(counted.length){
       const winners = CATEGORIES.map(cat => {
         let best = null;
-        for(const r of counted){ const v = cat.value(r.stats); if(best === null || v > best.v) best = { name: r.name, v }; }
+        for(const r of counted){ const v = cat.value(r.stats); if(best === null || v > best.v) best = { name: r.name, v, country: r.country }; }
         return { cat, best };
       });
       const catCards = winners.map(w => `
@@ -695,7 +742,7 @@ export function mount(el, sessionId){
           <div class="cat-icon">${icon(w.cat.icon)}</div>
           <div class="cat-name">${esc(w.cat.name)}</div>
           <div class="cat-desc">${esc(w.cat.desc)}</div>
-          <div class="cat-winner">${w.best ? `${esc(w.best.name)} · ${esc(w.cat.fmt(w.best.v))}` : '—'}</div>
+          <div class="cat-winner">${w.best ? `${esc(w.best.name)}${flagInline(w.best.country)} · ${esc(w.cat.fmt(w.best.v))}` : '—'}</div>
         </div>`).join('');
       const countedCards = counted.map((r, i) => racerCard(r, String(i + 1), 'rc' + i)).join('');
       leaderboardHtml = `
