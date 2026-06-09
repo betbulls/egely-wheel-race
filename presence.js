@@ -100,7 +100,7 @@ async function applyTrack(){
   if(!channel) return;
   if(visible()){
     const a = auth.getState();
-    const base = { uid: a.user.id, name: a.displayName || 'Explorer', avatar: a.avatarUrl || null, status: myStatus };
+    const base = { uid: a.user.id, name: a.displayName || 'Explorer', avatar: a.avatarUrl || null, status: myStatus, country: a.country || null };
     const json = JSON.stringify(base);                 // ts excluded so identical states don't re-track
     if(json === lastTrackedJson) return;
     try { await channel.track({ ...base, ts: Date.now() }); tracking = true; lastTrackedJson = json; }

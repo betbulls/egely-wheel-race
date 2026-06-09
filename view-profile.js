@@ -1,11 +1,19 @@
 import * as auth from './auth.js';
 import { qrSvg, qrCanvas } from './qrcode.js';
+import { COUNTRY_CODES, countryName } from './countries.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
 function avatarHtml(url, name){
   if(url) return `<img src="${esc(url)}" alt="">`;
   return `<span class="avatar-initial">${esc((name || '?').charAt(0).toUpperCase())}</span>`;
+}
+
+// Country dropdown options (labels via the browser, sorted by name; value = ISO code).
+function countryOptions(selected){
+  const opts = COUNTRY_CODES.map(c => ({ c, n: countryName(c) })).sort((a, b) => a.n.localeCompare(b.n));
+  return `<option value="">— Not set —</option>` +
+    opts.map(o => `<option value="${o.c}"${o.c === selected ? ' selected' : ''}>${esc(o.n)}</option>`).join('');
 }
 
 function connectUrl(handle){
@@ -122,6 +130,10 @@ export function mount(el){
         <label for="pfBio">Short bio</label>
         <textarea id="pfBio" maxlength="400" rows="3" placeholder="A few words about you — shown on your connection page.">${esc(s.bio || '')}</textarea>
       </div>
+      <div class="field full" style="margin-top:14px">
+        <label for="pfCountry">Country <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;font-size:11px">— auto-detected; shown as a flag on Live</span></label>
+        <select id="pfCountry">${countryOptions(s.country)}</select>
+      </div>
     </div>
 
     <div class="panel">
@@ -198,6 +210,7 @@ export function mount(el){
       is_practitioner: true,   // everyone can be a Spiritual Maker / gather members
       coupon_code: $('pfCoupon').value.trim() || null,
       show_on_live: $('pfLive').checked,
+      country: $('pfCountry').value || null,
     };
     // Validate + normalise every URL field (all optional; empty is fine).
     for(const [col, id, label] of URL_FIELDS){

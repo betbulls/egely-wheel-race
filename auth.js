@@ -28,6 +28,8 @@ function state(){
     facebook: profile?.facebook_url || '',
     affiliateLink: profile?.affiliate_link || '',
     couponCode: profile?.coupon_code || '',
+    // Country (2-letter ISO code) — auto-detected once, or set manually on the profile.
+    country: profile?.country || null,
     // Live presence visibility — default ON unless the user explicitly turned it off.
     showOnLive: profile?.show_on_live !== false,
   };
@@ -68,11 +70,34 @@ async function refreshProfile(){
   profile = created || null;
 }
 
+// One-time, best-effort country capture from a free geo-IP service. Stores ONLY the
+// 2-letter code (never the IP), and only when the user has no country set yet.
+async function detectCountry(){
+  const valid = cc => /^[A-Z]{2}$/.test(cc || '') ? cc : null;
+  // A few free, key-less, HTTPS+CORS geo-IP services — tried in order, first hit wins.
+  const sources = [
+    async () => { const j = await (await fetch('https://api.country.is/')).json(); return (j.country || '').toUpperCase(); },
+    async () => { const j = await (await fetch('https://get.geojs.io/v1/ip/country.json')).json(); return (j.country || '').toUpperCase(); },
+    async () => { const j = await (await fetch('https://ipapi.co/json/')).json(); return (j.country_code || '').toUpperCase(); },
+  ];
+  for(const src of sources){
+    try { const cc = valid(await src()); if(cc) return cc; } catch {}
+  }
+  return null;
+}
+async function maybeDetectCountry(){
+  if(!user || !profile || profile.country) return;
+  const cc = await detectCountry();
+  if(!cc || !user || !profile || profile.country) return;   // re-check (logout / set meanwhile)
+  const { data } = await supabase.from('profiles').update({ country: cc }).eq('id', user.id).select().maybeSingle();
+  if(data){ profile = data; emit(); }
+}
+
 function applyUser(u){
   user = u;
   emit();
   // Defer Supabase calls OUTSIDE the auth callback (avoids the auth-lock deadlock).
-  setTimeout(async () => { await refreshSubscriber(); await refreshProfile(); emit(); }, 0);
+  setTimeout(async () => { await refreshSubscriber(); await refreshProfile(); emit(); maybeDetectCountry(); }, 0);
 }
 
 supabase.auth.getSession().then(({ data }) => applyUser(data.session?.user || null));

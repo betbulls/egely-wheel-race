@@ -7,12 +7,20 @@ import * as presence from './presence.js';
 import { supabase } from './db.js';
 import { vitalityColor } from './analytics.js';
 import { drawVitalityChart } from './chart.js';
+import { flagUrl } from './countries.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
 function avatarHtml(url, name){
   if(url) return `<img src="${esc(url)}" alt="">`;
   return `<span class="avatar-initial">${esc((name || '?').charAt(0).toUpperCase())}</span>`;
+}
+
+// Small flag image after the name (renders on every OS, unlike flag emoji on Windows).
+function flagHtml(cc){
+  if(!cc || !/^[A-Za-z]{2}$/.test(cc)) return '';
+  const u = cc.toUpperCase();
+  return ` <img src="${flagUrl(cc)}" alt="${esc(u)}" title="${esc(u)}" loading="lazy" style="width:21px;height:15px;border-radius:3px;object-fit:cover;vertical-align:middle;margin-left:7px;box-shadow:0 0 0 1px rgba(255,255,255,0.18)">`;
 }
 
 const STATUS = {
@@ -66,8 +74,8 @@ export function mount(el){
   // Merge the full roster with the live presence list → everyone, with a status.
   function buildPeople(presenceList){
     const byUid = new Map();
-    for(const pr of roster) byUid.set(pr.uid, { uid: pr.uid, name: pr.name, avatar: pr.avatar, status: 'offline' });
-    for(const p of presenceList) byUid.set(p.uid, { uid: p.uid, name: p.name, avatar: p.avatar, status: p.status }); // presence wins (fresher + online)
+    for(const pr of roster) byUid.set(pr.uid, { uid: pr.uid, name: pr.name, avatar: pr.avatar, country: pr.country, status: 'offline' });
+    for(const p of presenceList) byUid.set(p.uid, { uid: p.uid, name: p.name, avatar: p.avatar, country: p.country, status: p.status }); // presence wins (fresher + online)
     return [...byUid.values()];
   }
 
@@ -100,7 +108,7 @@ export function mount(el){
           <div class="live-row">
             <div class="live-avatar">${avatarHtml(p.avatar, p.name)}</div>
             <div class="live-main">
-              <div class="live-name">${esc(p.name || 'Explorer')}${isMe ? ' <span class="live-you">You</span>' : ''}</div>
+              <div class="live-name">${esc(p.name || 'Explorer')}${flagHtml(p.country)}${isMe ? ' <span class="live-you">You</span>' : ''}</div>
               <div class="live-status"><span class="live-pill ${st.cls}">${esc(st.label)}</span></div>
             </div>
             ${value}
@@ -149,8 +157,9 @@ export function mount(el){
 
   // Load the full roster (everyone who hasn't hidden themselves), then render.
   (async () => {
-    const { data } = await supabase.from('profiles').select('id, display_name, avatar_url').neq('show_on_live', false);
-    roster = (data || []).map(p => ({ uid: p.id, name: p.display_name || 'Explorer', avatar: p.avatar_url }));
+    let { data, error } = await supabase.from('profiles').select('id, display_name, avatar_url, country').neq('show_on_live', false);
+    if(error){ ({ data } = await supabase.from('profiles').select('id, display_name, avatar_url').neq('show_on_live', false)); }   // country column not present yet → still works
+    roster = (data || []).map(p => ({ uid: p.id, name: p.display_name || 'Explorer', avatar: p.avatar_url, country: p.country || null }));
     render(presence.getList());
   })();
 
