@@ -22,21 +22,36 @@ export function mount(el){
             <label for="fName">Session name</label>
             <input type="text" id="fName" placeholder="e.g. Sunday Morning Meditation" required maxlength="80">
           </div>
-          <div class="field">
-            <label for="fDate">Date</label>
-            <input type="date" id="fDate" required>
+          <div class="field full">
+            <div class="sn-when">
+              <div class="field">
+                <label for="fDate">Date</label>
+                <input type="date" id="fDate" required>
+              </div>
+              <div class="field">
+                <label for="fTime">Start time</label>
+                <input type="time" id="fTime" required>
+              </div>
+              <div class="field">
+                <label for="fDuration">Duration (minutes)</label>
+                <input type="number" id="fDuration" min="1" max="240" value="10" required>
+              </div>
+            </div>
           </div>
-          <div class="field">
-            <label for="fTime">Start time</label>
-            <input type="time" id="fTime" required>
+          <div class="field full">
+            <label class="sn-option">
+              <input type="checkbox" id="fVerified">
+              <span class="sn-option-main">
+                <span class="sn-option-title">Verified session</span>
+                <span class="sn-option-sub">Only legitimate measurements count toward the group results — irregular spinning is excluded from the leaderboard.</span>
+              </span>
+            </label>
           </div>
-          <div class="field">
-            <label for="fDuration">Duration (minutes)</label>
-            <input type="number" id="fDuration" min="1" max="240" value="10" required>
-          </div>
-          <div class="field full check-field">
-            <label class="check"><input type="checkbox" id="fVerified"> Verified session — only legitimate measurements count toward the results</label>
-          </div>
+        </div>
+        <div class="sn-howto">
+          <b>How the room works:</b> before the scheduled time the room is already open as a
+          practice space — people can join, connect their wheel and spin together.
+          Official results are recorded only during the session window.
         </div>
         <div class="organizer-note" id="organizerNote"></div>
         <div class="form-actions">

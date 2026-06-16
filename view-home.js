@@ -326,12 +326,12 @@ function renderLevel(s){
 // ---- Stats -----------------------------------------------------------------
 function renderStats(s){
   const cards = [
-    { label: 'Sessions', val: s.sessionCount, color: '#9db4ff' },
-    { label: 'Solo',     val: s.soloCount,    color: '#cdbcff' },
-    { label: 'Experiments', val: s.experimentsCompleted || 0, color: '#9b6dff' },
-    s.clientsCount != null ? { label: 'Members', val: s.clientsCount, color: '#3ddc84' } : null,
-    { label: 'Best Avg', val: s.total ? s.bestAvg.toFixed(1) : '–', color: s.total ? vColor(s.bestAvg) : '#888' },
-    { label: 'Verified', val: s.total ? s.verifiedRatio + '%' : '–', color: '#f5a623' },
+    { label: 'Sessions', val: s.sessionCount, color: '#5230da' },
+    { label: 'Solo',     val: s.soloCount,    color: '#401d91' },
+    { label: 'Experiments', val: s.experimentsCompleted || 0, color: '#6b3fd4' },
+    s.clientsCount != null ? { label: 'Members', val: s.clientsCount, color: '#0f8a52' } : null,
+    { label: 'Best Avg', val: s.total ? s.bestAvg.toFixed(1) : '–', color: s.total ? vColor(s.bestAvg) : '#99a2a7' },
+    { label: 'Verified', val: s.total ? s.verifiedRatio + '%' : '–', color: '#b8860b' },
   ].filter(Boolean);
   return `<div class="dash-stats">
     ${cards.map(c => `

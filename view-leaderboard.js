@@ -105,7 +105,7 @@ function buildStanding(rank, total){
 // implicit (i.e., This Month and All Time), to make active people visible.
 function activeDot(u, showActivity){
   if(!showActivity || !u.activeThisWeek) return '';
-  return '<span class="lb-active-dot" title="Earned XP this week"></span>';
+  return '<span class="lb-active-pill" title="Earned XP this week"><span class="lb-active-dot"></span>Active</span>';
 }
 
 // ---- Podium ---------------------------------------------------------------
@@ -121,8 +121,9 @@ function renderPodium(podium, profMap, showActivity){
           <div class="lb-podium-card place-${i + 1}" data-user-id="${esc(u.user_id)}">
             <div class="lb-medal">${medals[i]}</div>
             <div class="lb-avatar lg">${avatarHtml(p.avatar_url, p.display_name)}</div>
-            <div class="lb-name">${esc(p.display_name || 'Player')}${isP ? '<span class="lb-pract-pin" title="Spiritual Maker">✓</span>' : ''}${activeDot(u, showActivity)}</div>
+            <div class="lb-name">${esc(p.display_name || 'Player')}${isP ? '<span class="lb-pract-pin" title="Spiritual Maker">✓</span>' : ''}</div>
             <div class="lb-podium-status">${esc(statusTitle(u))}</div>
+            ${activeDot(u, showActivity)}
             <div class="lb-level">${levelPill(u.xpAll)}</div>
             <div class="lb-xp">${u.xpPeriod} <span class="lb-xp-label">XP</span></div>
             <div class="lb-rare">${renderRare(u.badgesAll)}</div>
@@ -135,9 +136,9 @@ function renderPodium(podium, profMap, showActivity){
 function renderYourStanding(list, profMap, period, myId){
   if(!myId){
     return `
-      <div class="lb-mine empty">
-        <p class="lb-mine-msg">Log in to see where you stand on your journey.</p>
-        <div class="form-actions" style="margin-top:8px"><a class="btn-join" href="#/login">Log in</a></div>
+      <div class="lb-signin">
+        <span class="lb-signin-text">Want to see your rank?</span>
+        <a class="lb-signin-btn" href="#/login">Log in</a>
       </div>`;
   }
   const idx = list.findIndex(u => u.user_id === myId);
@@ -178,6 +179,7 @@ function renderYourStanding(list, profMap, period, myId){
 function renderList(rest, profMap, myId, showActivity){
   if(!rest.length) return '';
   return `
+    <h2 class="lb-list-h">More explorers</h2>
     <div class="lb-list">
       ${rest.map((u, i) => {
         const rank = i + 4;
@@ -211,10 +213,13 @@ function plural(n, one, many){ return `${n} ${n === 1 ? one : many}`; }
 
 function renderHeartbeat(journeyCount, weekActiveCount){
   if(journeyCount === 0) return '';
-  const left = `${plural(journeyCount, 'explorer', 'explorers')} on the journey`;
-  // The dot here is the same one shown next to active users on the rows —
-  // so the meaning ("● = active this week") becomes self-evident.
-  return `<div class="lb-heartbeat">${esc(left)} · <span class="lb-active-dot"></span> ${weekActiveCount} active this week</div>`;
+  // A quiet composed stats strip — bold numbers, dot separator. The green dot
+  // matches the "Active" pill on the rows, so its meaning stays self-evident.
+  return `<div class="lb-heartbeat">
+      <span class="lb-hb-item"><b>${journeyCount}</b> ${journeyCount === 1 ? 'explorer' : 'explorers'} on the journey</span>
+      <span class="lb-hb-dot"></span>
+      <span class="lb-hb-item"><span class="lb-active-dot"></span><b>${weekActiveCount}</b> active this week</span>
+    </div>`;
 }
 
 function renderEmpty(period, journeyCount){
@@ -417,7 +422,7 @@ export function mount(el){
       return;
     }
 
-    const top = list.slice(0, 100);
+    const top = list.slice(0, 50);
     const ids = new Set(top.map(u => u.user_id));
     if(myId) ids.add(myId);
     const { data: profs } = await supabase

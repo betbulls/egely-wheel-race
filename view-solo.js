@@ -3,10 +3,16 @@ import * as ble from './ble.js';
 import * as auth from './auth.js';
 import * as wakeLock from './wake-lock.js';
 import * as presence from './presence.js';
-import { computeStats, vitalityLevel, vitalityColor as vColor, downsample } from './analytics.js';
+import { computeStats, vitalityLevel, downsample } from './analytics.js';
+import { drawVitalitySeries } from './chart.js';
 
 const SAMPLE_MS = 250;        // how often the curve is sampled while measuring
 const LIVE_WINDOW_MS = 60000; // idle live-preview window
+// The wheel reports ~every 700ms, and its report about the FINAL stretch of a
+// measurement arrives after the countdown hits zero. Without a drain, that last
+// real signal is lost. After endMs we wait (at most) this long for one more
+// frame with a NEW device counter and use it to fill the held tail samples.
+const FINALIZE_GRACE_MS = 1500;
 // Verified rule: a real reading is steady (any level); hand-waving/blowing makes
 // the value SWING. We look at the range (max−min) inside a short window — this
 // catches a spike however it ramps — and count distinct swings (rising edges), so
@@ -20,6 +26,7 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>
 export function mount(el){
   let duration = 60;          // seconds
   let measuring = false, finished = false;
+  let finalizing = false;     // countdown done, draining the last delayed frame
   let startMs = 0, endMs = 0;
   let samples = [];           // led values recorded during the measurement
   let liveHistory = [];       // {t, led} rolling buffer for the idle preview
@@ -27,6 +34,11 @@ export function mount(el){
   let swingWin = [], swings = 0, wasSwing = false, cheatDetected = false;
   let lastStats = null, saved = false;   // held until the user clicks Save
   let sampleTimer = null, uiTimer = null, unsubFrames = null, unsubStatus = null;
+  let finalizeTimer = null;
+  // Tail-drain bookkeeping: holdRun = how many trailing samples were pushed
+  // WITHOUT a fresh frame (pure hold of the previous report); the late frame's
+  // value belongs exactly to those slots. Counter change = genuinely new report.
+  let holdRun = 0, frameFresh = false, lastCounter = null, counterAtEnd = null, lateHandled = false;
   let liveChannels = [];   // realtime channels to my linked practitioners (live broadcast)
 
   el.innerHTML = `
@@ -35,22 +47,35 @@ export function mount(el){
       <p class="page-sub">Measure on your own and track your progress.</p>
     </div>
 
-    <div class="panel">
+    <div class="panel solo-setup">
+      <div class="solo-top">
+        <span class="solo-state off" id="sState">Wheel not connected</span>
+      </div>
       <div class="solo-controls">
         <div class="field"><label for="sLabel">Measurement name</label><input id="sLabel" maxlength="60" placeholder="e.g. Morning practice"></div>
-        <div class="field"><label for="sDur">Duration (seconds)</label><input id="sDur" type="number" min="5" max="600" value="60"></div>
+        <div class="field field-dur"><label for="sDur">Duration (seconds)</label><input id="sDur" type="number" min="5" max="600" value="60"></div>
         <button id="sStart">Start measurement</button>
       </div>
       <div class="solo-msg" id="sMsg"></div>
     </div>
 
-    <div class="panel">
-      <div class="solo-nums">
-        <div class="solo-num"><div class="solo-num-val" id="sLive">–</div><div class="solo-num-lbl">Live</div></div>
-        <div class="solo-num"><div class="solo-num-val" id="sAvg">–</div><div class="solo-num-lbl">Avg</div></div>
-        <div class="solo-num"><div class="solo-num-val" id="sTime">–</div><div class="solo-num-lbl">Time left</div></div>
+    <div class="panel solo-cockpit">
+      <div class="solo-hero">
+        <div class="solo-current">
+          <div class="solo-current-val" id="sLive">–</div>
+          <div class="solo-current-lbl">Current vitality</div>
+        </div>
+        <div class="solo-side">
+          <div class="solo-stat"><div class="solo-stat-val" id="sAvg">–</div><div class="solo-stat-lbl">Avg</div></div>
+          <div class="solo-stat"><div class="solo-stat-val" id="sPeak">–</div><div class="solo-stat-lbl">Peak</div></div>
+          <div class="solo-stat"><div class="solo-stat-val" id="sTime">–</div><div class="solo-stat-lbl">Time left</div></div>
+        </div>
       </div>
-      <div class="solo-verify" id="sVerify" hidden></div>
+      <div class="tele-head">
+        <span class="tele-title">Live vitality</span>
+        <span class="tele-meta" id="sTeleMeta">Last 60s</span>
+        <span class="solo-verify" id="sVerify" hidden></span>
+      </div>
       <div class="solo-chart-wrap"><canvas id="sChart"></canvas></div>
       <div class="led-bar" id="sBar"></div>
     </div>
@@ -70,85 +95,68 @@ export function mount(el){
     });
   }
 
-  // ---- Chart with numbered axes and red/yellow/green Y zones ----------------
+  // ---- Chart: shared light telemetry engine (chart.js drawVitalitySeries) ---
+  // Solo keeps its own TIME logic (time-true sample x positions + rolling live
+  // window) and hands the points to the shared renderer, so Live/Solo/detail
+  // all speak one visual language (zone bands, faint grid, violet line, marker).
   const chart = $('sChart');
   function drawChart(){
-    const w = chart.clientWidth, h = chart.clientHeight;
-    if(!w || !h) return;
-    const dpr = window.devicePixelRatio || 1;
-    if(chart.width !== Math.round(w * dpr)){ chart.width = Math.round(w * dpr); chart.height = Math.round(h * dpr); }
-    const ctx = chart.getContext('2d');
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, w, h);
-
-    const padL = 30, padR = 8, padT = 8, padB = 20;
-    const x0 = padL, y0 = padT, plotW = w - padL - padR, plotH = h - padT - padB;
-    const ledToY = led => y0 + plotH - (led / 24) * plotH;
-
-    // Vitality zone bands
-    const band = (lo, hi, color) => { const yt = ledToY(hi); ctx.fillStyle = color; ctx.fillRect(x0, yt, plotW, ledToY(lo) - yt); };
-    band(0, 6, 'rgba(192,20,60,0.12)');
-    band(6, 13, 'rgba(233,210,74,0.12)');
-    band(13, 24, 'rgba(60,201,138,0.12)');
-
-    // Y gridlines + labels at the zone boundaries
-    ctx.font = '10px Inter, sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-    [0, 6, 13, 24].forEach(v => {
-      const y = ledToY(v);
-      ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x0 + plotW, y); ctx.stroke();
-      ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fillText(String(v), x0 - 6, y);
-    });
-
-    // X labels (time)
-    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillStyle = 'rgba(255,255,255,0.45)';
-    const live = !(measuring || finished);
-    for(let i = 0; i <= 4; i++){
-      const frac = i / 4, x = x0 + frac * plotW;
-      const txt = live ? (i === 4 ? 'now' : '-' + Math.round((1 - frac) * 60) + 's') : Math.round(frac * duration) + 's';
-      ctx.fillText(txt, x, y0 + plotH + 5);
-    }
-
-    // Running-average reference line (moves as the average changes)
-    if((measuring || finished) && samples.length){
-      const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
-      const y = ledToY(avg);
-      ctx.strokeStyle = vColor(avg); ctx.setLineDash([5, 4]); ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x0 + plotW, y); ctx.stroke(); ctx.setLineDash([]);
-      ctx.fillStyle = vColor(avg); ctx.font = '10px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
-      ctx.fillText('avg ' + avg.toFixed(1), x0 + 4, y - 2);
-    }
-
-    // Curve
-    let pts;
-    if(measuring || finished){
-      const total = duration * 1000;
-      pts = samples.map((v, i) => ({ x: Math.min(1, (i * SAMPLE_MS) / total), led: v }));
-    } else {
+    const live = !(measuring || finalizing || finished);
+    let pts, xLabels;
+    if(live){
       const now = Date.now();
       pts = liveHistory.map(p => ({ x: (p.t - (now - LIVE_WINDOW_MS)) / LIVE_WINDOW_MS, led: p.led })).filter(p => p.x >= 0);
+      xLabels = [0, 1, 2, 3, 4].map(i => ({ frac: i / 4, text: i === 4 ? 'now' : '-' + Math.round((1 - i / 4) * 60) + 's' }));
+    } else {
+      const total = duration * 1000;
+      pts = samples.map((v, i) => ({ x: Math.min(1, (i * SAMPLE_MS) / total), led: v }));
+      xLabels = [0, 1, 2, 3, 4].map(i => ({ frac: i / 4, text: Math.round((i / 4) * duration) + 's' }));
     }
-    if(pts.length < 2) return;
-    ctx.beginPath();
-    pts.forEach((p, i) => { const x = x0 + p.x * plotW, y = ledToY(p.led); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
-    ctx.strokeStyle = '#e8e6ff'; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
+    const avg = (!live && samples.length) ? samples.reduce((a, b) => a + b, 0) / samples.length : null;
+    drawVitalitySeries(chart, pts, { xLabels, avg });
+  }
+
+  // Zone colours tuned for the light theme: muted set for big numbers (no alarm
+  // red / unreadable yellow on white); the chart keeps its own vivid markers.
+  const zText = led => led < 6 ? '#c2415b' : led < 13 ? '#b8860b' : '#0f8a52';
+
+  // "What can I do now?" chip — one glance, one state.
+  function updateState(){
+    const chip = $('sState');
+    let cls, txt;
+    if(measuring){ cls = 'measuring'; txt = 'Measuring'; }
+    else if(finalizing){ cls = 'finalizing'; txt = 'Finalizing'; }
+    else if(finished){ cls = 'done'; txt = 'Finished'; }
+    else if(connected){ cls = 'ready'; txt = 'Wheel connected · Ready'; }
+    else { cls = 'off'; txt = 'Wheel not connected'; }
+    chip.className = 'solo-state ' + cls;
+    chip.textContent = txt;
   }
 
   function tick(){
     $('sLive').textContent = curLed;
-    $('sLive').style.color = vColor(curLed);
+    $('sLive').style.color = zText(curLed);
     updateBar(curLed);
+    if(samples.length){
+      const avg = samples.reduce((s, v) => s + v, 0) / samples.length;
+      $('sAvg').textContent = avg.toFixed(1);
+      $('sAvg').style.color = zText(avg);
+      const pk = Math.max(...samples);
+      $('sPeak').textContent = pk;
+      $('sPeak').style.color = zText(pk);
+    }
     if(measuring){
       const left = Math.max(0, endMs - Date.now());
       $('sTime').textContent = Math.ceil(left / 1000) + 's';
-      if(samples.length){
-        const avg = samples.reduce((s, v) => s + v, 0) / samples.length;
-        $('sAvg').textContent = avg.toFixed(1);
-        $('sAvg').style.color = vColor(avg);
-      }
       updateVerify();
       publishLiveTick();
-      if(Date.now() >= endMs) stopMeasurement();
+      if(Date.now() >= endMs) beginFinalize();
     }
+    $('sTeleMeta').textContent = measuring ? duration + 's measurement · running'
+      : finalizing ? duration + 's measurement · finalizing'
+      : finished ? duration + 's measurement · finished'
+      : 'Last 60s · idle preview';
+    updateState();
     drawChart();
   }
 
@@ -217,22 +225,46 @@ export function mount(el){
     duration = Math.max(5, Math.min(600, parseInt($('sDur').value, 10) || 60));
     if(!connected){ setMsg('Connect your Egely Wheel (top right) first.', 'err'); return; }
     samples = []; swingWin = []; swings = 0; wasSwing = false; cheatDetected = false; finished = false; lastStats = null; saved = false;
+    finalizing = false; lateHandled = false; holdRun = 0; frameFresh = false;
     measuring = true; startMs = Date.now(); endMs = startMs + duration * 1000;
     $('sEval').hidden = true;
     $('sStart').textContent = 'Stop';
     $('sDur').disabled = true;
     setMsg('Measuring…', '');
     updateVerify();
-    sampleTimer = setInterval(() => samples.push(curLed), SAMPLE_MS);
+    sampleTimer = setInterval(() => {
+      samples.push(curLed);
+      // Track the trailing "hold" run: pushes with no fresh frame in between
+      // just repeat the previous report — the finalize drain may overwrite them.
+      if(frameFresh){ frameFresh = false; holdRun = 0; } else holdRun++;
+    }, SAMPLE_MS);
     openLive();   // fire and forget; channels become ready within ~1s
     presence.setMeasuring(true);   // show me as "measuring" on the Live wall
     wakeLock.acquire();
   }
 
-  function stopMeasurement(){
-    if(!measuring) return;
-    measuring = false; finished = true;
+  // Countdown hit zero (or the user pressed Stop): stop SAMPLING immediately —
+  // the chosen window is over — but wait briefly for the wheel's last report
+  // (it covers the final stretch and arrives ~700ms late). NOT extra measuring
+  // time: the late value only fills the already-recorded held tail slots.
+  function beginFinalize(){
+    if(!measuring || finalizing) return;
+    measuring = false; finalizing = true;
     if(sampleTimer){ clearInterval(sampleTimer); sampleTimer = null; }
+    counterAtEnd = lastCounter; lateHandled = false;
+    $('sStart').disabled = true;
+    $('sStart').textContent = 'Finalizing…';
+    $('sTime').textContent = '0s';
+    setMsg('Processing the last signal…', '');
+    presence.setMeasuring(false);   // never leave a stuck "measuring" presence
+    finalizeTimer = setTimeout(completeMeasurement, FINALIZE_GRACE_MS);
+  }
+
+  function completeMeasurement(){
+    if(!finalizing) return;
+    finalizing = false; finished = true;
+    if(finalizeTimer){ clearTimeout(finalizeTimer); finalizeTimer = null; }
+    $('sStart').disabled = false;
     $('sStart').textContent = 'Start measurement';
     $('sDur').disabled = false;
     $('sTime').textContent = '–';
@@ -241,7 +273,6 @@ export function mount(el){
     lastStats = computeStats(samples);
     if(lastStats) showEval(lastStats);
     closeLive();
-    presence.setMeasuring(false);
     wakeLock.release();
   }
 
@@ -251,11 +282,11 @@ export function mount(el){
     eval_.hidden = false;
     eval_.innerHTML = `
       <h2>Result</h2>
-      <div class="eval-level" style="color:${lvl.color}">${esc(lvl.name)}</div>
+      <div class="eval-level" style="color:${zText(stats.avg)}">${esc(lvl.name)}</div>
       <div class="eval-meaning">${esc(lvl.meaning)}</div>
       <div class="eval-stats">
-        <span><b style="color:${vColor(stats.avg)}">${stats.avg.toFixed(1)}</b> Avg</span>
-        <span><b style="color:${vColor(stats.peak)}">${stats.peak}</b> Peak</span>
+        <span><b style="color:${zText(stats.avg)}">${stats.avg.toFixed(1)}</b> Avg</span>
+        <span><b style="color:${zText(stats.peak)}">${stats.peak}</b> Peak</span>
         <span><b>${stats.steadiness}</b> Steady</span>
         ${cheatDetected ? '<span class="warn">Not verified</span>' : '<span class="v-badge verified">✓ Verified</span>'}
       </div>
@@ -296,21 +327,34 @@ export function mount(el){
 
   function setMsg(text, state){ const m = $('sMsg'); m.className = 'solo-msg ' + (state || ''); m.textContent = text; }
 
-  $('sStart').addEventListener('click', () => { measuring ? stopMeasurement() : startMeasurement(); });
+  $('sStart').addEventListener('click', () => {
+    if(finalizing) return;                       // drain in progress — ignore clicks
+    measuring ? beginFinalize() : startMeasurement();
+  });
 
   unsubStatus = ble.subscribeStatus(s => { connected = s.connected; if(!connected && !measuring) setMsg('', ''); });
   unsubFrames = ble.subscribeFrames(frame => {
     curLed = frame.led;
+    lastCounter = frame.counter;
     const now = Date.now();
     liveHistory.push({ t: now, led: frame.led });
     liveHistory = liveHistory.filter(p => now - p.t <= LIVE_WINDOW_MS);
     if(measuring){
+      frameFresh = true;
       swingWin.push({ t: now, led: frame.led });
       swingWin = swingWin.filter(f => now - f.t <= CHEAT_WINDOW_MS);
       const leds = swingWin.map(f => f.led);
       const swingNow = (Math.max(...leds) - Math.min(...leds)) >= SWING_LIMIT;
       if(swingNow && !wasSwing && ++swings >= MAX_SWINGS) cheatDetected = true;
       wasSwing = swingNow;
+    } else if(finalizing && !lateHandled && frame.counter !== counterAtEnd){
+      // The wheel's delayed report on the FINAL stretch of the window: write it
+      // into the held tail slots (no length change → no extra measuring time),
+      // then finish right away — no need to sit out the full grace.
+      lateHandled = true;
+      const n = Math.min(holdRun, samples.length, 4);
+      for(let i = samples.length - n; i < samples.length; i++) samples[i] = frame.led;
+      completeMeasurement();
     }
   });
 
@@ -321,6 +365,7 @@ export function mount(el){
   return () => {
     if(sampleTimer) clearInterval(sampleTimer);
     if(uiTimer) clearInterval(uiTimer);
+    if(finalizeTimer) clearTimeout(finalizeTimer);
     if(unsubFrames) unsubFrames();
     if(unsubStatus) unsubStatus();
     closeLive();

@@ -68,29 +68,35 @@ function router(){
 // ---- Login view -------------------------------------------------------------
 function mountLogin(el){
   el.innerHTML = `
-    <div class="view-head">
-      <h1 class="page-title">Log in or sign up</h1>
-      <p class="page-sub">Just your email — we send a 6-digit code, no password. New here? Entering your email creates your account.</p>
-    </div>
-    <div class="panel">
-      <div class="field full">
-        <label for="liEmail">Email</label>
-        <input id="liEmail" type="email" placeholder="you@example.com" autocomplete="email">
+    <div class="login-wrap">
+      <div class="login-card">
+        <div class="login-badge" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="26" height="26"><path fill="#fff" d="M13 1L6 13h5l-2 10 8-13h-5l1-9z"/></svg>
+        </div>
+        <h1 class="login-title">Log in or sign up</h1>
+        <p class="login-sub">Enter your email and we'll send you a 6-digit code — no password to remember.</p>
+
+        <div class="field full">
+          <label for="liEmail">Email</label>
+          <input id="liEmail" type="email" placeholder="you@example.com" autocomplete="email">
+        </div>
+        <div class="field full" id="liCodeWrap" hidden>
+          <label for="liCode">Login code (from your email)</label>
+          <input id="liCode" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="6-digit code">
+        </div>
+        <div class="form-actions login-actions">
+          <button id="liSend">Send code</button>
+          <button id="liVerify" hidden>Verify &amp; log in</button>
+          <span class="form-msg" id="liMsg"></span>
+        </div>
+
+        <p class="login-trust">New here? Entering your email creates your account — no password, and we never post anything or share your address.</p>
       </div>
-      <div class="field full" id="liCodeWrap" hidden>
-        <label for="liCode">Login code (from your email)</label>
-        <input id="liCode" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="6-digit code">
-      </div>
-      <div class="form-actions">
-        <button id="liSend">Send code</button>
-        <button id="liVerify" hidden>Verify &amp; log in</button>
-        <span class="form-msg" id="liMsg"></span>
-      </div>
-    </div>
-    <p class="page-sub" style="text-align:center;margin-top:16px">
-      Watching is always free. Want to measure with your own Egely Wheel?
-      <a href="#/subscribe" style="color:#cdbcff;font-weight:600;text-decoration:none">See the options →</a>
-    </p>`;
+      <p class="login-foot">
+        Watching is always free. Want to measure with your own Egely Wheel?
+        <a href="#/subscribe" class="login-foot-link">See the options →</a>
+      </p>
+    </div>`;
   const msg = el.querySelector('#liMsg');
   const emailInput = el.querySelector('#liEmail');
   const codeWrap = el.querySelector('#liCodeWrap');
@@ -111,6 +117,7 @@ function mountLogin(el){
     codeWrap.hidden = false;
     verifyBtn.hidden = false;
     sendBtn.textContent = 'Resend code';
+    sendBtn.classList.add('lo-secondary');   // primary action is now Verify
     msg.className = 'form-msg ok';
     msg.textContent = 'We sent a 6-digit code to your email. Enter it below.';
     codeInput.focus();

@@ -5,6 +5,50 @@ import * as presence from './presence.js';
 import { computeStats, CATEGORIES, METRIC_HELP, icon, trendLabel, vitalityColor } from './analytics.js';
 import { drawTrio } from './chart.js';
 import { flagUrl } from './countries.js';
+import { createAddToCalendar } from './calendar.js';
+
+// Robust clipboard copy — Clipboard API with a legacy execCommand fallback.
+async function copyText(text){
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch(e){
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      const ok = document.execCommand('copy'); ta.remove();
+      return ok;
+    } catch(e2){ return false; }
+  }
+}
+
+// "Share / Copy link" control — Web Share API when available, otherwise copies
+// the room URL with brief "Copied" feedback. Returns the root element to append.
+function createShareButton(session){
+  const url = location.origin + location.pathname + '#/room/' + session.id;
+  const root = document.createElement('div');
+  root.className = 'room-share';
+  root.innerHTML = `
+    <button type="button" class="cal-btn room-share-btn" title="Share this room">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>
+      <span class="room-share-label">${navigator.share ? 'Share' : 'Copy link'}</span>
+    </button>`;
+  const btn = root.querySelector('.room-share-btn');
+  const label = root.querySelector('.room-share-label');
+  let resetTimer = null;
+  btn.addEventListener('click', async (e) => {
+    e.preventDefault(); e.stopPropagation();
+    if(navigator.share){
+      try { await navigator.share({ title: (session.name || 'EWR Live session') + ' — EWR Live', url }); }
+      catch(err){ /* user dismissed the share sheet — nothing to do */ }
+      return;
+    }
+    const ok = await copyText(url);
+    label.textContent = ok ? 'Copied' : 'Copy failed';
+    clearTimeout(resetTimer);
+    resetTimer = setTimeout(() => { label.textContent = 'Copy link'; }, 1800);
+  });
+  return root;
+}
 
 const BROADCAST_MS = 500;   // how often each client samples + broadcasts its LED
 const RENDER_MS = 250;      // how often the board repaints
@@ -69,12 +113,30 @@ export function mount(el, sessionId){
   let mySampleTimes = [];    // matching real-time offsets (ms from session start), for time-anchoring the curve
   let groupSaved = false;    // host writes session group_avg once, at the end
   let myResultSaved = false; // each client writes its own result row once, at the end
+  let resultsShown = false;  // in-place live→results transition happened
 
   let swingWin = [], swings = 0, wasSwing = false;   // cheat detection: count of distinct swings
   let cheatDetected = false; // latched once enough swings are seen
 
+  // Tail drain (same fix as Solo): the wheel reports ~every 700ms, so its report
+  // covering the FINAL stretch of the window arrives after endMs. Before saving
+  // the result we wait briefly for one frame with a NEW device counter and let
+  // it overwrite the held tail samples (no extra time — the slots already exist).
+  const FINALIZE_GRACE_MS = 1500;
+  let holdRun = 0, frameFresh = false, lastCounter = null;
+  let tailDrainStart = null, tailCounterAtEnd = null, tailDrainDone = false;
+
   const racerId = name => name.trim().toLowerCase().replace(/\s+/g, '_');
   const inWindow = () => { const n = Date.now(); return n >= startMs && n <= endMs; };
+  // The room is a LIVE space in three phases: 'pre' = practice room before the
+  // scheduled window (presence + live values, NO official stats/recording),
+  // 'active' = the official measured session, 'post' = read-only results.
+  const phase = () => { const n = Date.now(); return n < startMs ? 'pre' : n <= endMs ? 'active' : 'post'; };
+  // Presence roster: everyone who OPENED the room (wheel or not). name -> {ble, country}
+  const present = new Map();
+  // Muted zone colours for TEXT on the light theme (readable on white — the
+  // vivid vitality set stays for curve/spark lines).
+  const zText = led => led < 6 ? '#c2415b' : led < 13 ? '#b8860b' : '#0f8a52';
 
   el.innerHTML = `
     <div class="room-head">
@@ -83,6 +145,8 @@ export function mount(el, sessionId){
         <span class="live-pill" id="livePill" hidden><span class="dot"></span>Live</span>
       </div>
       <div class="room-sub" id="roomSub"></div>
+      <div class="room-actions" id="roomActions"></div>
+      <p class="room-practice-note" id="roomPracticeNote" hidden>This room is open for practice now — official results are recorded once the session begins.</p>
     </div>
 
     <div class="panel name-gate" id="nameGate" hidden>
@@ -100,6 +164,7 @@ export function mount(el, sessionId){
       <div class="session-pulse">
         <div class="sp-head">
           <span class="sp-title">Session pulse</span>
+          <span class="sp-state" id="spState" hidden></span>
           <div class="sp-legend">
             <span class="leg-item leg-host"><i class="leg-dot"></i>Host</span>
             <span class="leg-item leg-group"><i class="leg-dot"></i>Group</span>
@@ -159,6 +224,17 @@ export function mount(el, sessionId){
       weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
     });
     $('roomSub').textContent = `Hosted by ${session.created_by || 'unknown'} · ${session.duration_minutes} min · ${when}`;
+
+    // Header actions: "Remind me" (calendar) only while it's still upcoming, and
+    // a Share/Copy-link control always — the room is a community space.
+    const phaseNow = Date.now() < startMs ? 'pre' : (Date.now() <= endMs ? 'active' : 'post');
+    const actionsEl = $('roomActions');
+    if(actionsEl){
+      if(phaseNow === 'pre') actionsEl.appendChild(createAddToCalendar({ ...session, _hostName: session.created_by }));
+      actionsEl.appendChild(createShareButton(session));
+    }
+    if(phaseNow === 'pre'){ const note = $('roomPracticeNote'); if(note) note.hidden = false; }
+
     if(Date.now() > endMs) renderResults();
     else start();
   })();
@@ -188,10 +264,12 @@ export function mount(el, sessionId){
     $('roomBody').hidden = false;
     joinChannel();
 
-    unsubStatus = ble.subscribeStatus(s => { bleConnected = s.connected; updateHint(); presence.setSession(s.connected); });
+    unsubStatus = ble.subscribeStatus(s => { bleConnected = s.connected; updateHint(); presence.setSession(s.connected); trackPresence(); });
     unsubFrames = ble.subscribeFrames(frame => {
       myLed = frame.led;
+      lastCounter = frame.counter;
       if(inWindow()){
+        frameFresh = true;
         const now = Date.now();
         swingWin.push({ t: now, led: frame.led });
         swingWin = swingWin.filter(f => now - f.t <= CHEAT_WINDOW_MS);
@@ -199,6 +277,13 @@ export function mount(el, sessionId){
         const swingNow = (Math.max(...leds) - Math.min(...leds)) >= SWING_LIMIT;
         if(swingNow && !wasSwing && !cheatDetected && ++swings >= MAX_SWINGS){ cheatDetected = true; updateHint(); }
         wasSwing = swingNow;
+      } else if(tailDrainStart !== null && !tailDrainDone && frame.counter !== tailCounterAtEnd){
+        // The wheel's delayed report on the window's final stretch: patch the
+        // held tail samples (their time slots are already in-window), then save.
+        tailDrainDone = true;
+        const n = Math.min(holdRun, mySamples.length, 4);
+        for(let i = mySamples.length - n; i < mySamples.length; i++) mySamples[i] = frame.led;
+        maybeSaveMyResult();
       }
     });
 
@@ -212,15 +297,55 @@ export function mount(el, sessionId){
   function updateHint(){
     const h = $('roomHint');
     if(cheatDetected){ h.innerHTML = '<span class="warn">Irregular spinning detected — this measurement won\'t be verified.</span>'; return; }
-    if(bleConnected) h.textContent = `You are measuring as "${myName}".`;
-    else h.textContent = 'Connect your Egely Wheel (top right) to join the measurement — or just watch the leaderboard.';
+    if(bleConnected){
+      h.textContent = phase() === 'pre'
+        ? `Practice mode — you are spinning as "${myName}". Official results start with the session.`
+        : `You are measuring as "${myName}".`;
+    } else {
+      h.textContent = 'You are in the room. Connect your Egely Wheel (top right) to measure — or just watch.';
+    }
   }
 
   // ---- Realtime channel -----------------------------------------------------
+  // NOTE (future improvement, parked on purpose): late joiners currently see
+  // other racers' curves only from the moment they join. "Late joiners should
+  // eventually see appropriate room/session history" — needs a real product
+  // decision (how much history, per phase) before building.
   function joinChannel(){
-    channel = supabase.channel('room-' + sessionId, { config: { broadcast: { self: false } } });
+    channel = supabase.channel('room-' + sessionId, {
+      config: { broadcast: { self: false }, presence: { key: racerId(myName) } },
+    });
     channel.on('broadcast', { event: 'tick' }, ({ payload }) => applyTick(payload));
-    channel.subscribe();
+    // Presence: everyone who opens the room is a participant — wheel or not.
+    channel.on('presence', { event: 'sync' }, syncPresence);
+    channel.subscribe(status => { if(status === 'SUBSCRIBED') trackPresence(); });
+  }
+
+  function trackPresence(){
+    if(!channel) return;
+    channel.track({ name: myName, ble: bleConnected, country: auth.getState().country || null })
+      .catch(() => {});   // best-effort; the roster also works off broadcasts
+  }
+
+  function syncPresence(){
+    present.clear();
+    const state = channel ? channel.presenceState() : {};
+    for(const metas of Object.values(state)){
+      const m = metas[metas.length - 1];   // latest track wins per key
+      if(m && m.name) present.set(m.name, { ble: !!m.ble, country: m.country || null });
+    }
+    // Presence-only participants join the roster; entries that never produced
+    // wheel data leave it when their presence drops (broadcasters stay).
+    for(const [name, p] of present){
+      if(!racers.has(name)){
+        racers.set(name, { name, led: 0, avg: 0, count: 0, peak: 0, host: isHostName(name),
+          verified: true, country: p.country, history: [], el: null, hasData: false });
+      }
+    }
+    for(const [name, r] of racers){
+      if(!r.hasData && !present.has(name)){ racers.delete(name); }
+    }
+    render();
   }
 
   function applyTick(p){
@@ -234,11 +359,14 @@ export function mount(el, sessionId){
       r = { name, led: 0, avg: 0, count: 0, peak: 0, host, verified: true, country: null, history: [], el: null };
       racers.set(name, r);
     }
+    r.hasData = true;   // produced wheel data (vs. presence-only participant)
     r.led = led; r.avg = avg; r.count = count; r.host = host;
     r.peak = Math.max(r.peak || 0, peak || 0);
     if(verified !== undefined) r.verified = verified;
     if(country) r.country = country;
-    const t = Math.max(0, Date.now() - startMs);
+    // t may be NEGATIVE before the scheduled window — the pre-session practice
+    // room shows those points on a rolling chart; official renderers filter t>=0.
+    const t = Date.now() - startMs;
     r.history.push({ t, led });
     if(r.history.length > 2400) r.history.shift();
   }
@@ -251,6 +379,9 @@ export function mount(el, sessionId){
       myPeak = Math.max(myPeak, myLed);
       mySamples.push(myLed);
       mySampleTimes.push(Date.now() - startMs);
+      // Track the trailing "hold" run (pushes with no fresh frame in between) —
+      // the finalize tail drain may overwrite exactly those slots.
+      if(frameFresh){ frameFresh = false; holdRun = 0; } else holdRun++;
       pendingSamples.push({
         session_id: Number(sessionId), user_id: auth.getState().user?.id || null,
         racer_id: racerId(myName), racer_name: myName, led_value: myLed,
@@ -282,7 +413,7 @@ export function mount(el, sessionId){
   // The host's client writes the session's group result once the session ends.
   function maybeSaveGroup(){
     if(groupSaved || Date.now() <= endMs || !isHostName(myName)) return;
-    const list = [...racers.values()];
+    const list = [...racers.values()].filter(r => r.hasData);   // presence-only people don't dilute the official group avg
     if(list.length === 0) return;
     groupSaved = true;
     const groupAvg = list.reduce((s, r) => s + (r.avg || 0), 0) / list.length;
@@ -324,6 +455,17 @@ export function mount(el, sessionId){
   // Each measuring client writes its own summarised result once the session ends.
   function maybeSaveMyResult(){
     if(myResultSaved || Date.now() <= endMs || mySamples.length === 0) return;
+    // Tail drain: give the wheel's delayed final report a brief chance to land
+    // before the stats are computed. The frame listener completes the drain
+    // early; the timeout is the fallback so the save can never get stuck.
+    if(!tailDrainDone){
+      if(tailDrainStart === null){
+        tailDrainStart = Date.now();
+        tailCounterAtEnd = lastCounter;
+        setTimeout(() => { if(!tailDrainDone){ tailDrainDone = true; maybeSaveMyResult(); } }, FINALIZE_GRACE_MS);
+      }
+      return;
+    }
     myResultSaved = true;
     const s = computeStats(fullWindowSamples(mySamples, mySampleTimes, durationMs));
     supabase.from('results').insert({
@@ -371,6 +513,10 @@ export function mount(el, sessionId){
     const vbadge = document.createElement('span');
     vbadge.className = 'v-badge';
     nameRow.append(vbadge);
+    const status = document.createElement('span');
+    status.className = 'racer-status';
+    status.hidden = true;
+    nameRow.append(status);
     const spark = document.createElement('canvas');
     spark.className = 'spark';
     mid.append(nameRow, spark);
@@ -383,8 +529,15 @@ export function mount(el, sessionId){
     metrics.append(live.wrap, peak.wrap, avg.wrap);
 
     card.append(rank, avatar, mid, metrics);
-    r.el = { card, rank, liveVal: live.val, peakVal: peak.val, avgVal: avg.val, spark, vbadge };
+    r.el = { card, rank, liveVal: live.val, peakVal: peak.val, avgVal: avg.val, spark, vbadge, status };
     return card;
+  }
+
+  // Map history (t = ms from session start, may be negative) onto a rolling
+  // last-60s practice window ending NOW: returned t' is in [0, 60000].
+  function rolling(history){
+    const nowRel = Date.now() - startMs;
+    return history.map(p => ({ t: p.t - nowRel + 60000, led: p.led })).filter(p => p.t >= 0);
   }
 
   function mkMetric(cls, label){
@@ -407,7 +560,7 @@ export function mount(el, sessionId){
     const ctx = canvas.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
-    const span = durationMs || 60000;
+    const span = opts.span || durationMs || 60000;
     const pad = opts.big ? 8 : 2;
     const xOf = t => (t / span) * w;
     const yOf = led => h - (led / 24) * (h - pad * 2) - pad;
@@ -436,25 +589,87 @@ export function mount(el, sessionId){
   function render(){
     const b = board();
     if(!b) return;            // results mode has no live board
+
+    // The session ended while we are IN the room: finalize (tail drain + saves
+    // need a moment to land for everyone), then swap to the final results in
+    // place — nobody should have to leave and dig through past sessions.
+    if(phase() === 'post' && !resultsShown){
+      maybeSaveGroup();
+      maybeSaveMyResult();
+      renderGroup();   // time card flips to "Finished"
+      const mySettled = myResultSaved || mySamples.length === 0;
+      const SETTLE_MS = 2600;   // > FINALIZE_GRACE_MS, lets other racers' saves land too
+      if(!(mySettled && Date.now() - endMs > SETTLE_MS)){
+        b.innerHTML = '<div class="room-finalizing"><span class="rf-dot"></span>Finalizing results…</div>';
+        const st = $('spState');
+        if(st){ st.hidden = false; st.textContent = 'Session finished — finalizing results'; }
+        return;
+      }
+      resultsShown = true;
+      if(broadcastTimer){ clearInterval(broadcastTimer); broadcastTimer = null; }
+      flushSamples();
+      renderResults();   // replaces roomBody; later ticks bail out (no #board)
+      return;
+    }
+
     const list = [...racers.values()];
 
     if(list.length === 0){
-      b.innerHTML = '<div class="empty">Waiting for racers to connect…</div>';
+      b.innerHTML = '<div class="empty">No one is in the room yet.</div>';
     } else {
       if(b.querySelector('.empty')) b.innerHTML = '';
       const sorted = list.sort((a, c) => c.led - a.led);
+      const ph = phase();
       sorted.forEach((r, i) => {
         if(!r.el){ b.appendChild(buildCard(r)); }
         b.appendChild(r.el.card); // reorder, preserves canvas
         r.el.rank.textContent = i + 1;
-        r.el.liveVal.textContent = r.led;
-        r.el.liveVal.style.color = vitalityColor(r.led);
-        r.el.peakVal.textContent = r.peak;
-        r.el.peakVal.style.color = vitalityColor(r.peak);
-        r.el.avgVal.textContent = (r.avg || 0).toFixed(1);
-        if(r.verified === false){ r.el.vbadge.className = 'v-badge unverified'; r.el.vbadge.textContent = 'unverified'; }
-        else { r.el.vbadge.className = 'v-badge verified'; r.el.vbadge.textContent = '✓'; }
-        drawCurve(r.el.spark, r.history, vitalityColor(r.led));
+
+        // Live value: only for participants with wheel data.
+        if(r.hasData){
+          r.el.liveVal.textContent = r.led;
+          r.el.liveVal.style.color = zText(r.led);
+        } else {
+          r.el.liveVal.textContent = '–'; r.el.liveVal.style.color = '';
+        }
+        // Official peak/avg only inside the active session window — the
+        // practice room shows no official-looking stats.
+        if(ph === 'active' && r.hasData){
+          r.el.peakVal.textContent = r.peak;
+          r.el.peakVal.style.color = zText(r.peak);
+          r.el.avgVal.textContent = (r.avg || 0).toFixed(1);
+        } else {
+          r.el.peakVal.textContent = '–'; r.el.peakVal.style.color = '';
+          r.el.avgVal.textContent = '–';
+        }
+
+        // Badge: verified verdict belongs to the official session; otherwise a
+        // presence/wheel status pill (In room / Wheel connected / Practicing).
+        let status = null;
+        if(!r.hasData) status = 'In room';
+        else if(ph === 'pre') status = r.led > 0 ? 'Practicing' : 'Wheel connected';
+        if(status){
+          r.el.vbadge.hidden = true;
+          r.el.status.hidden = false;
+          r.el.status.textContent = status;
+          r.el.status.className = 'racer-status' +
+            (status === 'Practicing' ? ' practicing' : status === 'Wheel connected' ? ' wheel' : '');
+        } else {
+          r.el.status.hidden = true;
+          r.el.vbadge.hidden = false;
+          if(r.verified === false){ r.el.vbadge.className = 'v-badge unverified'; r.el.vbadge.textContent = 'unverified'; }
+          else { r.el.vbadge.className = 'v-badge verified'; r.el.vbadge.textContent = '✓'; }
+        }
+
+        // Spark: session-anchored when active; rolling last-60s in practice.
+        // Area fill gives it telemetry weight (not an empty input-field strip).
+        if(r.hasData && r.history.length > 1){
+          if(ph === 'active') drawCurve(r.el.spark, r.history.filter(pt => pt.t >= 0), vitalityColor(r.led), { fill: true });
+          else drawCurve(r.el.spark, rolling(r.history), vitalityColor(r.led), { span: 60000, fill: true });
+        } else {
+          const c = r.el.spark.getContext('2d');
+          if(c) c.clearRect(0, 0, r.el.spark.width, r.el.spark.height);
+        }
       });
     }
     renderPulse();
@@ -485,26 +700,50 @@ export function mount(el, sessionId){
   }
 
   function renderPulse(){
-    const list = [...racers.values()];
+    const ph = phase();
+    // Only participants with wheel data feed the pulse chart and group numbers.
+    const list = [...racers.values()].filter(r => r.hasData);
     const hostR = list.find(r => r.host);
     const meR = racers.get(myName);
+    const meData = meR && meR.hasData ? meR : null;
     const groupHist = computeGroupHistory();
 
-    drawTrio($('spChart'), {
-      host: hostR ? hostR.history : [],
-      group: groupHist,
-      me: meR ? meR.history : [],
-    }, { durationMs });
+    if(ph === 'pre'){
+      // Practice room: rolling last-60s window (the session window hasn't started).
+      const practiceLabels = [0, 1, 2, 3, 4].map(i =>
+        ({ frac: i / 4, text: i === 4 ? 'now' : '-' + Math.round((1 - i / 4) * 60) + 's' }));
+      drawTrio($('spChart'), {
+        host: hostR ? rolling(hostR.history) : [],
+        group: rolling(groupHist),
+        me: meData ? rolling(meData.history) : [],
+      }, { durationMs: 60000, xLabels: practiceLabels });
+    } else {
+      drawTrio($('spChart'), {
+        host: hostR ? hostR.history.filter(p => p.t >= 0) : [],
+        group: groupHist.filter(p => p.t >= 0),
+        me: meData ? meData.history.filter(p => p.t >= 0) : [],
+      }, { durationMs });
+    }
 
+    // Practice state line in the panel header.
+    const st = $('spState');
+    if(st){
+      if(ph === 'pre'){ st.hidden = false; st.textContent = 'Practice room — official session not started'; }
+      else st.hidden = true;
+    }
+
+    const official = ph === 'active';   // peak/avg are official-session metrics
     const hostName = hostR ? hostR.name : (session ? (session.created_by || '—') : '—');
     setVal('spHostName', hostName);
     setVal('spHostLive', hostR ? hostR.led : null);
-    setVal('spHostPeak', hostR ? hostR.peak : null);
-    setVal('spHostAvg',  hostR ? (hostR.avg || 0).toFixed(1) : null);
+    setVal('spHostPeak', official && hostR ? hostR.peak : null);
+    setVal('spHostAvg',  official && hostR ? (hostR.avg || 0).toFixed(1) : null);
     if(hostR){
-      $('spHostLive').style.color = vitalityColor(hostR.led);
-      $('spHostPeak').style.color = vitalityColor(hostR.peak);
-      $('spHostAvg').style.color  = vitalityColor(hostR.avg || 0);
+      $('spHostLive').style.color = zText(hostR.led);
+      if(official){
+        $('spHostPeak').style.color = zText(hostR.peak);
+        $('spHostAvg').style.color  = zText(hostR.avg || 0);
+      }
     }
 
     if(list.length){
@@ -512,20 +751,22 @@ export function mount(el, sessionId){
       const gAvg  = list.reduce((s, r) => s + (r.avg || 0), 0) / list.length;
       const gPeak = Math.max(0, ...list.map(r => r.peak || 0));
       setVal('spGroupLive', gLive.toFixed(1));
-      setVal('spGroupPeak', gPeak);
-      setVal('spGroupAvg', gAvg.toFixed(1));
-      $('spGroupAvg').style.color = vitalityColor(gAvg);
+      setVal('spGroupPeak', official ? gPeak : null);
+      setVal('spGroupAvg', official ? gAvg.toFixed(1) : null);
+      if(official) $('spGroupAvg').style.color = zText(gAvg);
     } else {
       setVal('spGroupLive', null); setVal('spGroupPeak', null); setVal('spGroupAvg', null);
     }
 
-    setVal('spMeLive', meR ? meR.led : null);
-    setVal('spMePeak', meR ? meR.peak : null);
-    setVal('spMeAvg',  meR ? (meR.avg || 0).toFixed(1) : null);
-    if(meR){
-      $('spMeLive').style.color = vitalityColor(meR.led);
-      $('spMePeak').style.color = vitalityColor(meR.peak);
-      $('spMeAvg').style.color  = vitalityColor(meR.avg || 0);
+    setVal('spMeLive', meData ? meData.led : null);
+    setVal('spMePeak', official && meData ? meData.peak : null);
+    setVal('spMeAvg',  official && meData ? (meData.avg || 0).toFixed(1) : null);
+    if(meData){
+      $('spMeLive').style.color = zText(meData.led);
+      if(official){
+        $('spMePeak').style.color = zText(meData.peak);
+        $('spMeAvg').style.color  = zText(meData.avg || 0);
+      }
     }
   }
 
@@ -536,19 +777,30 @@ export function mount(el, sessionId){
     if(now < startMs){ left = startMs - now; label = 'in ' + formatUntil(left); livePill.hidden = true; }
     else if(now <= endMs){ left = endMs - now; label = fmt(left); livePill.hidden = false; }
     else { label = 'Finished'; livePill.hidden = true; }
-    $('gTime').textContent = label;
+    const gTimeEl = $('gTime');
+    gTimeEl.textContent = label;
+    // Practice room: live telemetry leads, the countdown card steps back.
+    const timeCard = gTimeEl.closest('.gstat');
+    if(timeCard) timeCard.classList.toggle('quiet', phase() === 'pre');
 
-    const list = [...racers.values()];
+    // Only wheel-data participants count — presence-only people must not dilute.
+    const list = [...racers.values()].filter(r => r.hasData);
+    const gAvgEl = $('gAvg');
     if(list.length){
       const gLive = list.reduce((s, r) => s + r.led, 0) / list.length;
-      const gAvg = list.reduce((s, r) => s + (r.avg || 0), 0) / list.length;
       $('gLive').textContent = gLive.toFixed(1);
-      const gAvgEl = $('gAvg');
-      gAvgEl.textContent = gAvg.toFixed(1);
-      gAvgEl.style.color = vitalityColor(gAvg);
+      if(phase() === 'active'){
+        const gAvg = list.reduce((s, r) => s + (r.avg || 0), 0) / list.length;
+        gAvgEl.textContent = gAvg.toFixed(1);
+        gAvgEl.style.color = zText(gAvg);
+      } else {
+        gAvgEl.textContent = '–';   // practice room: no official-looking average
+        gAvgEl.style.color = '';
+      }
     } else {
       $('gLive').textContent = '0.0';
-      $('gAvg').textContent = '0.0';
+      gAvgEl.textContent = phase() === 'active' ? '0.0' : '–';
+      gAvgEl.style.color = '';
     }
   }
 
@@ -747,7 +999,7 @@ export function mount(el, sessionId){
       const countedCards = counted.map((r, i) => racerCard(r, String(i + 1), 'rc' + i)).join('');
       leaderboardHtml = `
         <div class="res-group">
-          <div class="res-group-val" style="color:${vitalityColor(Math.round(groupAvg))}">${groupAvg.toFixed(1)}</div>
+          <div class="res-group-val" style="color:${zText(Math.round(groupAvg))}">${groupAvg.toFixed(1)}</div>
           <div class="res-group-lbl">Group average · ${counted.length} racer${counted.length > 1 ? 's' : ''} · finished${verifiedOnly ? ' · verified only' : ''}</div>
         </div>
 

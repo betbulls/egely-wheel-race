@@ -1,0 +1,1483 @@
+/* =============================================================================
+   EWR Live — LIGHT REDESIGN LAYER
+   -----------------------------------------------------------------------------
+   Loaded LAST in <head> (after the inline <style>), so it wins the cascade for
+   equal-specificity rules without a specificity war. To revert the whole
+   redesign: remove the single <link> to this file in index.html.
+
+   Design tokens come from the Egely Wheel / Spiritual Maker Shopify storefront
+   ("Workflow" theme). Brand bridge: accent #5230da already matched the app.
+
+   STATUS (migration in progress): this layer flips the global frame + shared
+   primitives + provides the .ewr-* component toolkit. View-specific dark classes
+   (dash-*, lj-*, live-*, res-*, cn-*, xp-* …) are ported screen-by-screen; until
+   a screen is ported its bespoke bits may still look dark. Do NOT deploy until
+   the in-scope screens are done.
+   ========================================================================== */
+
+/* ---- Token layer (from Codex review) -------------------------------------- */
+:root{
+  --ewr-bg:#ffffff;
+  --ewr-bg-soft:#f7f8f8;
+  --ewr-surface:#ffffff;
+  --ewr-surface-muted:#f2f3f4;
+  --ewr-border:#dfe3e6;
+
+  --ewr-text:#011624;
+  --ewr-text-muted:#67737c;
+  --ewr-text-soft:#99a2a7;
+
+  --ewr-accent:#5230da;
+  --ewr-accent-strong:#401d91;
+  --ewr-accent-hover:#011624;
+  --ewr-accent-tint:rgba(82,48,218,0.08);
+  --ewr-gradient:linear-gradient(135deg,#37dbff 0%,#5230da 100%);
+
+  --ewr-dark:#011624;
+  --ewr-dark-surface:#152936;
+  --ewr-dark-border:#1f323e;
+
+  /* Vitality scale — the product's core signal. Keep vivid on white. */
+  --ewr-red:#f04438;     /* LED 0-5  */
+  --ewr-yellow:#f5b700;  /* LED 6-12 */
+  --ewr-green:#20b26b;   /* LED 13-24 */
+
+  --ewr-radius-sm:8px;
+  --ewr-radius-md:12px;
+  --ewr-radius-lg:16px;
+  --ewr-radius-pill:999px;
+
+  --ewr-shadow-card:0 10px 28px rgba(1,22,36,0.08);
+  --ewr-shadow-pop:0 16px 40px rgba(82,48,218,0.18);
+}
+
+/* ---- Global frame --------------------------------------------------------- */
+body{
+  background:var(--ewr-bg);
+  color:var(--ewr-text);
+  background-image:none;
+}
+h1,h2,h3{color:var(--ewr-text);letter-spacing:-0.01em}
+a{color:var(--ewr-accent)}
+::selection{background:rgba(82,48,218,0.16)}
+
+/* ---- Header / shell ------------------------------------------------------- */
+.app-header{border-bottom:1px solid var(--ewr-border)}
+.wordmark{color:var(--ewr-text);letter-spacing:0.02em;font-weight:600}
+
+.nav a{color:var(--ewr-text-muted)}
+.nav a:hover{color:var(--ewr-text);background:var(--ewr-surface-muted)}
+.nav a.active{color:var(--ewr-accent);background:var(--ewr-accent-tint)}
+
+.nav-more{border:1px solid var(--ewr-border);color:var(--ewr-text-muted);background:#fff}
+.nav-more:hover{color:var(--ewr-accent);border-color:var(--ewr-accent);background:var(--ewr-accent-tint)}
+
+/* Dropdowns (account + "More") — dark gradient → clean white card. */
+.nav-more-menu,
+.account-menu{
+  background:var(--ewr-surface);
+  border:1px solid var(--ewr-border);
+  box-shadow:var(--ewr-shadow-card);
+}
+.nav-more-menu a,
+.account-menu a,
+.account-menu button{color:var(--ewr-text)}
+.nav-more-menu a:hover,
+.account-menu a:hover,
+.account-menu button:hover{background:var(--ewr-surface-muted)}
+.account-menu hr{border-top:1px solid var(--ewr-border)}
+.account-trigger:hover{background:var(--ewr-surface-muted)}
+.account-chevron,
+.auth-email{color:var(--ewr-text-muted)}
+
+/* Mobile bottom-sheets share the dropdown selectors above; re-skin the sheet. */
+@media (max-width:600px){
+  .account-menu,
+  .nav-more-menu{
+    background:var(--ewr-surface);
+    border:1px solid var(--ewr-border);border-bottom:none;
+    box-shadow:0 -18px 48px -12px rgba(1,22,36,0.18);
+  }
+  .account-menu::before,
+  .nav-more-menu::before{background:var(--ewr-border)}
+}
+
+/* Egely Wheel connection bar */
+.ble-bar{
+  background:var(--ewr-surface-muted);
+  border:1px solid var(--ewr-border);
+  color:var(--ewr-text-muted);
+}
+.ble-bar.connected{color:var(--ewr-text)}
+.ble-bar .dot{background:var(--ewr-text-soft)}
+.ble-bar.connected .dot{background:var(--ewr-green);box-shadow:0 0 10px rgba(32,178,107,0.5)}
+.ble-bar button{
+  background:var(--ewr-accent-strong);color:#fff;
+  border-radius:var(--ewr-radius-pill);text-transform:uppercase;letter-spacing:0.04em;
+}
+.ble-bar button:hover:not(:disabled){background:var(--ewr-accent-hover)}
+
+/* Auth area — make "Log in / Sign up" a prominent primary pill. */
+.auth-btn{
+  background:var(--ewr-accent-strong);
+  border:1px solid var(--ewr-accent-strong);
+  color:#fff;border-radius:var(--ewr-radius-pill);
+  text-transform:uppercase;letter-spacing:0.04em;
+}
+.auth-btn:hover{background:var(--ewr-accent-hover);border-color:var(--ewr-accent-hover)}
+
+/* Floating action button — gradient circle; menu → white card. */
+.fab{
+  background:var(--ewr-gradient);
+  box-shadow:var(--ewr-shadow-pop), 0 4px 12px -2px rgba(1,22,36,0.18);
+}
+.fab:hover{box-shadow:0 20px 48px -10px rgba(82,48,218,0.5), 0 6px 18px -2px rgba(1,22,36,0.2)}
+.fab-menu{
+  background:var(--ewr-surface);
+  border:1px solid var(--ewr-border);
+  box-shadow:var(--ewr-shadow-card);
+}
+.fab-item{color:var(--ewr-text)}
+.fab-item:hover{background:var(--ewr-surface-muted)}
+
+/* ---- Shared view primitives ---------------------------------------------- */
+.page-title{font-family:'Montserrat',sans-serif;font-weight:600;letter-spacing:-0.5px;color:var(--ewr-text)}
+.page-sub{color:var(--ewr-text-muted)}
+.placeholder{color:var(--ewr-text-muted)}
+.empty{color:var(--ewr-text-soft)}
+
+/* Glass panel → clean white card. */
+.panel{
+  background:var(--ewr-surface);
+  border:1px solid var(--ewr-border);
+  border-radius:var(--ewr-radius-md);
+  box-shadow:var(--ewr-shadow-card);
+}
+.panel h2{color:var(--ewr-text)}
+
+/* Generic form controls → light. */
+input,textarea,select{
+  background:var(--ewr-bg-soft);
+  border:1px solid var(--ewr-border);
+  color:var(--ewr-text);
+}
+input::placeholder,textarea::placeholder{color:var(--ewr-text-soft)}
+input:focus,textarea:focus,select:focus{
+  border-color:var(--ewr-accent);
+  background:#fff;
+  box-shadow:0 0 0 3px var(--ewr-accent-tint);
+}
+label{color:var(--ewr-text-muted)}
+input[type=file]{color:var(--ewr-text-muted)}
+
+/* Shared buttons used across views. */
+.btn-join{
+  background:var(--ewr-accent-strong);color:#fff;
+  border-radius:var(--ewr-radius-pill);padding:11px 22px;
+  text-transform:uppercase;letter-spacing:0.04em;font-weight:700;
+}
+.btn-join:hover{background:var(--ewr-accent-hover)}
+.btn-secondary{
+  background:#fff;color:var(--ewr-text);text-decoration:none;
+  border:1px solid var(--ewr-border);border-radius:var(--ewr-radius-pill);
+  padding:10px 20px;text-transform:uppercase;letter-spacing:0.04em;
+}
+.btn-secondary:hover{background:var(--ewr-surface-muted)}
+
+/* =============================================================================
+   COMPONENT TOOLKIT (.ewr-*) — used as views are ported onto the light system.
+   ========================================================================== */
+
+/* Buttons */
+.ewr-btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  font-family:'Inter',sans-serif;font-weight:700;font-size:14px;
+  text-transform:uppercase;letter-spacing:0.04em;text-decoration:none;
+  min-height:44px;padding:0 24px;border:1px solid transparent;cursor:pointer;
+  border-radius:var(--ewr-radius-pill);transition:background .18s,color .18s,border-color .18s,transform .12s;
+}
+.ewr-btn:active{transform:translateY(1px)}
+.ewr-btn--primary{background:var(--ewr-accent-strong);color:#fff}
+.ewr-btn--primary:hover{background:var(--ewr-accent-hover)}
+.ewr-btn--secondary{background:var(--ewr-accent-tint);color:var(--ewr-accent-strong)}
+.ewr-btn--secondary:hover{background:rgba(82,48,218,0.16)}
+.ewr-btn--outline{background:#fff;color:var(--ewr-text);border-color:var(--ewr-border)}
+.ewr-btn--outline:hover{border-color:var(--ewr-accent);color:var(--ewr-accent)}
+.ewr-btn--ghost{background:transparent;color:var(--ewr-accent);min-height:auto;padding:6px 8px}
+.ewr-btn--ghost:hover{background:var(--ewr-accent-tint)}
+.ewr-btn--gradient{background:var(--ewr-gradient);color:#fff;box-shadow:var(--ewr-shadow-pop)}
+
+/* Cards */
+.ewr-card{
+  background:var(--ewr-surface);border:1px solid var(--ewr-border);
+  border-radius:var(--ewr-radius-md);padding:22px;box-shadow:var(--ewr-shadow-card);
+}
+.ewr-card--muted{background:var(--ewr-surface-muted);border-color:transparent;box-shadow:none}
+.ewr-card--flat{box-shadow:none}
+
+/* Eyebrow label */
+.ewr-eyebrow{
+  display:inline-flex;align-items:center;gap:7px;
+  font-family:'Inter',sans-serif;font-weight:700;font-size:12px;
+  letter-spacing:0.12em;text-transform:uppercase;color:var(--ewr-text-muted);
+}
+.ewr-eyebrow .ewr-eyebrow-ic{color:var(--ewr-accent)}
+
+/* Hero */
+.ewr-hero{display:grid;grid-template-columns:1.1fr 0.9fr;gap:32px;align-items:center;margin-bottom:28px}
+.ewr-hero h1{font-family:'Montserrat',sans-serif;font-weight:600;font-size:40px;line-height:1.12;letter-spacing:-0.5px}
+.ewr-hero p{color:var(--ewr-text-muted);font-size:16px;line-height:1.6;margin-top:14px}
+.ewr-hero-media{border-radius:var(--ewr-radius-lg);background:var(--ewr-gradient);aspect-ratio:4/3;overflow:hidden;display:flex;align-items:center;justify-content:center}
+@media (max-width:680px){.ewr-hero{grid-template-columns:1fr;gap:20px}.ewr-hero h1{font-size:30px}}
+
+/* Badges / status pills */
+.ewr-badge{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:11px;font-weight:700;letter-spacing:0.04em;
+  padding:4px 11px;border-radius:var(--ewr-radius-pill);
+  background:var(--ewr-surface-muted);color:var(--ewr-text-muted);white-space:nowrap;
+}
+.ewr-badge--live{background:rgba(32,178,107,0.14);color:#0f8a52}
+.ewr-badge--live::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--ewr-green);box-shadow:0 0 8px rgba(32,178,107,0.6)}
+.ewr-badge--subscriber{background:var(--ewr-accent-tint);color:var(--ewr-accent-strong)}
+.ewr-badge--maker{background:var(--ewr-accent-tint);color:var(--ewr-accent-strong)}
+.ewr-badge--verified{background:rgba(245,183,0,0.16);color:#9a7400}
+.ewr-badge--locked{background:var(--ewr-surface-muted);color:var(--ewr-text-soft)}
+
+/* Inputs (explicit component variant) */
+.ewr-input{
+  width:100%;min-height:46px;padding:0 14px;
+  background:var(--ewr-bg-soft);border:1px solid var(--ewr-border);
+  border-radius:var(--ewr-radius-sm);color:var(--ewr-text);font-family:'Inter',sans-serif;font-size:14px;
+}
+.ewr-input:focus{outline:none;border-color:var(--ewr-accent);background:#fff;box-shadow:0 0 0 3px var(--ewr-accent-tint)}
+
+/* Stat card */
+.ewr-stat-card{
+  background:var(--ewr-surface);border:1px solid var(--ewr-border);
+  border-radius:var(--ewr-radius-md);padding:16px 18px;
+}
+.ewr-stat-val{font-family:'Montserrat',sans-serif;font-weight:600;font-size:26px;line-height:1;font-variant-numeric:tabular-nums}
+.ewr-stat-lbl{font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--ewr-text-muted);margin-top:7px}
+
+/* List row (leaderboard / sessions / members) */
+.ewr-list-row{
+  display:flex;align-items:center;gap:14px;
+  background:var(--ewr-surface);border:1px solid var(--ewr-border);
+  border-radius:var(--ewr-radius-md);padding:12px 16px;
+}
+.ewr-list-row + .ewr-list-row{margin-top:8px}
+.ewr-list-row .ewr-row-main{flex:1;min-width:0}
+.ewr-list-row .ewr-row-action{margin-left:auto;flex-shrink:0}
+
+/* Avatar with gradient ring + verified seal */
+.ewr-avatar{position:relative;width:56px;height:56px;border-radius:50%;padding:2px;background:var(--ewr-gradient);flex-shrink:0}
+.ewr-avatar > img,.ewr-avatar > .ewr-avatar-fallback{width:100%;height:100%;border-radius:50%;object-fit:cover;background:#fff;display:flex;align-items:center;justify-content:center;font-family:'Montserrat',sans-serif;font-weight:600;color:var(--ewr-accent-strong)}
+.ewr-avatar--stack{margin-left:-12px;border:2px solid #fff;box-shadow:0 1px 4px rgba(1,22,36,0.12)}
+.ewr-seal{position:absolute;right:-4px;bottom:-4px;width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 35% 30%, #ffe07a, #e0a200);border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:11px;color:#7a5a00}
+
+/* Accordion */
+.ewr-accordion{background:var(--ewr-surface-muted);border-radius:var(--ewr-radius-lg);padding:20px 22px;margin-bottom:12px}
+.ewr-accordion-q{display:flex;align-items:center;justify-content:space-between;gap:16px;font-weight:600;color:var(--ewr-text);cursor:pointer}
+.ewr-accordion-toggle{width:34px;height:34px;border-radius:50%;background:#fff;border:1px solid var(--ewr-border);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ewr-accordion-a{color:var(--ewr-text);font-style:italic;margin-top:12px;line-height:1.6}
+
+/* Empty state */
+.ewr-empty{background:var(--ewr-surface-muted);border-radius:var(--ewr-radius-md);padding:28px 24px;text-align:center}
+.ewr-empty-title{font-weight:600;color:var(--ewr-text)}
+.ewr-empty-sub{color:var(--ewr-text-muted);font-size:14px;margin:6px 0 16px}
+
+/* =============================================================================
+   HOME DASHBOARD — ported to light components (was a half-baked flip)
+   ========================================================================== */
+
+/* Section headings + empty — markánsabb. */
+.dash-h{color:var(--ewr-text);font-weight:600;font-size:19px;margin-top:34px}
+.dash-h-sub{color:var(--ewr-text-muted)}
+.dash-empty{color:var(--ewr-text-muted);background:var(--ewr-surface-muted);border:none}
+
+/* Stat cards — real container, stronger surface, weightier label.
+   Stable 3-col grid (3x2 with 6 stats) instead of auto-fit, so no orphan card. */
+.dash-stats{grid-template-columns:repeat(3,1fr)}
+@media (max-width:600px){.dash-stats{grid-template-columns:repeat(2,1fr)}}
+.dash-stat{background:var(--ewr-surface);border:1px solid var(--ewr-border);box-shadow:var(--ewr-shadow-card)}
+.dash-stat-val{font-weight:600}
+.dash-stat-lbl{color:#5a6571;font-family:'Inter',sans-serif;font-weight:700}
+
+/* Level journey — DARK NAVY HERO card: instant focus + Egely energy on a light page. */
+.level-journey{
+  background:radial-gradient(125% 145% at 100% 0%, rgba(82,48,218,0.55), transparent 55%), var(--ewr-dark);
+  border:1px solid var(--ewr-dark-border);
+  box-shadow:var(--ewr-shadow-pop);
+}
+.level-journey::before{background:radial-gradient(circle, rgba(55,219,255,0.18), transparent 70%)}
+.level-journey.level-tier-5{border-color:rgba(245,183,0,0.5)}
+.level-journey.level-tier-6{border-color:rgba(245,183,0,0.7);
+  background:radial-gradient(125% 145% at 100% 0%, rgba(245,166,35,0.45), transparent 55%), var(--ewr-dark)}
+.lj-title,.lj-title-sm{color:#ffffff}
+.lj-eyebrow{color:#99a2a7}
+.lj-meta{color:#b9c2c8}
+.lj-to-next{color:#a78bff}
+.lj-max{color:#ffd479}
+.lj-total{color:#7c8990;border-top:1px solid rgba(255,255,255,0.10)}
+.level-journey.level-tier-6 .lj-to-next{color:#ffd479}
+.lj-bar{background:rgba(255,255,255,0.12)}
+.lj-bar-fill{background:var(--ewr-gradient);box-shadow:0 0 14px rgba(82,48,218,0.6)}
+.lj-dot{background:rgba(255,255,255,0.2);border:2px solid var(--ewr-dark)}
+.lj-marker.reached .lj-dot{background:#37dbff;box-shadow:0 0 8px rgba(55,219,255,0.6)}
+.lj-marker.current .lj-dot{background:#ffd479;border-color:#fff;box-shadow:0 0 16px rgba(255,212,121,0.9)}
+.lj-label{color:#aab6bd}
+.lj-marker.reached .lj-label{color:#dbe2e6}
+.lj-marker.current .lj-label{color:#ffd479;font-weight:600}
+/* "What do the levels mean?" — anchor to the card's bottom-right instead of
+   floating centered between sections. */
+.lj-link{color:var(--ewr-text-muted);text-align:right;margin:8px 4px 22px;font-size:12px;
+  font-weight:600;letter-spacing:0.02em}
+.lj-link:hover{color:var(--ewr-accent)}
+
+/* Continue Experiment — stronger CTA row: white card, icon tile, pill CTA. */
+.home-continue{background:var(--ewr-surface);border:1px solid var(--ewr-border);box-shadow:var(--ewr-shadow-card)}
+.home-continue:hover{border-color:var(--ewr-accent);transform:translateY(-1px)}
+.hc-icon{background:var(--ewr-accent-tint);width:52px;height:52px;border-radius:var(--ewr-radius-md);
+  display:flex;align-items:center;justify-content:center}
+.hc-eyebrow{color:var(--ewr-accent);font-weight:700}
+.hc-title{color:var(--ewr-text)}
+.hc-meta{color:var(--ewr-text-muted)}
+.hc-cta{color:#fff;background:var(--ewr-accent-strong);padding:10px 18px;border-radius:var(--ewr-radius-pill);
+  font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:0.04em}
+
+/* Upcoming sessions — real list rows. */
+.home-sess-card{background:var(--ewr-surface);border:1px solid var(--ewr-border);box-shadow:var(--ewr-shadow-card)}
+.home-sess-card:hover{background:#fff;border-color:var(--ewr-accent)}
+.home-sess-card.live{border-color:var(--ewr-accent);background:var(--ewr-accent-tint)}
+.hs-action{color:var(--ewr-accent)}
+.hs-meta{color:var(--ewr-text-muted)}
+.hs-live{color:#0f8a52}
+
+/* Next milestones */
+.dash-milestone{background:var(--ewr-surface);border:1px solid var(--ewr-border);box-shadow:var(--ewr-shadow-card)}
+.dash-milestone.tier-gold{border-color:rgba(245,183,0,0.4)}
+.dash-milestone.tier-special{border-color:rgba(82,48,218,0.4)}
+.dm-bar{background:rgba(1,22,36,0.08)}
+.dm-progress{color:var(--ewr-text-muted)}
+
+/* Recent achievements */
+.dash-recent-card{background:var(--ewr-surface);border:1px solid var(--ewr-border);box-shadow:var(--ewr-shadow-card)}
+.drc-title{color:var(--ewr-text)}
+
+/* Achievement collection */
+.dash-cat-title{color:#5a6571;font-size:13px}
+.dash-cat-count{color:var(--ewr-text-soft)}
+.dash-badge{background:var(--ewr-surface);border:1px solid var(--ewr-border)}
+.dash-badge.unlocked{background:var(--ewr-surface);box-shadow:var(--ewr-shadow-card)}
+.db-title{color:var(--ewr-text)}
+.db-status{color:var(--ewr-text-muted)}
+
+/* Cleaner achievement states: neutral unlocked borders (only SPECIAL stays accented),
+   a small green Unlocked pill, and readable (not washed-out) locked cards. */
+.dash-badge.unlocked.tier-bronze,
+.dash-badge.unlocked.tier-silver,
+.dash-badge.unlocked.tier-gold,
+.dash-recent-card.tier-bronze,
+.dash-recent-card.tier-silver,
+.dash-recent-card.tier-gold{border-color:var(--ewr-border);box-shadow:var(--ewr-shadow-card)}
+.dash-badge.unlocked.tier-special,
+.dash-recent-card.tier-special{border-color:rgba(82,48,218,0.45);box-shadow:0 8px 24px rgba(82,48,218,0.14)}
+.db-status.unlocked{display:inline-block;background:rgba(32,178,107,0.12);color:#0f8a52;
+  padding:3px 10px;border-radius:var(--ewr-radius-pill);font-weight:700}
+.dash-badge.locked{opacity:1}
+.dash-badge.locked .db-icon{opacity:0.4}
+.dash-badge.locked .db-title{color:#67737c}
+.dash-badge.locked .db-status{color:#99a2a7}
+
+/* Info "i" button + description — functional (tap toggles description) but
+   visually quiet: faint by default, prominent on hover/focus/expanded. */
+.db-info{background:transparent;border:1px solid transparent;color:var(--ewr-text-soft);opacity:.45;
+  transition:opacity .15s,background .15s,color .15s,border-color .15s}
+.db-info:hover,.db-info:focus-visible,
+.dash-badge.expanded .db-info,
+.dash-recent-card.expanded .db-info{opacity:1;background:#fff;color:var(--ewr-accent);border-color:var(--ewr-accent)}
+.db-desc{color:var(--ewr-text-muted);border-top:1px solid var(--ewr-border)}
+.db-desc-meta{color:var(--ewr-text-soft)}
+.db-desc-xp{color:var(--ewr-accent)}
+.dash-badge.unlocked .db-desc-xp,
+.dash-recent-card .db-desc-xp{color:#0f8a52}
+
+/* NEW pulse pill — keep green, ensure contrast on white. */
+.dash-new-pill,.dash-new-count{background:var(--ewr-green);color:#fff}
+
+/* Header level pill (next to user identity) */
+.header-level{background:var(--ewr-accent-tint);border:1px solid var(--ewr-border)}
+.header-level:hover{border-color:var(--ewr-accent)}
+
+/* =============================================================================
+   LIVE WALL — community directory rows. Cards stay non-clickable by design
+   (presence wall, no profile actions); the expand control only toggles charts.
+   Charts are light "vitality telemetry" panels (chart.js draws light grid +
+   zone tints + violet line) — the chart is the heart of the product.
+   ========================================================================== */
+.live-head{color:var(--ewr-text-muted)}
+.live-head b{color:var(--ewr-text)}
+.live-list{gap:10px}
+.live-card{background:var(--ewr-surface);border:1px solid var(--ewr-border);box-shadow:var(--ewr-shadow-card)}
+.live-card.measuring{border-color:var(--ewr-accent);background:#fff;box-shadow:0 10px 28px rgba(82,48,218,0.16)}
+.live-card.experiment{border-color:rgba(82,48,218,0.45);background:#fff}
+.live-card.session{border-color:rgba(32,178,107,0.5);background:#fff}
+/* Offline: readable, just quieter — no washed-out whole-card fade. */
+.live-card.offline{opacity:1;background:var(--ewr-bg-soft);border-color:var(--ewr-border);box-shadow:none}
+.live-card.offline .live-name{color:#5a6571}
+
+/* Avatar: gradient ring around photos; initials keep the gradient disc. */
+.live-avatar{padding:2px;background:var(--ewr-gradient)}
+.live-avatar img{border-radius:50%}
+.live-card.offline .live-avatar{background:#d2d8dc}
+.live-card.offline .live-avatar .avatar-initial{color:#5a6571}   /* was white on grey — unreadable */
+
+.live-name{color:var(--ewr-text);font-weight:600}
+.live-you{color:var(--ewr-accent-strong);border:1px solid rgba(82,48,218,0.35);background:var(--ewr-accent-tint)}
+
+/* Status pills — light variants (ONLINE comes from the view's injected styles). */
+.live-pill.connected{background:rgba(0,51,255,0.10);color:#0033ff}
+.live-pill.measuring{background:var(--ewr-accent);color:#fff}
+.live-pill.experiment{background:var(--ewr-accent-tint);color:var(--ewr-accent-strong)}
+.live-pill.session{background:rgba(32,178,107,0.14);color:#0f8a52}
+.live-pill.offline{background:var(--ewr-surface-muted);color:var(--ewr-text-soft)}
+
+/* Metric block: number + "Vitality" caption (no floating digits). */
+.live-led.waiting{color:var(--ewr-text-soft)}
+.live-led-cap{display:block;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;
+  color:var(--ewr-text-soft);font-weight:700;margin-top:3px}
+
+/* Collapsed mini sparkline strip. */
+.live-wheel-curve{background:var(--ewr-bg-soft);border:1px solid rgba(1,22,36,0.08)}
+
+/* Expanded chart = light telemetry panel. */
+.live-big-wrap{background:#fff;border:1px solid var(--ewr-border);border-radius:14px;
+  box-shadow:var(--ewr-shadow-card);padding:16px;height:230px}
+
+/* Expand control: text pill, not a raw dropdown chevron. */
+.live-expand{width:auto;height:auto;padding:7px 13px;border-radius:var(--ewr-radius-pill);
+  display:inline-flex;align-items:center;gap:6px;
+  background:#fff;border:1px solid var(--ewr-border);color:var(--ewr-accent-strong);
+  font-family:'Inter',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase}
+.live-expand:hover{background:var(--ewr-accent-tint);border-color:var(--ewr-accent);color:var(--ewr-accent)}
+.live-card.expanded .live-expand{transform:none}
+.le-car{display:inline-block;transition:transform .2s;font-size:10px}
+.live-card.expanded .le-car{transform:rotate(180deg)}
+.le-hide{display:none}
+.live-card.expanded .le-show{display:none}
+.live-card.expanded .le-hide{display:inline}
+
+/* Other measurement surfaces (Solo, detail, experiments) — same light telemetry. */
+.solo-chart-wrap{background:#fff;border:1px solid var(--ewr-border);border-radius:14px;
+  box-shadow:var(--ewr-shadow-card);padding:16px;height:270px}
+.xp-live-cell{background:var(--ewr-bg-soft);border:1px solid var(--ewr-border)}
+.xp-live-lbl{color:var(--ewr-text-muted)}
+
+/* Mobile: measuring rows get a deterministic grid — name row on top,
+   metric + chart toggle on a second row (no cramming/overlap at 375px). */
+@media (max-width:600px){
+  .live-row{display:grid;grid-template-columns:auto 1fr auto;
+    grid-template-areas:"av main main" "av val exp";align-items:center;column-gap:12px;row-gap:4px}
+  .live-avatar{grid-area:av;align-self:start}
+  .live-main{grid-area:main;min-width:0}
+  .live-value{grid-area:val;justify-self:start;text-align:left;margin-left:0;
+    display:flex;align-items:baseline;gap:7px}
+  .live-led{font-size:24px}
+  .live-led-cap{margin-top:0}
+  .live-expand{grid-area:exp;justify-self:end}
+}
+
+/* =============================================================================
+   SOLO MEASUREMENT — "measurement cockpit": status chip → controls → big
+   current vitality + side stats → telemetry header → chart → LED scale.
+   ========================================================================== */
+.solo-top{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.solo-state{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:700;
+  letter-spacing:0.06em;text-transform:uppercase;padding:6px 13px;border-radius:var(--ewr-radius-pill)}
+.solo-state::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor;flex-shrink:0}
+.solo-state.off{background:var(--ewr-surface-muted);color:var(--ewr-text-muted)}
+.solo-state.ready{background:rgba(32,178,107,0.12);color:#0f8a52}
+.solo-state.measuring{background:var(--ewr-accent);color:#fff}
+.solo-state.measuring::before{animation:ewrBlink 1.6s ease-in-out infinite;background:#fff}
+@keyframes ewrBlink{0%,100%{opacity:1}50%{opacity:.4}}
+.solo-state.finalizing{background:rgba(245,183,0,0.16);color:#9a7400}
+.solo-state.finalizing::before{animation:ewrBlink 1.6s ease-in-out infinite}
+.solo-state.done{background:rgba(0,51,255,0.10);color:#0033ff}
+
+.solo-controls .field-dur{flex:0 0 140px;min-width:110px}
+#sStart{background:var(--ewr-accent-strong);color:#fff;border-radius:var(--ewr-radius-pill);
+  min-height:46px;padding:0 28px;font-weight:700;font-size:13px;letter-spacing:0.05em;text-transform:uppercase}
+#sStart:hover:not(:disabled){background:var(--ewr-accent-hover)}
+.solo-msg{color:var(--ewr-text-muted)}
+.solo-msg.err{color:#c2415b}
+
+/* Big current vitality + compact side stats */
+.solo-hero{display:flex;align-items:center;gap:26px;margin-bottom:18px}
+.solo-current{flex:1;min-width:0}
+.solo-current-val{font-family:'Montserrat',sans-serif;font-size:64px;font-weight:600;line-height:1;
+  font-variant-numeric:tabular-nums;color:var(--ewr-text)}
+.solo-current-lbl{font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#5a6571;
+  font-weight:700;margin-top:8px}
+.solo-side{display:grid;grid-template-columns:repeat(3,minmax(86px,1fr));gap:10px}
+.solo-stat{background:var(--ewr-bg-soft);border:1px solid var(--ewr-border);border-radius:12px;
+  padding:12px 10px;text-align:center}
+.solo-stat-val{font-family:'Montserrat',sans-serif;font-size:24px;font-weight:600;line-height:1;
+  font-variant-numeric:tabular-nums;color:var(--ewr-text)}
+.solo-stat-lbl{font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--ewr-text-muted);
+  font-weight:700;margin-top:6px}
+
+/* Telemetry header above the chart */
+.tele-head{display:flex;align-items:center;gap:8px 12px;margin-bottom:10px;flex-wrap:wrap}
+.tele-title{font-family:'Inter',sans-serif;font-weight:700;font-size:13px;color:var(--ewr-text);white-space:nowrap}
+.tele-meta{font-size:12px;color:var(--ewr-text-muted)}
+.solo-verify{margin-left:auto;margin-bottom:0;text-align:left;font-size:11px;font-weight:700;
+  letter-spacing:0.04em;padding:4px 11px;border-radius:var(--ewr-radius-pill);white-space:nowrap}
+.solo-verify.good{background:rgba(32,178,107,0.12);color:#0f8a52}
+.solo-verify.bad{background:rgba(245,183,0,0.16);color:#9a7400}
+
+/* LED scale: subtle 24-step vitality scale, not a Christmas tree. */
+.led-bar{height:22px;gap:3px;margin-top:12px}
+.led-cell{background:var(--ewr-surface-muted);border-radius:3px}
+.led-cell.lit.red{background:var(--ewr-red)}
+.led-cell.lit.yellow{background:var(--ewr-yellow)}
+.led-cell.lit.green{background:var(--ewr-green)}
+
+/* Primary action buttons in shared form rows → brand pills. */
+.form-actions button{border-radius:var(--ewr-radius-pill);text-transform:uppercase;
+  font-weight:700;font-size:13px;letter-spacing:0.04em;padding:12px 26px;
+  background:var(--ewr-accent-strong)}
+.form-actions button:hover:not(:disabled){background:var(--ewr-accent-hover)}
+
+/* Result panel — same telemetry language. */
+.eval-meaning{color:var(--ewr-text-muted)}
+.eval-stats{color:var(--ewr-text-muted)}
+.eval-stats b{color:var(--ewr-text)}
+.v-badge.verified{background:rgba(32,178,107,0.12);color:#0f8a52;padding:4px 11px;
+  border-radius:var(--ewr-radius-pill);font-weight:700;font-size:11px}
+.eval-stats .warn{background:rgba(245,183,0,0.16);color:#9a7400;padding:4px 11px;
+  border-radius:var(--ewr-radius-pill);font-weight:700;font-size:11px}
+
+@media (max-width:600px){
+  .solo-hero{flex-direction:column;align-items:flex-start;gap:14px}
+  .solo-side{width:100%;grid-template-columns:repeat(3,1fr)}
+  .solo-current-val{font-size:52px}
+}
+
+/* =============================================================================
+   SESSION ROOM + DETAIL — Session Pulse, board, results: same light telemetry
+   language as Live/Solo. (Old lavender gradient + white-on-light leftovers out.)
+   ========================================================================== */
+.session-pulse{background:#fff;border:1px solid var(--ewr-border);box-shadow:var(--ewr-shadow-card);
+  padding:20px 22px;gap:16px}
+.sp-head{padding-bottom:12px;border-bottom:1px solid var(--ewr-surface-muted)}
+.sp-title{color:var(--ewr-text);font-weight:700;font-size:12px;letter-spacing:0.12em}
+.leg-item{color:var(--ewr-text-muted);font-weight:600;font-size:13px}
+.leg-dot{width:18px;height:4px;border-radius:3px}
+/* Legend swatches follow chart.js TRIO_COLORS (host orange / group blue / you navy). */
+.leg-host .leg-dot{background:#f5a623}
+.leg-group .leg-dot{background:#0033ff}
+.leg-me .leg-dot{background:#011624}
+.sp-col{background:var(--ewr-bg-soft);border:1px solid var(--ewr-border)}
+.sp-col-name{color:var(--ewr-text);font-weight:600}
+.ss-val{color:var(--ewr-text)}
+.ss-lbl{color:var(--ewr-text-muted)}
+
+.room-sub,.room-hint{color:var(--ewr-text-muted)}
+.gstat{background:#fff;border:1px solid var(--ewr-border);box-shadow:var(--ewr-shadow-card)}
+.gstat.time{background:var(--ewr-accent-tint);border-color:rgba(82,48,218,0.35)}
+.gval{color:var(--ewr-text);overflow-wrap:break-word}
+.glbl{color:var(--ewr-text-muted)}
+/* Vitality scale: quiet reference strip — must not compete with the chart. */
+.scale{margin:12px 0 18px}
+.scale-label{color:var(--ewr-text-soft);font-size:10px}
+.scale-bar{height:7px;opacity:0.85}
+.scale-ticks{color:var(--ewr-text-soft)}
+/* Pre-session: the countdown card steps back, live telemetry leads. */
+.gstat.time.quiet{background:#fff;border-color:var(--ewr-border)}
+
+.leader-banner{background:var(--ewr-accent-tint);border:1px solid rgba(82,48,218,0.3)}
+.lb-label{color:var(--ewr-text-muted)}
+.lb-name{color:var(--ewr-text)}
+.lb-name.waiting{color:var(--ewr-text-soft)}
+.lb-spark{background:var(--ewr-bg-soft);border:1px solid rgba(1,22,36,0.08)}
+.lb-expand{background:#fff;border:1px solid var(--ewr-border);color:var(--ewr-text-muted)}
+.lb-expand:hover{background:var(--ewr-surface-muted);color:var(--ewr-accent)}
+.lb-chart{background:#fff;border:1px solid var(--ewr-border)}
+.lm-val{color:var(--ewr-text)}
+.lm-lbl{color:var(--ewr-text-muted)}
+
+.racer{background:#fff;border:1px solid var(--ewr-border);box-shadow:var(--ewr-shadow-card)}
+.rank{color:var(--ewr-text-soft)}
+.racer-name{color:var(--ewr-text);font-weight:600}
+.host-tag{background:var(--ewr-accent-tint);border:1px solid rgba(82,48,218,0.35);color:var(--ewr-accent-strong)}
+.spark{background:var(--ewr-bg-soft);border:1px solid rgba(1,22,36,0.08)}
+.metric-val.avg{color:var(--ewr-text)}
+.metric-lbl{color:var(--ewr-text-muted)}
+
+/* Results screen */
+.res-group{background:#fff;border:1px solid var(--ewr-border);box-shadow:var(--ewr-shadow-card)}
+.res-group-lbl{color:var(--ewr-text-muted)}
+.res-h{color:var(--ewr-text)}
+.res-h-sub{color:var(--ewr-text-muted)}
+.cat-card{background:#fff;border:1px solid var(--ewr-border);box-shadow:var(--ewr-shadow-card)}
+.cat-desc{color:var(--ewr-text-muted)}
+.cat-winner{color:var(--ewr-text);border-top:1px solid var(--ewr-border)}
+.res-card{background:#fff;border:1px solid var(--ewr-border);box-shadow:var(--ewr-shadow-card)}
+.res-rank{color:var(--ewr-text-soft)}
+.res-curve{background:var(--ewr-bg-soft);border:1px solid rgba(1,22,36,0.08)}
+.zonebar{background:rgba(1,22,36,0.06)}
+.rs-val{color:var(--ewr-text)}
+.rs-lbl{color:var(--ewr-text-muted)}
+.metric-legend{background:var(--ewr-surface-muted);border:none;color:var(--ewr-text-muted)}
+.metric-legend b{color:var(--ewr-text)}   /* legend terms were white on light — unreadable */
+.link{color:var(--ewr-accent)}
+
+/* Verified badges on racer cards / results */
+.v-badge.unverified{background:rgba(245,183,0,0.16);color:#9a7400;padding:3px 9px;
+  border-radius:var(--ewr-radius-pill);font-weight:700;font-size:10px}
+
+/* Live-room participant status (presence/wheel state — not an official verdict). */
+.racer-status{font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;
+  padding:3px 9px;border-radius:var(--ewr-radius-pill);white-space:nowrap;flex-shrink:0;
+  background:var(--ewr-surface-muted);color:var(--ewr-text-muted)}
+.racer-status.wheel{background:rgba(0,51,255,0.10);color:#0033ff}
+.racer-status.practicing{background:var(--ewr-accent);color:#fff}
+
+/* Practice-room state line in the Session Pulse header. */
+.sp-state{font-size:11px;font-weight:700;letter-spacing:0.04em;
+  padding:4px 11px;border-radius:var(--ewr-radius-pill);white-space:nowrap;
+  background:rgba(245,183,0,0.16);color:#9a7400}
+
+/* Participant mini-sparkline: same telemetry strip as the Live wall. */
+.spark{height:44px;background:var(--ewr-bg-soft);border:1px solid rgba(1,22,36,0.08);border-radius:8px}
+
+/* =============================================================================
+   CREATE SESSION — clean form: when-grid, option row, helper, organizer card.
+   ========================================================================== */
+.check-field .check{color:var(--ewr-text)}   /* was white-on-white (invisible) */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator{filter:none;opacity:.65}
+.sn-when{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media (max-width:600px){.sn-when{grid-template-columns:1fr}}
+.sn-option{display:flex;align-items:flex-start;gap:12px;cursor:pointer;
+  background:var(--ewr-bg-soft);border:1px solid var(--ewr-border);border-radius:var(--ewr-radius-md);
+  padding:14px 16px;text-transform:none;letter-spacing:0}
+.sn-option input{width:17px;height:17px;accent-color:var(--ewr-accent);margin-top:2px;flex-shrink:0}
+.sn-option-title{display:block;font-weight:600;color:var(--ewr-text);font-size:14px}
+.sn-option-sub{display:block;color:var(--ewr-text-muted);font-size:12.5px;margin-top:3px;line-height:1.45}
+.sn-howto{margin-top:16px;background:var(--ewr-accent-tint);border-radius:var(--ewr-radius-md);
+  padding:13px 16px;font-size:13px;line-height:1.55;color:var(--ewr-text-muted)}
+.sn-howto b{color:var(--ewr-accent-strong)}
+.organizer-note{margin-top:16px;background:var(--ewr-bg-soft);border:1px solid var(--ewr-border);
+  border-radius:var(--ewr-radius-md);padding:10px 14px;display:flex;align-items:center;gap:9px}
+.organizer-note .sess-avatar{width:26px;height:26px}
+
+/* =============================================================================
+   PROFILE — account control panel: two-column basics, custom upload pill,
+   compact social grid, save bar, explained measurement marks, link card.
+   ========================================================================== */
+.pf-basic{display:grid;grid-template-columns:210px 1fr;gap:24px;align-items:start}
+.pf-side{display:flex;flex-direction:column;align-items:center;gap:11px;text-align:center;
+  background:var(--ewr-bg-soft);border-radius:var(--ewr-radius-md);padding:20px 14px}
+.pf-side .profile-avatar{width:96px;height:96px}
+.pf-side .profile-avatar .avatar-initial{font-size:36px}
+.pf-upload{background:#fff;border:1px solid var(--ewr-border);color:var(--ewr-text);
+  font-family:'Inter',sans-serif;font-size:13px;font-weight:700;padding:9px 18px;
+  border-radius:var(--ewr-radius-pill);cursor:pointer;transition:border-color .15s,color .15s}
+.pf-upload:hover{border-color:var(--ewr-accent);color:var(--ewr-accent)}
+.pf-upload-hint{font-size:11px;color:var(--ewr-text-soft);line-height:1.4}
+.pf-live{margin-top:6px}
+.pf-label-note{color:var(--ewr-text-soft);font-weight:400;text-transform:none;letter-spacing:0;font-size:11px}
+.pf-main .field + .field{margin-top:14px}
+textarea{min-height:96px}
+select{appearance:none;-webkit-appearance:none;width:100%;
+  padding:11px 36px 11px 13px;border-radius:8px;
+  font-family:'Inter',sans-serif;font-size:14px;cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%2367737c' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 14px center}
+@media (max-width:640px){
+  .pf-basic{grid-template-columns:1fr}
+  .pf-side{padding:16px 14px}
+}
+
+/* Toggle on light */
+.toggle-label{color:#5a6571}
+.toggle-track{background:#d7dce0}
+.toggle-knob{box-shadow:0 1px 3px rgba(1,22,36,.25)}
+
+/* Compact social + promotion grids */
+.pf-socials{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px}
+.pf-promo{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px}
+@media (max-width:600px){
+  .pf-socials,.pf-promo{grid-template-columns:1fr}
+}
+.prefix-input{background:var(--ewr-bg-soft);border:1px solid var(--ewr-border)}
+.prefix-input:focus-within{border-color:var(--ewr-accent);background:#fff;
+  box-shadow:0 0 0 3px var(--ewr-accent-tint)}
+.prefix-input-pre{color:var(--ewr-text-soft)}
+.prefix-input input:focus{box-shadow:none}
+
+/* Save bar — card-footer style action row. */
+.pf-savebar{display:flex;align-items:center;justify-content:flex-end;gap:14px;
+  background:var(--ewr-surface);border:1px solid var(--ewr-border);border-radius:var(--ewr-radius-md);
+  box-shadow:var(--ewr-shadow-card);padding:12px 14px;margin:0 0 22px}
+.pf-savebar .form-msg{margin-right:auto;text-align:left}
+.pf-savebar button{background:var(--ewr-accent-strong);color:#fff;border-radius:var(--ewr-radius-pill);
+  font-weight:700;font-size:14px;padding:13px 28px}
+.pf-savebar button:hover:not(:disabled){background:var(--ewr-accent-hover)}
+@media (max-width:600px){
+  .pf-savebar{flex-direction:column-reverse;align-items:stretch}
+  .pf-savebar button{width:100%}
+  .pf-savebar .form-msg{margin:0;text-align:center}
+}
+
+/* Measurement marks — explained rows, not floating badges. */
+.verify-help{gap:12px}
+.verify-row{background:var(--ewr-bg-soft);border-radius:var(--ewr-radius-md);
+  padding:14px 16px;align-items:center;color:var(--ewr-text-muted)}
+.verify-mark{width:auto;min-width:112px;padding-top:0}
+.verify-title{color:var(--ewr-text);font-weight:600;font-size:14px;margin-bottom:3px}
+.verify-body p{margin:0;font-size:13.5px;line-height:1.5;color:var(--ewr-text-muted)}
+
+/* Connection link — input group + tidy QR block. */
+.link-row{gap:0;background:var(--ewr-bg-soft);border:1px solid var(--ewr-border);
+  border-radius:var(--ewr-radius-pill);padding:4px 4px 4px 16px}
+.link-input{border:none;background:transparent;color:#5a6571;box-shadow:none}
+.link-input:focus{border:none;background:transparent;box-shadow:none}
+.qr-block{align-items:flex-start}
+.qr-img{border:1px solid var(--ewr-border);box-shadow:var(--ewr-shadow-card)}
+.qr-cap{color:var(--ewr-text-muted)}
+
+/* Following list */
+.following-name{color:var(--ewr-text);font-weight:600}
+
+/* My measurements list (light pass) */
+.me-card{background:var(--ewr-surface);border:1px solid var(--ewr-border);box-shadow:var(--ewr-shadow-card)}
+.me-kind.solo{background:rgba(0,51,255,0.10);color:#0033ff}
+.me-kind.session{background:var(--ewr-accent-tint);color:var(--ewr-accent-strong)}
+.me-kind.experiment{background:rgba(82,48,218,0.12);color:#6b3fd4}
+.me-title{color:var(--ewr-text)}
+.me-meta{color:var(--ewr-text-muted)}
+.me-host-name{color:var(--ewr-text)}
+.d-meta{color:var(--ewr-text-muted)}
+.d-comment{border-top:1px solid var(--ewr-border)}
+.d-comment-lbl{color:var(--ewr-text-muted)}
+.d-client-chip{background:var(--ewr-bg-soft);border:1px solid var(--ewr-border)}
+.d-client-name{color:var(--ewr-text-muted)}
+
+/* =============================================================================
+   CONNECT LANDING (#/connect/:handle) — public Spiritual Maker referral page.
+   Was dark (white-on-lavender = invisible on white). Full light re-skin +
+   Codex polish: clean hero, explained benefits, stat cards, sessions,
+   premium recommendation card with coupon copy.
+   ========================================================================== */
+.cn-card{background:var(--ewr-surface);border:1px solid var(--ewr-border);border-radius:18px;
+  box-shadow:var(--ewr-shadow-card)}
+.cn-h{color:var(--ewr-text);font-weight:600}
+
+/* Hero — white card with a subtle cyan→violet corner accent (no purple fog). */
+.cn-hero{text-align:center;background:var(--ewr-surface);border:1px solid var(--ewr-border);
+  border-radius:22px;box-shadow:var(--ewr-shadow-card)}
+.cn-hero::before{background:radial-gradient(circle, rgba(82,48,218,0.10), transparent 70%)}
+.cn-hero-avatar{border:3px solid #fff;box-shadow:0 0 0 2px rgba(82,48,218,0.25),0 10px 24px rgba(82,48,218,0.18)}
+.cn-badge{color:var(--ewr-accent-strong);background:var(--ewr-accent-tint);border:1px solid rgba(82,48,218,0.3)}
+.cn-name{color:var(--ewr-text);font-weight:600}
+.cn-intro{color:var(--ewr-text-muted)}
+.cn-trust{margin-top:12px;font-size:13px;color:var(--ewr-text-muted)}
+.cn-trust b{color:var(--ewr-text)}
+.cn-cta-sub{margin-top:10px;font-size:13px;color:var(--ewr-text-muted);line-height:1.5;max-width:420px;
+  margin-left:auto;margin-right:auto}
+.cn-sub{color:var(--ewr-text-muted);font-size:14px;line-height:1.55;margin:-6px 0 16px}
+.cn-social{background:#fff;border:1px solid var(--ewr-border);color:var(--ewr-text-muted)}
+.cn-social:hover{background:var(--ewr-accent-tint);border-color:var(--ewr-accent);color:var(--ewr-accent);transform:translateY(-2px)}
+
+/* Primary connect / buy CTA — solid violet pill. */
+.cn-cta{background:var(--ewr-accent-strong);color:#fff;border-radius:var(--ewr-radius-pill);
+  font-weight:700;box-shadow:0 10px 24px -10px rgba(64,29,145,0.6)}
+.cn-cta:hover{background:var(--ewr-accent-hover)}
+.cn-note{color:var(--ewr-text-muted)}
+.cn-note.ok{color:#0f8a52}
+
+/* What happens — title + muted explanation per row. */
+.cn-check li{color:var(--ewr-text)}
+.cn-tick{color:#20b26b}
+.cn-check-t{color:var(--ewr-text);font-weight:600;font-size:14px}
+.cn-check-d{color:var(--ewr-text-muted);font-size:13px;line-height:1.45;margin-top:2px}
+
+/* Community — compact stat cards. */
+.cn-stat{background:var(--ewr-bg-soft);border:1px solid var(--ewr-border)}
+.cn-stat-val{color:var(--ewr-text)}
+.cn-stat-lbl{color:var(--ewr-text-muted)}
+@media (max-width:560px){ .cn-stats{grid-template-columns:repeat(2,1fr)} }
+
+/* Upcoming sessions + empty state. */
+.cn-session{background:var(--ewr-bg-soft);border:1px solid var(--ewr-border)}
+.cn-session:hover{border-color:var(--ewr-accent);background:#fff}
+.cn-session-name{color:var(--ewr-text)}
+.cn-session-meta{color:var(--ewr-text-muted)}
+.cn-session-pill{flex-shrink:0;font-size:12px;font-weight:700;letter-spacing:.03em;
+  padding:7px 14px;border-radius:var(--ewr-radius-pill);white-space:nowrap}
+.cn-session-pill.up{background:#fff;border:1px solid var(--ewr-border);color:var(--ewr-accent-strong)}
+.cn-session-pill.live{background:var(--ewr-accent);color:#fff}
+.hs-live{color:#0f8a52;font-weight:600}
+.cn-empty{background:var(--ewr-bg-soft);border-radius:var(--ewr-radius-md);padding:22px 18px;
+  text-align:center;color:var(--ewr-text-muted);font-size:14px;line-height:1.5}
+
+/* Recommended product — premium recommendation, not an ad. */
+.cn-offer-tag{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--ewr-accent-strong);
+  background:var(--ewr-accent-tint);border-radius:var(--ewr-radius-pill);padding:5px 12px;margin-bottom:12px}
+/* Big product image — first impression, show the whole pack large (no crop). */
+.cn-offer-body{flex-direction:column;align-items:stretch;gap:16px}
+.cn-offer-img{object-fit:contain;background:var(--ewr-bg-soft);border:1px solid #eef0f2;padding:14px;
+  width:100%;height:260px;border-radius:14px}
+.cn-offer-img-ph{color:var(--ewr-text-soft);border:1px dashed var(--ewr-border)}
+@media (max-width:600px){ .cn-offer-img{height:200px} }
+.cn-offer-name{color:var(--ewr-text)}
+.cn-price{flex-direction:row;align-items:baseline;gap:10px;flex-wrap:wrap}
+.cn-price-reg{color:var(--ewr-text-soft);font-size:15px}
+.cn-price-your{font-family:'Montserrat',sans-serif;font-size:26px;font-weight:700;color:#0f8a52;line-height:1}
+.cn-price-lbl{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ewr-text-muted);font-weight:700}
+.cn-coupon{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.cn-coupon-lbl{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ewr-text-muted);font-weight:700}
+.cn-coupon-code{font-family:'Montserrat',sans-serif;font-weight:700;color:#9a7400;letter-spacing:.06em;
+  background:rgba(245,183,0,0.14);border:1px dashed rgba(245,183,0,0.6);border-radius:8px;padding:4px 12px}
+.cn-coupon-copy{background:#fff;border:1px solid var(--ewr-border);color:var(--ewr-text);
+  font-family:'Inter',sans-serif;font-size:12px;font-weight:700;padding:6px 14px;border-radius:var(--ewr-radius-pill);
+  cursor:pointer;transition:border-color .15s,color .15s}
+.cn-coupon-copy:hover{border-color:var(--ewr-accent);color:var(--ewr-accent)}
+
+.cn-final-h{color:var(--ewr-text);font-weight:600}
+
+/* Confirm modal — light. */
+.cn-modal-backdrop{background:rgba(1,22,36,0.45);backdrop-filter:blur(4px)}
+.cn-modal{background:var(--ewr-surface);border:1px solid var(--ewr-border);
+  box-shadow:0 24px 60px -16px rgba(1,22,36,0.3)}
+.cn-modal-title{color:var(--ewr-text)}
+.cn-modal-text{color:var(--ewr-text-muted)}
+
+/* "Link not found" fallback + legacy connect-card. */
+.connect-card{background:var(--ewr-surface);border:1px solid var(--ewr-border);box-shadow:var(--ewr-shadow-card)}
+.connect-title{color:var(--ewr-text)}
+.connect-eyebrow,.connect-bio,.connect-lead,.connect-note{color:var(--ewr-text-muted)}
+.connect-what{border-top:1px solid var(--ewr-border)}
+.connect-what h2{color:var(--ewr-text)}
+.connect-what p{color:var(--ewr-text-muted)}
+.connect-note.ok{color:#0f8a52}
+
+/* =============================================================================
+   CLIENTS — practitioner energy wall + live banner (was dark lavender). Member
+   metric numbers use muted zone text; spark/chart lines stay vivid.
+   ========================================================================== */
+.client-card{background:var(--ewr-surface);border:1px solid var(--ewr-border);box-shadow:var(--ewr-shadow-card)}
+.client-card:hover{border-color:var(--ewr-accent)}
+.client-name{color:var(--ewr-text);font-weight:600}
+.client-sub{color:var(--ewr-text-muted)}
+.client-spark{background:var(--ewr-bg-soft);border:1px solid rgba(1,22,36,0.08);border-radius:8px}
+.cm-lbl{color:var(--ewr-text-muted)}
+.client-empty{color:var(--ewr-text-soft)}
+/* "Live measuring" pill — brand accent (matches the measuring state elsewhere). */
+.live-pill-mini{background:var(--ewr-accent);color:#fff}
+.client-card.live{border-color:var(--ewr-accent);
+  box-shadow:0 0 0 1px rgba(82,48,218,0.25),0 10px 28px -10px rgba(82,48,218,0.45)}
+.client-live-banner{background:var(--ewr-accent-tint);border:1px solid rgba(82,48,218,0.3)}
+.live-title{color:var(--ewr-text)}
+.lm-lbl{color:var(--ewr-text-muted)}
+.live-curve{background:#fff;border:1px solid var(--ewr-border);border-radius:12px}
+
+/* ---- Clients dashboard: summary strip, controls, status pills, overview ---- */
+.cl-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.cl-sum{background:var(--ewr-surface);border:1px solid var(--ewr-border);border-radius:var(--ewr-radius-md);
+  box-shadow:var(--ewr-shadow-card);padding:14px 16px}
+.cl-sum-n{font-family:'Montserrat',sans-serif;font-size:26px;font-weight:600;line-height:1;color:var(--ewr-text);font-variant-numeric:tabular-nums}
+.cl-sum-l{font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--ewr-text-muted);font-weight:700;margin-top:7px}
+.cl-sum.live .cl-sum-n{color:var(--ewr-accent-strong)}
+.cl-sum.new .cl-sum-n{color:#0f8a52}
+.cl-sum.attn .cl-sum-n{color:#9a7400}
+@media (max-width:600px){ .cl-summary{grid-template-columns:repeat(2,1fr)} }
+
+/* Controls: search + sort share the top row; filters wrap to their own line. */
+.cl-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.cl-search{order:0;flex:1;min-width:180px;box-sizing:border-box;background:var(--ewr-bg-soft);
+  border:1px solid var(--ewr-border);border-radius:var(--ewr-radius-pill);color:var(--ewr-text);
+  font-family:'Inter',sans-serif;font-size:14px;padding:10px 16px}
+.cl-search::placeholder{color:var(--ewr-text-soft)}
+.cl-search:focus{outline:none;border-color:var(--ewr-accent);background:#fff;box-shadow:0 0 0 3px var(--ewr-accent-tint)}
+.cl-filters{order:2;flex-basis:100%;display:flex;gap:6px;flex-wrap:wrap}
+.cl-pill{font-family:'Inter',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.02em;
+  padding:8px 13px;border-radius:var(--ewr-radius-pill);cursor:pointer;
+  background:#fff;border:1px solid var(--ewr-border);color:var(--ewr-text-muted);transition:all .15s}
+.cl-pill:hover{border-color:var(--ewr-accent);color:var(--ewr-accent)}
+.cl-pill.active{background:var(--ewr-accent-strong);border-color:var(--ewr-accent-strong);color:#fff}
+.cl-sort{order:1;flex-shrink:0;width:auto;min-width:150px;cursor:pointer}
+
+/* Member status pills (one per card). */
+.cl-stat{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:700;
+  letter-spacing:0.06em;text-transform:uppercase;padding:4px 10px;border-radius:var(--ewr-radius-pill);white-space:nowrap}
+.cl-stat .dot{width:6px;height:6px;border-radius:50%;background:currentColor;animation:ewrBlink 1.4s ease-in-out infinite}
+.cl-stat.live{background:var(--ewr-accent);color:#fff}
+.cl-stat.attn,.cl-stat.review{background:rgba(245,183,0,0.16);color:#9a7400}
+.cl-stat.low{background:rgba(240,68,56,0.12);color:#c2415b}
+.cl-stat.new{background:rgba(32,178,107,0.14);color:#0f8a52}
+.cl-stat.idle{background:var(--ewr-surface-muted);color:var(--ewr-text-soft)}
+.client-card.attn{border-color:rgba(245,183,0,0.5)}
+.client-card.live{border-color:var(--ewr-accent);
+  box-shadow:0 0 0 1px rgba(82,48,218,0.25),0 10px 28px -10px rgba(82,48,218,0.45)}
+.cl-empty-sub{display:block;color:var(--ewr-text-soft);font-size:12px;margin-top:4px}
+.cl-empty-row{background:var(--ewr-surface-muted);border-radius:var(--ewr-radius-md);
+  padding:22px 18px;text-align:center;color:var(--ewr-text-muted);font-size:14px}
+
+/* Member detail overview header. */
+.cl-overview{background:var(--ewr-surface);border:1px solid var(--ewr-border);border-radius:var(--ewr-radius-md);
+  box-shadow:var(--ewr-shadow-card);padding:18px 20px;margin-bottom:16px}
+.cl-ov-rel{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:700;
+  letter-spacing:0.04em;color:#0f8a52;background:rgba(32,178,107,0.12);
+  border-radius:var(--ewr-radius-pill);padding:5px 12px}
+.cl-rel-dot{width:7px;height:7px;border-radius:50%;background:#20b26b}
+.cl-ov-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0 12px}
+.cl-ov-n{font-family:'Montserrat',sans-serif;font-size:24px;font-weight:600;line-height:1;color:var(--ewr-text);font-variant-numeric:tabular-nums}
+.cl-ov-l{font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--ewr-text-muted);font-weight:700;margin-top:6px}
+.cl-ov-last{font-size:13px;color:var(--ewr-text-muted)}
+@media (max-width:600px){ .cl-ov-stats{grid-template-columns:repeat(2,1fr)} }
+
+/* "Finalizing results…" — the brief settle window after a session ends. */
+.room-finalizing{display:flex;align-items:center;justify-content:center;gap:10px;
+  padding:34px 20px;background:var(--ewr-surface-muted);border-radius:var(--ewr-radius-md);
+  color:var(--ewr-text-muted);font-weight:600;font-size:14px}
+.rf-dot{width:9px;height:9px;border-radius:50%;background:var(--ewr-accent);
+  animation:ewrBlink 1.2s ease-in-out infinite;flex-shrink:0}
+
+/* =============================================================================
+   SESSIONS — real session rows: title + host · status badge · time · CTA.
+   Root cause of the "scattered" look: organizer name was white-on-white and
+   finished cards sat at 50% opacity. Fixed by recoloring, not restructuring.
+   ========================================================================== */
+.sess-section-title{color:#5a6571}
+.sess-section-sub{color:var(--ewr-text-soft)}
+.session-card{background:var(--ewr-surface);border:1px solid var(--ewr-border);box-shadow:var(--ewr-shadow-card)}
+.session-card.live{border-color:var(--ewr-accent);background:#fff;box-shadow:0 10px 28px rgba(82,48,218,0.16)}
+/* Finished: readable, just quieter (no half-transparent ghost cards). */
+.session-card.finished{opacity:1;background:var(--ewr-bg-soft);box-shadow:none}
+.session-card.finished .session-name{color:#5a6571}
+.session-name{color:var(--ewr-text);font-weight:600}
+.sess-verified{color:#0f8a52}
+.session-meta{color:var(--ewr-text-muted)}
+.session-organizer .organizer-name{color:var(--ewr-text);font-weight:600}
+.organizer-note .organizer-label{color:var(--ewr-text-soft)}
+.organizer-note b{color:var(--ewr-text)}
+
+.badge.upcoming{background:rgba(0,51,255,0.10);color:#0033ff}
+.badge.live{background:var(--ewr-accent);color:#fff}
+.badge.finished{background:var(--ewr-surface-muted);color:var(--ewr-text-muted)}
+.countdown{color:var(--ewr-text)}
+.countdown.live{color:#0f8a52}
+.session-avg{color:var(--ewr-text-muted)}
+.session-avg b{color:var(--ewr-text)}
+/* Ended sessions get a secondary VIEW (primary JOIN is for live/upcoming only). */
+.session-card.finished .btn-join{background:#fff;color:var(--ewr-text);border:1px solid var(--ewr-border)}
+.session-card.finished .btn-join:hover{border-color:var(--ewr-accent);color:var(--ewr-accent);background:#fff}
+
+/* Add-to-calendar: secondary pill + white dropdown card. */
+.cal-btn{background:#fff;color:var(--ewr-text);border:1px solid var(--ewr-border);border-radius:var(--ewr-radius-pill)}
+.cal-btn:hover{background:var(--ewr-surface-muted);border-color:var(--ewr-accent)}
+.cal-menu{background:var(--ewr-surface);border:1px solid var(--ewr-border);box-shadow:var(--ewr-shadow-card)}
+.cal-opt{color:var(--ewr-text)}
+.cal-opt:hover{background:var(--ewr-surface-muted)}
+
+/* =============================================================================
+   EXPERIMENTS (#/experiments · topic · single experiment) — a guided practice
+   journey: topic tiles → experiment cards → day stepper + lesson + the day's
+   closing measurement + reflection. STYLE ONLY — lesson content untouched.
+   Was dark purple-glass: eyebrows/CTAs in #cdbcff and body in --white were
+   invisible on white. Re-skinned to the light system; numbers use muted zText.
+   ========================================================================== */
+
+/* Icon/cover — unified branded tile (cyan→violet); a real cover image overlays it. */
+.xp-cover{background:var(--ewr-gradient)}
+.xp-cover-icon{opacity:1;color:#fff}
+
+/* Continue / recommend hero — the focal "pick up where you left off" card. */
+.xp-hero{background:var(--ewr-surface);border:1px solid var(--ewr-border);
+  box-shadow:var(--ewr-shadow-card)}
+.xp-hero:hover{border-color:var(--ewr-accent);box-shadow:var(--ewr-shadow-pop)}
+.xp-hero-eyebrow{color:var(--ewr-accent-strong)}
+.xp-hero-title{color:var(--ewr-text);font-weight:600}
+.xp-hero-meta{color:var(--ewr-text-muted)}
+.xp-hero-cta{color:#fff;background:var(--ewr-accent-strong);border-radius:var(--ewr-radius-pill);
+  padding:9px 18px;font-weight:700;font-size:13px}
+.xp-hero:hover .xp-hero-cta{background:var(--ewr-accent-hover)}
+/* "Everything done" variant — quiet, no CTA. */
+.xp-hero-done{background:var(--ewr-bg-soft);border:1px solid var(--ewr-border);box-shadow:none}
+.xp-hero-done .xp-hero-title{font-size:16px}
+
+/* Section heading ("Topics"). */
+.xp-section-h{color:var(--ewr-text-muted)}
+
+/* Topic tiles. */
+.xp-topic{background:var(--ewr-surface);border:1px solid var(--ewr-border);
+  box-shadow:var(--ewr-shadow-card)}
+a.xp-topic:hover{border-color:var(--ewr-accent)}
+.xp-topic.is-empty{opacity:1;background:var(--ewr-bg-soft);box-shadow:none}
+.xp-topic.is-empty .xp-cover{opacity:0.65;filter:grayscale(0.35)}
+.xp-topic.is-empty .xp-topic-count{color:var(--ewr-text-soft)}
+.xp-topic-title{color:var(--ewr-text);font-weight:600}
+.xp-topic-count{color:var(--ewr-text-muted)}
+
+/* Progress bar — quiet violet on a light track. */
+.xp-bar{background:var(--ewr-surface-muted)}
+.xp-bar-fill{background:var(--ewr-accent)}
+
+/* Experiment cards (topic page). */
+.xp-exp{background:var(--ewr-surface);border:1px solid var(--ewr-border);
+  box-shadow:var(--ewr-shadow-card)}
+.xp-exp:hover{border-color:var(--ewr-accent)}
+.xp-exp-title{color:var(--ewr-text);font-weight:600}
+.xp-exp-sum{color:var(--ewr-text-muted)}
+.xp-exp-cta{color:#fff;background:var(--ewr-accent-strong);border-radius:var(--ewr-radius-pill);
+  padding:8px 16px;font-weight:700;font-size:13px}
+.xp-exp:hover .xp-exp-cta{background:var(--ewr-accent-hover)}
+
+/* Experiment status — readable pills (not floating uppercase text). */
+.xp-status{color:var(--ewr-text-muted);background:var(--ewr-surface-muted);
+  padding:4px 11px;border-radius:var(--ewr-radius-pill);text-transform:none;letter-spacing:0.02em}
+.xp-status.going{color:var(--ewr-accent-strong);background:var(--ewr-accent-tint)}
+.xp-status.done{color:#0f8a52;background:rgba(32,178,107,0.14)}
+
+/* Day stepper — done=green check · current=accent · open=outline · locked=muted. */
+.xp-day-dot{background:#fff;border:1px solid var(--ewr-border);color:var(--ewr-text-muted)}
+.xp-day-dot.open:hover{border-color:var(--ewr-accent);color:var(--ewr-accent);background:var(--ewr-accent-tint)}
+.xp-day-dot.current{border-color:var(--ewr-accent);color:var(--ewr-accent);
+  box-shadow:0 0 0 2px var(--ewr-accent-tint)}
+.xp-day-dot.done{background:rgba(32,178,107,0.14);border-color:rgba(32,178,107,0.45);color:#0f8a52}
+.xp-day-dot.locked{opacity:1;background:var(--ewr-surface-muted);border-color:var(--ewr-border);
+  color:var(--ewr-text-soft);cursor:not-allowed}
+
+/* Lesson card — navy text, accent labels, sectioned blocks. */
+.xp-day-eyebrow{color:var(--ewr-accent-strong)}
+.xp-day-text{color:var(--ewr-text)}
+.xp-day-block{background:var(--ewr-bg-soft);border:1px solid var(--ewr-border);
+  border-radius:var(--ewr-radius-md);padding:12px 14px}
+.xp-day-label{color:var(--ewr-accent-strong);font-weight:700}
+.xp-day-block p{color:var(--ewr-text-muted)}
+
+/* Completed-day note / measurement link. */
+.xp-done-note{background:rgba(32,178,107,0.1);border:1px solid rgba(32,178,107,0.3);color:#0f8a52}
+.xp-done-card{background:rgba(32,178,107,0.1);border:1px solid rgba(32,178,107,0.3)}
+.xp-done-card:hover{border-color:rgba(32,178,107,0.55)}
+.xp-done-main{color:#0f8a52}
+.xp-done-cta{color:var(--ewr-accent-strong)}
+
+/* Measurement panel — the day's closing act, framed as "Complete Day N". */
+.xp-measure{background:var(--ewr-surface);border:1px solid var(--ewr-border);
+  border-top:3px solid var(--ewr-accent);box-shadow:var(--ewr-shadow-card);text-align:left}
+.xp-measure-title{font-family:'Montserrat',sans-serif;font-size:16px;font-weight:600;color:var(--ewr-text)}
+.xp-measure-sub{font-size:13px;color:var(--ewr-text-muted);margin-top:3px}
+.xp-measure-head{color:var(--ewr-text)}                 /* legacy single-line head */
+.xp-measure .cn-cta{margin-top:14px}
+.xp-measure-hint{color:var(--ewr-text-muted)}
+.xp-live-val{color:var(--ewr-text)}                      /* number tint comes from inline zText */
+.xp-verify.good{color:#0f8a52}
+.xp-verify.bad{color:#9a7400}
+.xp-review-row{color:var(--ewr-text-muted)}
+.xp-review-row b{color:var(--ewr-text)}
+/* Discard sits in .form-actions (which forces a primary bg) → keep it secondary. */
+.xp-measure .form-actions .btn-secondary{background:#fff;color:var(--ewr-text);border:1px solid var(--ewr-border)}
+.xp-measure .form-actions .btn-secondary:hover{border-color:var(--ewr-accent);color:var(--ewr-accent);background:#fff}
+
+/* Reflection — the day's closing question; its answer becomes the measurement comment. */
+.xp-reflect{margin-top:14px;background:var(--ewr-bg-soft);border:1px solid var(--ewr-border);
+  border-radius:var(--ewr-radius-md);padding:14px 16px}
+.xp-reflect-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.xp-reflect-lbl{font-size:11px;letter-spacing:0.12em;text-transform:uppercase;
+  color:var(--ewr-accent-strong);font-weight:700}
+.xp-reflect-opt{font-size:11px;color:var(--ewr-text-soft);letter-spacing:0}
+.xp-reflect-q{color:var(--ewr-text);font-size:14px;line-height:1.5;margin:0 0 10px}
+.xp-reflect textarea{margin:0}
+
+/* Experiment rating (only on a fully completed experiment). */
+.xp-rating-q{color:var(--ewr-text)}
+.xp-star{color:var(--ewr-border)}
+.xp-star.on{color:var(--ewr-yellow)}
+.xp-rating-thanks{color:#0f8a52}
+
+/* Mobile: heavy CTAs wrap full-width under the card body (no cramming at 375px). */
+@media (max-width:600px){
+  .xp-hero{flex-wrap:wrap}
+  .xp-hero-cta{order:3;width:100%;text-align:center;margin-top:4px}
+  .xp-exp{flex-wrap:wrap}
+  .xp-exp-cta{order:3;width:100%;text-align:center;margin-top:4px}
+}
+
+/* =============================================================================
+   GLOBAL RANKING / LEADERBOARD (#/leaderboard) — period tabs · podium · your
+   standing · ranked list · mini-profile modal. Was dark glass (#cdbcff copy on
+   purple gradients). Full light re-skin; the podium keeps its gold/silver/bronze
+   medal identity, and "Your standing" becomes the personal navy focal card.
+   CSS-ONLY — view-leaderboard.js markup is untouched. NOTE: .lb-name / .lb-label
+   already get light colours in the SESSION ROOM block above (shared with the old
+   live table); here we add the Global-Ranking-specific surfaces.
+   ========================================================================== */
+
+/* Period tabs — light pills; active = solid accent. */
+.lb-tab{background:#fff;border:1px solid var(--ewr-border);color:var(--ewr-text-muted)}
+.lb-tab:hover{color:var(--ewr-accent);border-color:var(--ewr-accent);background:var(--ewr-accent-tint)}
+.lb-tab.active{background:var(--ewr-accent-strong);border-color:var(--ewr-accent-strong);color:#fff}
+
+/* Community heartbeat line. */
+.lb-heartbeat{color:var(--ewr-text-muted)}
+
+/* Podium — white cards; place-1 gold (focal), place-2 silver, place-3 bronze. */
+.lb-podium-card{background:var(--ewr-surface);border:1px solid var(--ewr-border);
+  box-shadow:var(--ewr-shadow-card)}
+.lb-podium-card.place-1{background:linear-gradient(180deg, rgba(245,183,0,0.12), #fff);
+  border-color:rgba(245,183,0,0.55);box-shadow:0 12px 32px -10px rgba(245,183,0,0.45)}
+.lb-podium-card.place-2{background:linear-gradient(180deg, rgba(160,174,185,0.14), #fff);
+  border-color:rgba(160,174,185,0.5)}
+.lb-podium-card.place-3{background:linear-gradient(180deg, rgba(205,127,50,0.14), #fff);
+  border-color:rgba(205,127,50,0.45)}
+.lb-podium-card .lb-xp{color:var(--ewr-text)}
+.lb-podium-status{color:var(--ewr-text-muted)}
+.lb-pract-pin{color:#0f8a52}
+
+/* Level pill — light accent-tint; top levels keep a gold accent. */
+.lb-level-pill{background:var(--ewr-accent-tint);border:1px solid rgba(82,48,218,0.3);
+  color:var(--ewr-accent-strong)}
+.lb-level-pill.lv-5,.lb-level-pill.lv-6{background:rgba(245,183,0,0.16);
+  border-color:rgba(245,183,0,0.5);color:#9a7400}
+.lb-xp-label{color:var(--ewr-text-muted)}
+
+/* Your standing — the personal navy focal card (matches the home level hero). */
+.lb-mine{background:var(--ewr-dark);border:1px solid var(--ewr-dark-border);
+  box-shadow:0 14px 36px -16px rgba(1,22,36,0.5)}
+.lb-mine-eyebrow{color:#8aa0b2}
+.lb-mine .lb-name{color:#fff}
+.lb-mine .lb-meta{color:#aab6bd}
+.lb-mine .lb-level-pill{background:rgba(82,48,218,0.28);border-color:rgba(123,97,255,0.5);color:#cdbcff}
+.lb-rank-num{color:#fff}
+.lb-rank-meta{color:#8aa0b2}
+.lb-mine-copy{color:#dbe2e6}
+/* Logged-out / no-XP variant stays light (nothing personal to spotlight yet). */
+.lb-mine.empty{background:var(--ewr-bg-soft);border:1px solid var(--ewr-border);box-shadow:none}
+.lb-mine.empty .lb-mine-msg{color:var(--ewr-text-muted)}
+
+/* Ranked list rows. */
+.lb-row{background:var(--ewr-surface);border:1px solid var(--ewr-border);box-shadow:var(--ewr-shadow-card)}
+.lb-row:hover{border-color:var(--ewr-accent);background:#fff}
+.lb-row.mine{border-color:var(--ewr-accent);background:var(--ewr-accent-tint);
+  box-shadow:0 0 0 1px rgba(82,48,218,0.2)}
+.lb-row-rank{color:var(--ewr-text-soft)}
+.lb-row-xp{color:var(--ewr-text)}
+.lb-status{color:var(--ewr-text-muted)}
+.lb-pract-tag{background:rgba(32,178,107,0.14);color:#0f8a52;border:1px solid rgba(32,178,107,0.4)}
+
+/* Empty state. */
+.lb-empty{background:var(--ewr-bg-soft);border:1px solid var(--ewr-border);color:var(--ewr-text-muted)}
+
+/* ---- Mini-profile modal — dark glass → clean light card. ------------------- */
+.lb-modal-backdrop{background:rgba(1,22,36,0.45);backdrop-filter:blur(4px)}
+.lb-modal{background:var(--ewr-surface);border:1px solid var(--ewr-border);
+  box-shadow:0 24px 60px -16px rgba(1,22,36,0.3);color:var(--ewr-text)}
+.lb-modal-close{background:var(--ewr-surface-muted);border:1px solid var(--ewr-border);color:var(--ewr-text-muted)}
+.lb-modal-close:hover{background:var(--ewr-border);color:var(--ewr-text)}
+.lb-modal-name{color:var(--ewr-text)}
+/* Verified Spiritual Maker — gold seal. */
+.lb-modal-pract{color:#9a7400;background:rgba(245,183,0,0.16);border:1px solid rgba(245,183,0,0.5)}
+.lb-modal-status{color:var(--ewr-text-muted)}
+.lb-modal-level{background:var(--ewr-accent-tint);border:1px solid rgba(82,48,218,0.25)}
+.lb-modal-level-eyebrow{color:var(--ewr-text-muted)}
+.lb-modal-level-title{color:var(--ewr-text)}
+.lbm-stat{background:var(--ewr-bg-soft);border:1px solid var(--ewr-border)}
+.lbm-val{color:var(--ewr-text)}
+.lbm-lbl{color:var(--ewr-text-muted)}
+
+/* ---- Leaderboard polish (Csaba review, 2026-06-16) ------------------------- */
+
+/* Heartbeat → a composed, quiet stats strip (bold numbers, dot separator). */
+.lb-heartbeat{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 2px 18px}
+.lb-hb-item{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--ewr-text-muted)}
+.lb-hb-item b{color:var(--ewr-text);font-weight:700}
+.lb-hb-item .lb-active-dot{margin-left:0}
+.lb-hb-dot{width:3px;height:3px;border-radius:50%;background:var(--ewr-text-soft);flex-shrink:0}
+
+/* Compact sign-in callout — replaces the big empty "Log in" block (logged out). */
+.lb-signin{display:flex;align-items:center;justify-content:space-between;gap:14px;
+  background:var(--ewr-accent-tint);border:1px solid rgba(82,48,218,0.18);
+  border-radius:var(--ewr-radius-pill);padding:10px 12px 10px 20px;margin-bottom:18px}
+.lb-signin-text{font-size:14px;color:var(--ewr-text);font-weight:600}
+.lb-signin-btn{flex-shrink:0;background:var(--ewr-accent-strong);color:#fff;text-decoration:none;
+  border-radius:var(--ewr-radius-pill);padding:9px 22px;font-weight:700;font-size:13px;
+  text-transform:uppercase;letter-spacing:0.04em}
+.lb-signin-btn:hover{background:var(--ewr-accent-hover)}
+/* Logged-in "no XP yet" message stays, just tighter. */
+.lb-mine.empty{padding:14px 18px}
+
+/* Podium: stronger avatar (gradient ring), heavier XP, tidy rare-badge tiles. */
+.lb-podium-card .lb-avatar.lg,.lb-modal .lb-avatar.xl{padding:3px;background:var(--ewr-gradient)}
+.lb-podium-card .lb-avatar.lg img,.lb-modal .lb-avatar.xl img{border-radius:50%}
+.lb-podium-card .lb-xp{font-weight:700}
+.lb-podium-card .lb-rare:not(:empty){margin-top:12px;padding-top:10px;border-top:1px solid var(--ewr-border)}
+.lb-podium-card .lb-rare-icon{background:var(--ewr-surface-muted);border-radius:7px;padding:3px 6px;font-size:15px}
+
+/* "Active this week" → a small green pill (dot + label), not a floating dot. */
+.lb-active-pill{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;
+  letter-spacing:0.04em;text-transform:uppercase;padding:3px 9px;border-radius:var(--ewr-radius-pill);
+  background:rgba(32,178,107,0.14);color:#0f8a52;white-space:nowrap}
+.lb-active-pill .lb-active-dot{width:6px;height:6px;margin-left:0;box-shadow:none}
+.lb-podium-card .lb-active-pill{margin-top:6px}
+
+/* Section label separating the podium from the ranked list. */
+.lb-list-h{font-family:'Montserrat',sans-serif;font-size:13px;font-weight:600;letter-spacing:0.14em;
+  text-transform:uppercase;color:var(--ewr-text-muted);margin:22px 2px 12px}
+
+/* Modal: subtler close button; the orphan 7th stat spans full width. */
+.lb-modal-close{width:30px;height:30px;font-size:16px}
+.lb-modal-close:hover{color:var(--ewr-accent)}
+.lb-modal-stats .lbm-stat:last-child:nth-child(odd){grid-column:1 / -1}
+
+@media (max-width:600px){
+  .lb-signin{padding:10px 12px 10px 16px}
+  .lb-signin-text{font-size:13px}
+  .lb-signin-btn{padding:8px 16px}
+}
+
+/* =============================================================================
+   MY MEASUREMENTS (#/me) — summary strip + filter pills + a lightweight
+   inline-SVG sparkline per card, so the history reads at a glance (chart-first).
+   ========================================================================== */
+.me-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.me-sum{background:var(--ewr-surface);border:1px solid var(--ewr-border);border-radius:var(--ewr-radius-md);
+  box-shadow:var(--ewr-shadow-card);padding:13px 15px}
+.me-sum-n{font-family:'Montserrat',sans-serif;font-size:22px;font-weight:600;line-height:1;
+  color:var(--ewr-text);font-variant-numeric:tabular-nums}
+.me-sum-l{font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--ewr-text-muted);
+  font-weight:700;margin-top:7px}
+
+.me-filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+.me-filter{font-family:'Inter',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.02em;
+  padding:8px 14px;border-radius:var(--ewr-radius-pill);cursor:pointer;
+  background:#fff;border:1px solid var(--ewr-border);color:var(--ewr-text-muted);transition:all .15s}
+.me-filter:hover{border-color:var(--ewr-accent);color:var(--ewr-accent)}
+.me-filter.active{background:var(--ewr-accent-strong);border-color:var(--ewr-accent-strong);color:#fff}
+
+/* Card sparkline strip — sits between the title block and the right-hand stats. */
+.me-spark{flex:0 0 132px;height:38px;background:var(--ewr-bg-soft);border:1px solid var(--ewr-border);
+  border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.me-spark-svg{width:100%;height:100%;display:block}
+.me-spark-empty{font-size:10px;color:var(--ewr-text-soft);letter-spacing:0.04em}
+
+@media (max-width:600px){
+  .me-summary{grid-template-columns:repeat(2,1fr)}
+  /* Card stacks (index.html @600) — sparkline spans full width above the stats. */
+  .me-spark{flex:0 0 auto;width:100%;height:46px}
+}
+
+/* =============================================================================
+   THE JOURNEY (#/journey) — the motivational core: how measurements become a
+   practice and a visible path. Was dark glass (white text, gold/yellow level
+   accents, gradient-text title — unreadable on white). Premium light re-skin:
+   memorable 2-col hero with an SVG "journey device", editorial why-card with a
+   Measure→Notice→Grow triad, a cyan→violet→gold level timeline, grow cards +
+   XP badge chips, soft accent closing. CSS + static markup only.
+   ========================================================================== */
+.jr-wrap{max-width:920px}
+
+/* Hero — white editorial panel, text left, the SVG path device right. */
+.jr-hero{text-align:left;padding:30px 34px;display:grid;grid-template-columns:1fr 190px;
+  gap:28px;align-items:center;background:#fff;border:1px solid var(--ewr-border);
+  border-radius:20px;box-shadow:var(--ewr-shadow-card);position:relative;overflow:hidden}
+.jr-eyebrow{color:var(--ewr-accent-strong)}
+.jr-title{background:none;-webkit-text-fill-color:var(--ewr-text);color:var(--ewr-text);
+  font-size:48px;font-weight:600;letter-spacing:-0.01em;margin:8px 0 14px}
+.jr-lead{color:var(--ewr-text-muted);opacity:1;margin:0;max-width:none}
+.jr-hero-art{display:flex;justify-content:center;align-items:center}
+.jr-art-svg{height:248px;width:auto;display:block}
+
+/* Sections / shared text. */
+.jr-h{color:var(--ewr-text);font-weight:600}
+.jr-p{color:var(--ewr-text-muted);max-width:680px}
+.jr-p b{color:var(--ewr-text)}
+.jr-muted{color:var(--ewr-text-soft)}
+
+/* "Why this exists" — editorial card + Measure → Notice → Grow triad. */
+.jr-why{background:#fff;border:1px solid var(--ewr-border);border-radius:16px;
+  box-shadow:var(--ewr-shadow-card);padding:24px 28px}
+.jr-why-text .jr-h{margin-bottom:10px}
+.jr-why-text .jr-p:last-child{margin-bottom:0}
+.jr-triad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;
+  margin-top:20px;padding-top:20px;border-top:1px solid var(--ewr-border)}
+.jr-step{text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px}
+.jr-step-n{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:var(--ewr-accent-tint);color:var(--ewr-accent-strong);
+  font-family:'Montserrat',sans-serif;font-weight:600;font-size:15px}
+.jr-step-t{font-family:'Montserrat',sans-serif;font-weight:600;color:var(--ewr-text);font-size:15px}
+.jr-step-d{font-size:12.5px;color:var(--ewr-text-muted)}
+
+/* Level timeline — cyan → violet → gold rail, numbered tier-coloured nodes,
+   soft level cards. */
+.jr-levels::before{background:linear-gradient(180deg,#37dbff,#5230da 55%,#f5b700);width:3px;left:23px;opacity:0.9}
+.jr-level{padding-bottom:18px}
+.jr-node{background:#fff;border:2px solid var(--ewr-border);color:var(--ewr-text);
+  box-shadow:0 0 0 4px #fff;font-weight:600}
+.jr-low .jr-node{border-color:#cfd6db;color:#8a93a0}
+.jr-mid .jr-node{border-color:var(--ewr-accent);color:var(--ewr-accent-strong)}
+.jr-high .jr-node{border-color:#e6b800;color:#9a7400;box-shadow:0 0 0 4px #fff,0 0 0 7px rgba(245,183,0,0.16)}
+.jr-level-body{background:var(--ewr-bg-soft);border:1px solid var(--ewr-border);
+  border-radius:12px;padding:11px 16px}
+.jr-high .jr-level-body{background:rgba(245,183,0,0.07);border-color:rgba(245,183,0,0.35)}
+.jr-level-name{color:var(--ewr-text);font-weight:600}
+.jr-level-xp{color:var(--ewr-accent-strong);background:var(--ewr-accent-tint);
+  border-radius:var(--ewr-radius-pill);padding:2px 10px;font-weight:700}
+.jr-high .jr-level-xp{color:#9a7400;background:rgba(245,183,0,0.16)}
+.jr-level-desc{color:var(--ewr-text-muted)}
+
+/* "How you grow" — source cards + XP badge chips. */
+.jr-grow-cards{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:16px 0}
+.jr-grow-card{background:#fff;border:1px solid var(--ewr-border);border-radius:12px;
+  box-shadow:var(--ewr-shadow-card);padding:15px 17px}
+.jr-grow-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--ewr-gradient)}
+.jr-grow-t{font-family:'Montserrat',sans-serif;font-weight:600;color:var(--ewr-text);
+  font-size:15px;margin:8px 0 4px}
+.jr-grow-d{font-size:13px;line-height:1.5;color:var(--ewr-text-muted);margin:0}
+
+.jr-rewards{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  background:var(--ewr-bg-soft);border:1px solid var(--ewr-border);
+  border-radius:12px;padding:13px 16px;margin:6px 0 14px}
+.jr-rewards-lbl{font-size:11px;letter-spacing:0.12em;text-transform:uppercase;
+  color:var(--ewr-text-muted);font-weight:700}
+.jr-tiers{margin:0;gap:8px}
+.jr-tier{background:#fff;border:1px solid var(--ewr-border);border-radius:var(--ewr-radius-pill);
+  padding:5px 12px;color:var(--ewr-text-muted)}
+.jr-tier-name{font-size:12px;font-weight:700;letter-spacing:0.02em}
+.jr-tier b{font-family:'Montserrat',sans-serif}
+.jr-tier-bronze b{color:#b07a3c}
+.jr-tier-silver b{color:#8a93a0}
+.jr-tier-gold b{color:#b8860b}
+.jr-tier-special b{color:var(--ewr-accent-strong)}
+
+/* Closing — soft accent panel + primary pill CTA. */
+.jr-closing{text-align:center;background:var(--ewr-accent-tint);
+  border:1px solid rgba(82,48,218,0.18);border-radius:18px;padding:30px 28px;margin-top:34px}
+.jr-closing .jr-p{margin-left:auto;margin-right:auto}
+.jr-cta{display:inline-block;margin-top:10px;background:var(--ewr-accent-strong);color:#fff;
+  text-decoration:none;border-radius:var(--ewr-radius-pill);padding:12px 26px;
+  font-family:'Inter',sans-serif;font-weight:700;font-size:14px;letter-spacing:0.03em}
+.jr-cta:hover{background:var(--ewr-accent-hover)}
+
+@media (max-width:700px){
+  .jr-title{font-size:38px}
+  .jr-hero{grid-template-columns:1fr;text-align:center;padding:26px 22px}
+  .jr-hero-art{order:2}
+  .jr-art-svg{height:200px}
+  .jr-lead{margin-left:auto;margin-right:auto}
+  .jr-triad{grid-template-columns:repeat(3,1fr);gap:6px}
+  .jr-grow-cards{grid-template-columns:1fr}
+}
+
+/* =============================================================================
+   LOGIN (#/login) — a focused, trust-building auth card (not a raw wide form).
+   Email → 6-digit code (OTP). Fields/buttons reuse the shared light primitives.
+   ========================================================================== */
+.login-wrap{max-width:440px;margin:24px auto 0}
+.login-card{background:var(--ewr-surface);border:1px solid var(--ewr-border);
+  border-radius:var(--ewr-radius-lg);box-shadow:var(--ewr-shadow-card);padding:30px 30px 26px;text-align:center}
+.login-badge{width:52px;height:52px;border-radius:14px;margin:0 auto 16px;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--ewr-gradient);box-shadow:0 8px 20px -8px rgba(82,48,218,0.55)}
+.login-title{font-family:'Montserrat',sans-serif;font-size:24px;font-weight:600;color:var(--ewr-text);margin:0 0 8px}
+.login-sub{font-size:14px;line-height:1.55;color:var(--ewr-text-muted);margin:0 0 22px}
+/* Fields read left-aligned inside the centered card. */
+.login-card .field{text-align:left}
+.login-card .field + .field{margin-top:14px}
+.login-actions{flex-direction:column;align-items:stretch;gap:10px;margin-top:16px}
+.login-actions button{width:100%}
+#liVerify{order:-1}   /* once the code field shows, Verify is the primary action */
+.login-actions .form-msg{order:1;text-align:center;margin:2px 0 0}
+.login-actions .lo-secondary{background:#fff;color:var(--ewr-text);border:1px solid var(--ewr-border)}
+.login-actions .lo-secondary:hover{background:var(--ewr-surface-muted);border-color:var(--ewr-accent);color:var(--ewr-accent)}
+.login-trust{font-size:12px;line-height:1.5;color:var(--ewr-text-soft);margin:18px 0 0}
+.login-foot{text-align:center;font-size:13.5px;color:var(--ewr-text-muted);margin:18px 0 0;line-height:1.5}
+.login-foot-link{color:var(--ewr-accent-strong);font-weight:700;text-decoration:none}
+.login-foot-link:hover{text-decoration:underline}
+
+/* =============================================================================
+   SESSIONS LIST polish — a live community gateway, not a calendar+archive.
+   Aligned 3-column rows; explicit states (live / practice room / starting soon /
+   upcoming / finished); live room-presence count ("N in room"); summary strip.
+   Logic/data untouched — presence is read as an observer (never tracked).
+   ========================================================================== */
+
+/* Summary strip — what's happening right now. */
+.sess-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.sess-sum{background:var(--ewr-surface);border:1px solid var(--ewr-border);border-radius:var(--ewr-radius-md);
+  box-shadow:var(--ewr-shadow-card);padding:13px 15px}
+.sess-sum-n{font-family:'Montserrat',sans-serif;font-size:22px;font-weight:600;line-height:1;
+  color:var(--ewr-text);font-variant-numeric:tabular-nums}
+.sess-sum-l{font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--ewr-text-muted);
+  font-weight:700;margin-top:7px}
+.sess-sum.on .sess-sum-n{color:var(--ewr-accent-strong)}
+.sess-sum.on.cyan .sess-sum-n{color:#0e7490}
+
+/* Aligned row grid: title/meta · status+activity · time+actions. */
+.session-card{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:10px 20px;padding:14px 18px}
+.sess-left{min-width:0}
+.sess-mid{display:flex;flex-direction:column;align-items:flex-start;gap:5px}
+.sess-right{display:flex;flex-direction:column;align-items:flex-end;gap:7px;text-align:right;flex-shrink:0}
+.sess-actions{display:flex;align-items:center;gap:8px}
+
+/* Activity line ("N in room" / "Room open" / "3 racers"). */
+.sess-activity{font-size:12px;color:var(--ewr-text-muted);white-space:nowrap}
+.session-card.live .sess-activity,.session-card.practice .sess-activity{color:#0e7490;font-weight:700}
+
+/* Status pills + the pulsing dot for active rooms. */
+.badge .badge-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:currentColor;
+  margin-right:6px;vertical-align:middle;animation:ewrBlink 1.4s ease-in-out infinite}
+.badge.practice{background:rgba(55,219,255,0.18);color:#0e7490}
+.badge.soon{background:rgba(245,183,0,0.16);color:#9a7400}
+
+/* Active rooms get a subtle accent edge; practice rooms a cyan edge. */
+.session-card.practice{border-color:rgba(55,219,255,0.55);
+  box-shadow:0 0 0 1px rgba(55,219,255,0.22),0 10px 28px rgba(1,22,36,0.07)}
+
+/* Past row: "View results" is a quiet secondary action. */
+.sess-view{background:#fff;color:var(--ewr-text);border:1px solid var(--ewr-border)}
+.sess-view:hover{border-color:var(--ewr-accent);color:var(--ewr-accent);background:#fff}
+
+/* Upcoming/live host strip — the host as a focal trust anchor (you enter their
+   room), not an inline meta avatar. Past rows keep the compact "Hosted by". */
+.sess-host{display:flex;align-items:center;gap:11px;margin-top:9px}
+.sess-host-av{flex-shrink:0;display:inline-flex}
+.sess-host-av .sess-avatar{width:38px;height:38px;font-size:15px}
+.sess-host-txt{min-width:0}
+.sess-host-line{font-size:14px;line-height:1.3}
+.sess-host-pre{color:var(--ewr-text-soft)}
+.sess-host-name{color:var(--ewr-text);font-weight:700}
+.sess-host-tag{display:inline-block;margin-top:3px;font-size:10px;font-weight:700;letter-spacing:0.04em;
+  color:#0f8a52;background:rgba(32,178,107,0.14);border-radius:var(--ewr-radius-pill);padding:2px 9px}
+.sess-when{margin-top:9px;font-size:12px}
+
+@media (max-width:600px){
+  .sess-summary{grid-template-columns:repeat(2,1fr)}
+  /* Stack: title/meta → status+activity → actions full-width. */
+  .session-card{grid-template-columns:1fr;gap:12px}
+  .sess-mid{flex-direction:row;align-items:center;flex-wrap:wrap;gap:8px}
+  .sess-right{align-items:stretch;text-align:left}
+  .sess-actions{width:100%}
+  .sess-actions .btn-join{flex:1;text-align:center}
+}
+
+/* =============================================================================
+   SESSION ROOM header actions — "Remind me" (calendar) + Share/Copy link as
+   secondary pills, plus a quiet practice-context note. Reuses .cal-btn styling.
+   ========================================================================== */
+.room-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.room-actions .cal-add,.room-actions .room-share{display:inline-flex}
+.room-practice-note{margin:13px 0 0;font-size:13px;line-height:1.5;color:var(--ewr-text-muted);
+  background:var(--ewr-accent-tint);border:1px solid rgba(82,48,218,0.14);
+  border-radius:var(--ewr-radius-md);padding:10px 14px}
+@media (max-width:600px){
+  .room-actions{width:100%}
+  .room-actions .cal-add,.room-actions .room-share{flex:1}
+  .room-actions .cal-btn{width:100%;justify-content:center}
+  .room-actions .cal-btn span{display:inline}   /* labels fit on the full-width room pills */
+}

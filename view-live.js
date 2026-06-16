@@ -20,17 +20,22 @@ function avatarHtml(url, name){
 function flagHtml(cc){
   if(!cc || !/^[A-Za-z]{2}$/.test(cc)) return '';
   const u = cc.toUpperCase();
-  return ` <img src="${flagUrl(cc)}" alt="${esc(u)}" title="${esc(u)}" loading="lazy" style="width:21px;height:15px;border-radius:3px;object-fit:cover;vertical-align:middle;margin-left:7px;box-shadow:0 0 0 1px rgba(255,255,255,0.18)">`;
+  return ` <img src="${flagUrl(cc)}" alt="${esc(u)}" title="${esc(u)}" loading="lazy" style="width:21px;height:15px;border-radius:3px;object-fit:cover;vertical-align:middle;margin-left:7px;box-shadow:0 0 0 1px rgba(1,22,36,0.15)">`;
 }
 
 const STATUS = {
   connected:  { label: 'Wheel connected', cls: 'connected',  live: true },
-  measuring:  { label: 'Measuring',       cls: 'measuring',  live: true },
+  measuring:  { label: 'Measuring live', cls: 'measuring',  live: true },
   experiment: { label: 'In an experiment',cls: 'experiment', live: true },
   session:    { label: 'In a session',    cls: 'session',    live: true },
   online:     { label: 'Online',          cls: 'online',     live: false },
   offline:    { label: 'Offline',         cls: 'offline',    live: false },
 };
+
+// Zone colours tuned for LIGHT backgrounds. The big number uses the muted set
+// (alarm-free red, readable gold); chart markers keep the vivid set.
+const zoneTextColor = led => led < 6 ? '#c2415b' : led < 13 ? '#b8860b' : '#0f8a52';
+const zoneMarkColor = led => led < 6 ? '#f04438' : led < 13 ? '#f5b700' : '#20b26b';
 // Group order: me first (handled separately), then connected wheels, online, offline.
 function groupRank(status){
   if(status === 'online') return 2;
@@ -38,9 +43,10 @@ function groupRank(status){
   return 1;   // connected / measuring / session
 }
 
-// Compact live curve (same look as the session per-racer curve): a coloured line
-// on a dark rounded panel, no axes.
-function drawLiveCurve(canvas, series, color){
+// Compact live sparkline: brand-violet line on a light strip, with a small
+// zone-coloured marker on the latest value (red stays a low-zone signal,
+// not the default chart colour).
+function drawLiveCurve(canvas, series){
   const w = canvas.clientWidth, h = canvas.clientHeight;
   if(!w || !h) return;
   const dpr = window.devicePixelRatio || 1;
@@ -50,11 +56,15 @@ function drawLiveCurve(canvas, series, color){
   ctx.clearRect(0, 0, w, h);
   const n = series.length;
   if(n < 2) return;
-  const pad = 4;
+  const pad = 5;
   const yOf = led => h - (Math.max(0, Math.min(24, led)) / 24) * (h - pad * 2) - pad;
   ctx.beginPath();
-  series.forEach((v, i) => { const x = (i / (n - 1)) * w, y = yOf(v); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
-  ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.stroke();
+  series.forEach((v, i) => { const x = pad + (i / (n - 1)) * (w - pad * 2), y = yOf(v); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+  ctx.strokeStyle = '#5230da'; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.stroke();
+  const last = series[n - 1];
+  ctx.beginPath(); ctx.arc(w - pad, yOf(last), 3.5, 0, Math.PI * 2);
+  ctx.fillStyle = zoneMarkColor(last); ctx.fill();
+  ctx.lineWidth = 1.5; ctx.strokeStyle = '#ffffff'; ctx.stroke();
 }
 
 // Injected once: green ONLINE pill + glowing dot, the search box, and the "show more"
@@ -64,14 +74,14 @@ function injectStyles(){
   const st = document.createElement('style');
   st.id = 'liveExtraStyles';
   st.textContent = `
-  .live-pill.online{background:rgba(60,201,138,.16);border:1px solid rgba(60,201,138,.5);color:#6fe6ad}
-  .live-pill.online::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;background:#3ddc84;box-shadow:0 0 7px 1px rgba(61,220,132,.85);animation:liveOnlineBlink 1.6s ease-in-out infinite}
+  .live-pill.online{background:rgba(32,178,107,.12);border:1px solid rgba(32,178,107,.4);color:#0f8a52}
+  .live-pill.online::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;background:#20b26b;box-shadow:0 0 7px 1px rgba(32,178,107,.7);animation:liveOnlineBlink 1.6s ease-in-out infinite}
   @keyframes liveOnlineBlink{0%,100%{opacity:1}50%{opacity:.4}}
-  .live-search{width:100%;box-sizing:border-box;background:rgba(0,0,0,.22);border:1px solid var(--panel-border);border-radius:11px;color:#fff;font-family:'Inter',sans-serif;font-size:15px;padding:12px 14px;margin:4px 0 16px}
-  .live-search::placeholder{color:var(--muted)}
-  .live-search:focus{outline:none;border-color:rgba(155,140,255,.6)}
-  .live-more{display:block;width:100%;margin:14px 0 4px;padding:13px;border-radius:11px;cursor:pointer;font-family:'Inter',sans-serif;font-size:14px;font-weight:600;color:#cdbcff;background:rgba(255,255,255,.05);border:1px solid var(--panel-border);transition:filter .15s}
-  .live-more:hover{filter:brightness(1.25)}`;
+  .live-search{width:100%;box-sizing:border-box;background:#f7f8f8;border:1px solid #dfe3e6;border-radius:11px;color:#011624;font-family:'Inter',sans-serif;font-size:15px;padding:12px 14px;margin:4px 0 16px}
+  .live-search::placeholder{color:#99a2a7}
+  .live-search:focus{outline:none;border-color:#5230da;background:#fff;box-shadow:0 0 0 3px rgba(82,48,218,.08)}
+  .live-more{display:block;width:100%;margin:14px 0 4px;padding:13px;border-radius:999px;cursor:pointer;font-family:'Inter',sans-serif;font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#401d91;background:#fff;border:1px solid #dfe3e6;transition:border-color .15s,background .15s}
+  .live-more:hover{border-color:#5230da;background:rgba(82,48,218,.06)}`;
   document.head.appendChild(st);
 }
 
@@ -125,8 +135,8 @@ export function mount(el){
       const st = STATUS[p.status] || STATUS.online;
       const isMe = myId && p.uid === myId;
       const isOpen = expanded.has(p.uid);
-      const value = st.live ? `<div class="live-value"><span class="live-led" data-led>·</span></div>` : '';
-      const expandBtn = st.live ? `<button type="button" class="live-expand" data-expand aria-label="Show full chart" aria-expanded="${isOpen}">▾</button>` : '';
+      const value = st.live ? `<div class="live-value"><span class="live-led" data-led>·</span><span class="live-led-cap">Vitality</span></div>` : '';
+      const expandBtn = st.live ? `<button type="button" class="live-expand" data-expand aria-label="Show full chart" aria-expanded="${isOpen}"><span class="le-show">Chart</span><span class="le-hide">Hide</span><span class="le-car">▾</span></button>` : '';
       const curve = st.live ? `<canvas class="live-wheel-curve" data-curve></canvas>` : '';
       const big = st.live ? `<div class="live-expanded"><div class="live-big-wrap"><canvas data-bigcurve></canvas></div></div>` : '';
       return `
@@ -165,10 +175,9 @@ export function mount(el){
         if(curve){ const c = curve.getContext('2d'); c && c.clearRect(0, 0, curve.width, curve.height); }
         return;
       }
-      const color = vitalityColor(led);
-      if(ledEl){ ledEl.textContent = String(led); ledEl.style.color = color; ledEl.classList.remove('waiting'); }
+      if(ledEl){ ledEl.textContent = String(led); ledEl.style.color = zoneTextColor(led); ledEl.classList.remove('waiting'); }
       const series = presence.getLiveSeries(uid);
-      if(curve && !card.classList.contains('expanded')) drawLiveCurve(curve, series, color);
+      if(curve && !card.classList.contains('expanded')) drawLiveCurve(curve, series);
       if(big && card.classList.contains('expanded')) drawVitalityChart(big, series, Math.round(series.length * 0.5));
     });
   }

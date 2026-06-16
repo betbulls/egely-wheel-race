@@ -95,10 +95,10 @@ export function mount(el, handle){
 
     body.innerHTML = `
       <div class="cn-wrap">
-        ${renderHero(pr, name, socials)}
-        ${renderWhat()}
+        ${renderHero(pr, name, socials, connectedMembers)}
+        ${renderWhat(name)}
+        ${renderUpcoming(upcoming, now, name)}
         ${renderCommunity({ connectedMembers, hostedSessions: allSessions.length, level: levelState.level, verifiedRate })}
-        ${renderUpcoming(upcoming, now)}
         ${hasOffer ? renderOffer(pr, name) : ''}
         ${renderFinal()}
       </div>`;
@@ -108,14 +108,16 @@ export function mount(el, handle){
       body.querySelectorAll('[data-cta-slot]').forEach(slot => { slot.innerHTML = html; });
     }
 
+    const ctaSub = `<p class="cn-cta-sub">Connect to share your measurements with ${esc(name)} so they can follow your progress. You stay in control.</p>`;
+
     async function updateConnectUI(){
       const a = auth.getState();
       if(!a.user){
-        setCtas(`<button class="cn-cta" data-act="login">Connect with ${esc(name)}</button>`);
+        setCtas(`<button class="cn-cta" data-act="login">Connect with ${esc(name)}</button>${ctaSub}`);
         return;
       }
       if(a.user.id === pr.id){
-        setCtas(`<p class="cn-note">This is your own link — share it with your members.</p>`);
+        setCtas(`<p class="cn-note">This is your own page — share this link with the people you want to follow your journey.</p>`);
         return;
       }
       // Finish a connection the visitor started before logging in.
@@ -126,10 +128,10 @@ export function mount(el, handle){
       }
       const connected = await auth.isConnectedTo(pr.id);
       if(connected){
-        setCtas(`<p class="cn-note ok">✓ You're connected with ${esc(name)}.</p>
+        setCtas(`<p class="cn-note ok">✓ You're connected — ${esc(name)} can now follow your measurements.</p>
                  <button class="btn-secondary" data-act="disconnect">End connection</button>`);
       } else {
-        setCtas(`<button class="cn-cta" data-act="connect">Connect with ${esc(name)}</button>`);
+        setCtas(`<button class="cn-cta" data-act="connect">Connect with ${esc(name)}</button>${ctaSub}`);
       }
     }
 
@@ -146,6 +148,11 @@ export function mount(el, handle){
         btn.disabled = true;
         await auth.disconnectPractitioner(pr.id);
         updateConnectUI();
+      } else if(act === 'copy-coupon'){
+        const code = btn.dataset.coupon || '';
+        try { await navigator.clipboard.writeText(code); } catch {}
+        const prev = btn.textContent; btn.textContent = 'Copied';
+        setTimeout(() => { btn.textContent = prev; }, 1600);
       }
     });
 
@@ -189,11 +196,14 @@ export function mount(el, handle){
 }
 
 // ---- Section renderers -------------------------------------------------------
-function renderHero(pr, name, socials){
+function renderHero(pr, name, socials, connectedMembers){
   const socialHtml = socials.length ? `
     <div class="cn-socials">
       ${socials.map(s => `<a class="cn-social" href="${esc((pr[s.field] || '').trim())}" target="_blank" rel="noopener noreferrer nofollow" aria-label="${esc(s.label)}" title="${esc(s.label)}">${s.icon}</a>`).join('')}
     </div>` : '';
+  const trust = connectedMembers > 0
+    ? `<p class="cn-trust">Trusted by <b>${connectedMembers}</b> connected member${connectedMembers === 1 ? '' : 's'}</p>`
+    : '';
   return `
     <section class="cn-hero">
       <div class="cn-hero-avatar">${avatarHtml(pr.avatar_url, name)}</div>
@@ -202,21 +212,23 @@ function renderHero(pr, name, socials){
       ${pr.bio ? `<p class="cn-intro">${esc(pr.bio)}</p>` : ''}
       ${socialHtml}
       <div class="cn-cta-slot" data-cta-slot><button class="cn-cta" data-act="connect">Connect with ${esc(name)}</button></div>
+      ${trust}
     </section>`;
 }
 
-function renderWhat(){
+function renderWhat(name){
   const items = [
-    'Your Spiritual Maker can follow your future measurements',
-    'You can join their live sessions',
-    'You become part of their community',
-    'You can disconnect at any time',
+    ['You share your measurements', `${name} can see the measurements and results you record from now on.`],
+    ['They follow your progress', 'They can see how your vitality develops over time — for guidance, feedback or deeper analysis.'],
+    ['Join their community', `You become one of ${name}'s connected members.`],
+    ['You stay in control', 'Disconnect at any time — you decide who follows your journey.'],
   ];
   return `
     <section class="cn-card">
       <h2 class="cn-h">What happens when you connect?</h2>
+      <p class="cn-sub">Connecting shares your measurements with ${esc(name)} so they can follow and support your journey — it is not about watching their sessions.</p>
       <ul class="cn-check">
-        ${items.map(t => `<li><span class="cn-tick">✓</span><span>${esc(t)}</span></li>`).join('')}
+        ${items.map(([t, d]) => `<li><span class="cn-tick">✓</span><div class="cn-check-body"><div class="cn-check-t">${esc(t)}</div><div class="cn-check-d">${esc(d)}</div></div></li>`).join('')}
       </ul>
     </section>`;
 }
@@ -241,12 +253,9 @@ function fmtWhen(iso){
   return new Date(iso).toLocaleString('en-US', { weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
 }
 
-function renderUpcoming(upcoming, now){
-  if(!upcoming.length) return '';
-  return `
-    <section class="cn-card">
-      <h2 class="cn-h">Upcoming Sessions</h2>
-      <div class="cn-sessions">
+function renderUpcoming(upcoming, now, name){
+  const body = upcoming.length
+    ? `<div class="cn-sessions">
         ${upcoming.map(s => {
           const start = new Date(s.scheduled_start).getTime();
           const live = now >= start && now <= start + (s.duration_minutes || 0) * 60000;
@@ -257,10 +266,15 @@ function renderUpcoming(upcoming, now){
                 <div class="cn-session-name">${esc(s.name || 'Untitled session')}${s.verified_only ? ' <span class="sess-verified">✓ Verified</span>' : ''}</div>
                 <div class="cn-session-meta">${live ? '<span class="hs-live">● Live now</span>' : esc(fmtWhen(s.scheduled_start))}${parts}</div>
               </div>
-              <span class="cn-session-cta">${live ? 'Join' : 'View'} →</span>
+              <span class="cn-session-pill ${live ? 'live' : 'up'}">${live ? 'Join' : 'View'} →</span>
             </a>`;
         }).join('')}
-      </div>
+      </div>`
+    : `<div class="cn-empty">No upcoming sessions yet. Connect to be notified when ${esc(name)} hosts one.</div>`;
+  return `
+    <section class="cn-card">
+      <h2 class="cn-h">Upcoming sessions</h2>
+      ${body}
     </section>`;
 }
 
@@ -272,6 +286,7 @@ function renderOffer(pr, name){
     : `<div class="cn-offer-img cn-offer-img-ph">Official<br>Egely Wheel<br>image</div>`;
   return `
     <section class="cn-card cn-offer">
+      <div class="cn-offer-tag">★ Maker recommendation</div>
       <h2 class="cn-h">Recommended by ${esc(name)}</h2>
       <div class="cn-offer-body">
         ${img}
@@ -281,13 +296,18 @@ function renderOffer(pr, name){
             ${OFFER.features.map(f => `<li><span class="cn-tick">✓</span><span>${esc(f)}</span></li>`).join('')}
           </ul>
           <div class="cn-price">
-            <span class="cn-price-reg">Regular Price: <s>${esc(OFFER.regularPrice)}</s></span>
-            <span class="cn-price-your">Your Price: <b>${esc(OFFER.yourPrice)}</b></span>
+            <span class="cn-price-reg"><s>${esc(OFFER.regularPrice)}</s></span>
+            <span class="cn-price-your">${esc(OFFER.yourPrice)}</span>
+            <span class="cn-price-lbl">your price</span>
           </div>
-          <div class="cn-coupon">Coupon Code: <span class="cn-coupon-code">${coupon}</span></div>
+          <div class="cn-coupon">
+            <span class="cn-coupon-lbl">Coupon</span>
+            <span class="cn-coupon-code">${coupon}</span>
+            <button type="button" class="cn-coupon-copy" data-act="copy-coupon" data-coupon="${coupon}">Copy</button>
+          </div>
           <div class="cn-offer-actions">
-            <a class="cn-cta" href="${link}" target="_blank" rel="noopener noreferrer nofollow">Buy Through ${esc(name)}</a>
-            <a class="btn-secondary" href="${link}" target="_blank" rel="noopener noreferrer nofollow">View Product</a>
+            <a class="cn-cta" href="${link}" target="_blank" rel="noopener noreferrer nofollow">Buy through ${esc(name)}</a>
+            <a class="btn-secondary" href="${link}" target="_blank" rel="noopener noreferrer nofollow">View product</a>
           </div>
         </div>
       </div>

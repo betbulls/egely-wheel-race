@@ -2,7 +2,7 @@ import * as auth from './auth.js';
 import * as ble from './ble.js';
 import * as wakeLock from './wake-lock.js';
 import * as presence from './presence.js';
-import { computeStats, vitalityLevel, vitalityColor as vColor, downsample } from './analytics.js';
+import { computeStats, vitalityLevel, downsample } from './analytics.js';
 import {
   TOPICS, EXPERIMENTS, topicsOrdered, getTopic, getExperiment, experimentsByTopic,
   experimentState, isDayUnlocked, topicProgress, pickContinue, dayNumber, completedExperimentCount,
@@ -16,6 +16,10 @@ function firstUnfinished(progByExp){
 }
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+// Muted vitality-zone colour for NUMBER TEXT on light surfaces — the vivid
+// vColor yellow is unreadable on white. (Chart lines/markers keep vColor.)
+const zText = v => v < 6 ? '#c2415b' : v < 13 ? '#b8860b' : '#0f8a52';
 
 const SAMPLE_MS = 250;
 const CHEAT_WINDOW_MS = 2000, SWING_LIMIT = 7, MAX_SWINGS = 2;   // same anti-cheat as Solo / rooms (de-spiked signal)
@@ -56,6 +60,7 @@ function renderMain(body, a, progByExp){
   if(cont){
     // Something in progress → pick up where you left off.
     const st = experimentState(cont, progByExp.get(cont.id));
+    const cpct = st.total ? Math.round(st.completedCount / st.total * 100) : 0;
     hero = `
       <a class="xp-hero" href="#/experiment/${esc(cont.id)}">
         ${coverHtml(cont, 'xp-hero-cover')}
@@ -63,6 +68,7 @@ function renderMain(body, a, progByExp){
           <div class="xp-hero-eyebrow">Pick up where you left off</div>
           <div class="xp-hero-title">${esc(cont.title)}</div>
           <div class="xp-hero-meta">Day ${st.currentNumber} of ${st.total}</div>
+          <div class="xp-bar"><div class="xp-bar-fill" style="width:${cpct}%"></div></div>
         </div>
         <span class="xp-hero-cta">Continue →</span>
       </a>`;
@@ -104,7 +110,7 @@ function renderMain(body, a, progByExp){
     const inner = `
       ${coverHtml(t, 'xp-topic-cover')}
       <div class="xp-topic-info">
-        <div class="xp-topic-title">${t.icon} ${esc(t.title)}</div>
+        <div class="xp-topic-title">${esc(t.title)}</div>
         <div class="xp-topic-count">${counter}</div>
         ${(!empty && tp.completed > 0) ? `<div class="xp-bar"><div class="xp-bar-fill" style="width:${pct}%"></div></div>` : ''}
       </div>`;
@@ -237,7 +243,7 @@ export function mountExperimentDetail(el, experimentId){
       const finishedNote = st.completed ? `<div class="xp-done-note">You finished this experiment — beautifully done. ✨</div>` : '';
       host.innerHTML = res
         ? `<a class="xp-done-card" href="#/m/${esc(String(res.id))}">
-             <span class="xp-done-main">✓ Day ${dayNumber(exp, day)} · <b style="color:${vColor(res.avg)}">${res.avg.toFixed(1)}</b> avg ${res.verified ? '<span class="v-badge verified">✓ Verified</span>' : '<span class="warn">Not verified</span>'}</span>
+             <span class="xp-done-main">✓ Day ${dayNumber(exp, day)} · <b style="color:${zText(res.avg)}">${res.avg.toFixed(1)}</b> avg ${res.verified ? '<span class="v-badge verified">✓ Verified</span>' : '<span class="warn">Not verified</span>'}</span>
              <span class="xp-done-cta">View measurement →</span>
            </a>${finishedNote}`
         : `<div class="xp-done-note">✓ Day ${dayNumber(exp, day)} completed.</div>${finishedNote}`;
@@ -307,7 +313,8 @@ function setupMeasure(host, exp, day, onSaved){
     else cta = `<button class="cn-cta" data-m="start">Start Measurement</button>`;
     host.innerHTML = `
       <div class="xp-measure">
-        <div class="xp-measure-head">Complete Day ${dayNumber(exp, day)} · ${durLabel(day.measureSeconds)} measurement</div>
+        <div class="xp-measure-title">Complete Day ${dayNumber(exp, day)}</div>
+        <div class="xp-measure-sub">Finish with a ${durLabel(day.measureSeconds)} measurement</div>
         ${cta}
       </div>`;
   }
@@ -319,8 +326,8 @@ function setupMeasure(host, exp, day, onSaved){
       <div class="xp-measure measuring">
         <div class="xp-live-row">
           <div class="xp-live-cell"><div class="xp-live-val">${left}s</div><div class="xp-live-lbl">Time left</div></div>
-          <div class="xp-live-cell"><div class="xp-live-val" style="color:${vColor(curLed)}">${curLed}</div><div class="xp-live-lbl">Live</div></div>
-          <div class="xp-live-cell"><div class="xp-live-val" style="color:${vColor(avg)}">${avg.toFixed(1)}</div><div class="xp-live-lbl">Avg</div></div>
+          <div class="xp-live-cell"><div class="xp-live-val" style="color:${zText(curLed)}">${curLed}</div><div class="xp-live-lbl">Live</div></div>
+          <div class="xp-live-cell"><div class="xp-live-val" style="color:${zText(avg)}">${avg.toFixed(1)}</div><div class="xp-live-lbl">Avg</div></div>
         </div>
         <div class="xp-verify ${cheat ? 'bad' : 'good'}">${cheat ? 'Unverified — irregular spinning' : '✓ Looks genuine'}</div>
         <button class="btn-secondary" data-m="stop">Stop</button>
@@ -332,15 +339,16 @@ function setupMeasure(host, exp, day, onSaved){
     host.innerHTML = `
       <div class="xp-measure review">
         <div class="xp-review-row">
-          <span><b style="color:${vColor(stats.avg)}">${stats.avg.toFixed(1)}</b> Avg</span>
-          <span><b style="color:${vColor(stats.peak)}">${stats.peak}</b> Peak</span>
+          <span><b style="color:${zText(stats.avg)}">${stats.avg.toFixed(1)}</b> Avg</span>
+          <span><b style="color:${zText(stats.peak)}">${stats.peak}</b> Peak</span>
           <span class="${cheat ? 'warn' : 'v-badge verified'}">${cheat ? 'Not verified' : '✓ Verified'}</span>
         </div>
-        <div class="xp-review-level" style="color:${lvl.color}">${esc(lvl.name)}</div>
+        <div class="xp-review-level" style="color:${zText(stats.avg)}">${esc(lvl.name)}</div>
         ${cheat ? `<p class="xp-measure-hint">This one won't count toward your progression. You can save it anyway, or discard and retry.</p>` : ''}
-        <div class="field full" style="margin-top:12px">
-          <label for="xpComment">Reflection — ${esc(day.reflectionPrompt || 'A note about this session')}</label>
-          <textarea id="xpComment" maxlength="500" rows="2" placeholder="Optional…"></textarea>
+        <div class="xp-reflect">
+          <div class="xp-reflect-head"><span class="xp-reflect-lbl">Reflection</span><span class="xp-reflect-opt">optional</span></div>
+          <p class="xp-reflect-q">${esc(day.reflectionPrompt || 'What did you notice during this practice?')}</p>
+          <textarea id="xpComment" maxlength="500" rows="3" placeholder="Write what you noticed…"></textarea>
         </div>
         <div class="form-actions">
           <button class="cn-cta" data-m="save">Save & complete day</button>

@@ -1,9 +1,13 @@
 import { supabase } from './db.js';
 import * as auth from './auth.js';
-import { vitalityLevel, vitalityColor as vColor, trendLabel } from './analytics.js';
+import { vitalityLevel, trendLabel } from './analytics.js';
 import { drawVitalityChart, drawTrio } from './chart.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+// Muted vitality-zone colour for NUMBER TEXT on light surfaces — the vivid
+// vColor yellow is unreadable on white. (Chart lines/zone bars keep vivid.)
+const zText = v => v < 6 ? '#c2415b' : v < 13 ? '#b8860b' : '#0f8a52';
 
 function avatarHtml(url, name){
   if(url) return `<img src="${esc(url)}" alt="">`;
@@ -166,7 +170,7 @@ export function mount(el, id){
         </div>
         <div class="d-meta">${esc(when)} · ${esc(dur)}</div>
 
-        <div class="eval-level" style="color:${lvl.color};margin-top:16px">${esc(lvl.name)}</div>
+        <div class="eval-level" style="color:${zText(r.avg || 0)};margin-top:16px">${esc(lvl.name)}</div>
         <div class="eval-meaning">${esc(lvl.meaning)}</div>
 
         ${Array.isArray(r.curve) && r.curve.length > 1
@@ -174,8 +178,8 @@ export function mount(el, id){
           : '<p class="d-meta" style="margin-top:16px">No curve stored for this measurement.</p>'}
 
         <div class="res-stats" style="justify-content:flex-start;margin-top:18px;gap:22px">
-          <div class="rs"><div class="rs-val" style="color:${vColor(r.avg)}">${(r.avg || 0).toFixed(1)}</div><div class="rs-lbl">Avg</div></div>
-          <div class="rs"><div class="rs-val" style="color:${vColor(r.peak)}">${r.peak}</div><div class="rs-lbl">Peak</div></div>
+          <div class="rs"><div class="rs-val" style="color:${zText(r.avg || 0)}">${(r.avg || 0).toFixed(1)}</div><div class="rs-lbl">Avg</div></div>
+          <div class="rs"><div class="rs-val" style="color:${zText(r.peak || 0)}">${r.peak}</div><div class="rs-lbl">Peak</div></div>
           <div class="rs"><div class="rs-val">${r.steadiness}</div><div class="rs-lbl">Steady</div></div>
           <div class="rs"><div class="rs-val rs-trend">${esc(trendLabel(r.trend || 0))}</div><div class="rs-lbl">Trend</div></div>
         </div>

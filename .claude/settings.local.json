@@ -17,7 +17,14 @@
       "PowerShell($conns = Get-NetTCPConnection -LocalPort 8765 -State Listen -ErrorAction SilentlyContinue; if \\($conns\\) { $conns | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { try { $p = Get-Process -Id $_ -ErrorAction Stop; Write-Output \"Killing PID $\\($p.Id\\) \\($\\($p.ProcessName\\)\\)\"; Stop-Process -Id $p.Id -Force } catch {} } } else { Write-Output \"Nothing listening on 8765\" })",
       "PowerShell(python \"C:\\\\Users\\\\User\\\\Downloads\\\\_csv_inspect.py\")",
       "Bash(pip install *)",
-      "Bash(python -c \"import openpyxl; print\\('openpyxl OK', openpyxl.__version__\\)\")"
+      "Bash(python -c \"import openpyxl; print\\('openpyxl OK', openpyxl.__version__\\)\")",
+      "mcp__f4d5007b-023f-47c1-8b48-7dd5718656a4__get-shop-info",
+      "mcp__f4d5007b-023f-47c1-8b48-7dd5718656a4__search_docs_chunks",
+      "mcp__f4d5007b-023f-47c1-8b48-7dd5718656a4__graphql_schema",
+      "mcp__f4d5007b-023f-47c1-8b48-7dd5718656a4__validate_graphql_codeblocks",
+      "mcp__f4d5007b-023f-47c1-8b48-7dd5718656a4__graphql_query",
+      "PowerShell(try { $r = Invoke-WebRequest -Uri \"http://localhost:8765/\" -UseBasicParsing -TimeoutSec 5; \"OK $\\($r.StatusCode\\)\" } catch { \"FAIL: $\\($_.Exception.Message\\)\" })",
+      "PowerShell(python --version)"
     ]
   }
 }

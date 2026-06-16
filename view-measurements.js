@@ -1,8 +1,13 @@
 import { supabase } from './db.js';
 import * as auth from './auth.js';
-import { vitalityLevel, vitalityColor as vColor } from './analytics.js';
+import { vitalityLevel } from './analytics.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+// Muted vitality-zone colour for NUMBER TEXT on light surfaces — the vivid
+// vColor yellow is unreadable on white. Vivid is used only for the spark marker.
+const zText  = v => v < 6 ? '#c2415b' : v < 13 ? '#b8860b' : '#0f8a52';
+const zVivid = v => v < 6 ? '#f04438' : v < 13 ? '#f5b700' : '#20b26b';
 
 function hostChipHtml(host){
   if(!host) return '';
@@ -12,6 +17,94 @@ function hostChipHtml(host){
     ? `<img class="sess-avatar" src="${esc(url)}" alt="">`
     : `<span class="sess-avatar sess-avatar-initial">${esc(name.charAt(0).toUpperCase())}</span>`;
   return ` · hosted by <span class="me-host">${av}<span class="me-host-name">${esc(name)}</span></span>`;
+}
+
+// A measurement's kind, from which columns are set.
+function kindOf(r){
+  if(r.experiment_id != null) return 'experiment';
+  if(r.session_id != null) return 'session';
+  return 'solo';
+}
+
+// Lightweight inline-SVG sparkline of the stored curve — no canvas, no resize,
+// no per-card draw calls. Stroke stays uniform via non-scaling-stroke.
+function sparkSvg(curve){
+  if(!Array.isArray(curve) || curve.length < 2) return '<span class="me-spark-empty">No curve</span>';
+  const W = 120, H = 34, pad = 4, MAX = 24, n = curve.length;
+  const pts = curve.map((v, i) => {
+    const x = pad + (i / (n - 1)) * (W - 2 * pad);
+    const c = Math.max(0, Math.min(MAX, v == null ? 0 : v));
+    const y = pad + (1 - c / MAX) * (H - 2 * pad);
+    return [x, y];
+  });
+  const d = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+  const last = pts[pts.length - 1];
+  return `<svg class="me-spark-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+      <path d="${d}" fill="none" stroke="#5230da" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+      <circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="2.6" fill="${zVivid(curve[n - 1] || 0)}"/>
+    </svg>`;
+}
+
+function cardHtml(r, sessMap, hostFor){
+  const kind = kindOf(r);
+  const kindLabel = kind === 'experiment' ? 'Experiment' : kind === 'session' ? 'Session' : 'Solo';
+  const lvl = vitalityLevel(r.avg || 0);
+  const when = new Date(r.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const sess = kind === 'session' ? sessMap.get(r.session_id) : null;
+  const title = kind === 'session' ? ((sess && sess.name) || 'Session') : (r.label || (kind === 'experiment' ? 'Experiment' : 'Solo measurement'));
+  const host = kind === 'session' ? hostFor(sess) : null;
+  return `
+      <a class="me-card" href="#/m/${r.id}">
+        <div class="me-main">
+          <div class="me-title-row">
+            <span class="me-kind ${kind}">${kindLabel}</span>
+            <span class="me-title">${esc(title)}</span>
+            ${r.verified ? '<span class="v-badge verified">✓</span>' : '<span class="v-badge unverified">unverified</span>'}
+          </div>
+          <div class="me-meta">${when} · <span style="color:${zText(r.avg || 0)}">${esc(lvl.name)}</span>${hostChipHtml(host)}</div>
+        </div>
+        <div class="me-spark">${sparkSvg(r.curve)}</div>
+        <div class="me-stats">
+          <div class="rs"><div class="rs-val" style="color:${zText(r.avg || 0)}">${(r.avg || 0).toFixed(1)}</div><div class="rs-lbl">Avg</div></div>
+          <div class="rs"><div class="rs-val" style="color:${zText(r.peak || 0)}">${r.peak}</div><div class="rs-lbl">Peak</div></div>
+          <div class="rs"><div class="rs-val">${r.steadiness}</div><div class="rs-lbl">Steady</div></div>
+        </div>
+      </a>`;
+}
+
+const FILTERS = [
+  { id: 'all',        label: 'All' },
+  { id: 'solo',       label: 'Solo' },
+  { id: 'session',    label: 'Session' },
+  { id: 'experiment', label: 'Experiment' },
+  { id: 'verified',   label: 'Verified' },
+];
+
+function matches(r, filter){
+  if(filter === 'all') return true;
+  if(filter === 'verified') return !!r.verified;
+  return kindOf(r) === filter;
+}
+
+function renderSummary(rows){
+  const total = rows.length;
+  const vRate = total ? Math.round(rows.filter(r => r.verified).length / total * 100) : 0;
+  const bestAvg = rows.reduce((m, r) => Math.max(m, r.avg || 0), 0);
+  const last = rows[0];   // rows are sorted newest-first
+  const lastWhen = last ? new Date(last.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
+  return `
+    <div class="me-summary">
+      <div class="me-sum"><div class="me-sum-n">${total}</div><div class="me-sum-l">Measurements</div></div>
+      <div class="me-sum"><div class="me-sum-n">${vRate}%</div><div class="me-sum-l">Verified</div></div>
+      <div class="me-sum"><div class="me-sum-n" style="color:${zText(bestAvg)}">${bestAvg.toFixed(1)}</div><div class="me-sum-l">Best avg</div></div>
+      <div class="me-sum"><div class="me-sum-n">${esc(lastWhen)}</div><div class="me-sum-l">Last</div></div>
+    </div>`;
+}
+
+function renderFilters(){
+  return `<div class="me-filters">${FILTERS.map(f =>
+    `<button class="me-filter${f.id === 'all' ? ' active' : ''}" data-filter="${f.id}">${f.label}</button>`
+  ).join('')}</div>`;
 }
 
 export function mount(el){
@@ -63,37 +156,31 @@ export function mount(el){
       return { display_name: (p && p.display_name) || sess.created_by, avatar_url: p && p.avatar_url };
     };
 
-    list.innerHTML = rows.map(r => {
-      // Three kinds: experiment (experiment_id set) / session (session_id set) / solo.
-      const isExperiment = r.experiment_id != null;
-      const isSession = !isExperiment && r.session_id != null;
-      const isSolo = !isExperiment && !isSession;
-      const kind = isExperiment ? 'experiment' : isSession ? 'session' : 'solo';
-      const kindLabel = isExperiment ? 'Experiment' : isSession ? 'Session' : 'Solo';
-      const lvl = vitalityLevel(r.avg || 0);
-      const when = new Date(r.created_at).toLocaleString('en-US', {
-        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-      });
-      const sess = isSession ? sessMap.get(r.session_id) : null;
-      const title = isSession ? ((sess && sess.name) || 'Session') : (r.label || (isExperiment ? 'Experiment' : 'Solo measurement'));
-      const host = isSession ? hostFor(sess) : null;
-      return `
-        <a class="me-card" href="#/m/${r.id}">
-          <div class="me-main">
-            <div class="me-title-row">
-              <span class="me-kind ${kind}">${kindLabel}</span>
-              <span class="me-title">${esc(title)}</span>
-              ${r.verified ? '<span class="v-badge verified">✓</span>' : '<span class="v-badge unverified">unverified</span>'}
-            </div>
-            <div class="me-meta">${when} · <span style="color:${lvl.color}">${esc(lvl.name)}</span>${hostChipHtml(host)}</div>
-          </div>
-          <div class="me-stats">
-            <div class="rs"><div class="rs-val" style="color:${vColor(r.avg)}">${(r.avg || 0).toFixed(1)}</div><div class="rs-lbl">Avg</div></div>
-            <div class="rs"><div class="rs-val" style="color:${vColor(r.peak)}">${r.peak}</div><div class="rs-lbl">Peak</div></div>
-            <div class="rs"><div class="rs-val">${r.steadiness}</div><div class="rs-lbl">Steady</div></div>
-          </div>
-        </a>`;
-    }).join('');
+    // Summary strip + filter pills + the (re-renderable) list of cards.
+    list.innerHTML = `
+      ${renderSummary(rows)}
+      ${renderFilters()}
+      <div id="meRows"></div>`;
+
+    const rowsHost = list.querySelector('#meRows');
+    let filter = 'all';
+    const paint = () => {
+      const shown = rows.filter(r => matches(r, filter));
+      rowsHost.innerHTML = shown.length
+        ? shown.map(r => cardHtml(r, sessMap, hostFor)).join('')
+        : '<div class="panel"><p class="placeholder">No measurements match this filter.</p></div>';
+    };
+
+    // Filter pills just re-render the displayed cards — no data refetch.
+    list.querySelector('.me-filters').addEventListener('click', (e) => {
+      const b = e.target.closest('.me-filter');
+      if(!b) return;
+      filter = b.dataset.filter;
+      list.querySelectorAll('.me-filter').forEach(p => p.classList.toggle('active', p === b));
+      paint();
+    });
+
+    paint();
   })();
 
   return () => {};

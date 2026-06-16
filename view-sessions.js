@@ -4,9 +4,22 @@ import { createAddToCalendar } from './calendar.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
+const STARTING_SOON_MS = 10 * 60 * 1000;   // "Starting soon" window before the official start
+const MAX_WATCH = 30;                       // cap on live room-presence channels watched at once
+
 function avatarHtml(url, name){
   if(url) return `<img class="sess-avatar" src="${esc(url)}" alt="">`;
   return `<span class="sess-avatar sess-avatar-initial">${esc((name || '?').charAt(0).toUpperCase())}</span>`;
+}
+
+function pillHtml(state){
+  switch(state){
+    case 'live':     return '<span class="badge live"><span class="badge-dot"></span>Live now</span>';
+    case 'practice': return '<span class="badge practice"><span class="badge-dot"></span>Practice room</span>';
+    case 'soon':     return '<span class="badge soon">Starting soon</span>';
+    case 'finished': return '<span class="badge finished">Finished</span>';
+    default:         return '<span class="badge upcoming">Upcoming</span>';
+  }
 }
 
 // Mounts the Group Sessions view into `el`. Returns a cleanup function.
@@ -14,28 +27,28 @@ export function mount(el){
   el.innerHTML = `
     <div class="view-head">
       <h1 class="page-title">Sessions</h1>
-      <p class="page-sub">Live and upcoming group measurements — and the journeys others have already taken.</p>
+      <p class="page-sub">Live and upcoming group measurements — drop into a room to practise together before the official measurement begins.</p>
     </div>
 
+    <div class="sess-summary" id="sessSummary"></div>
+
     <section class="sess-section">
-      <h2 class="sess-section-title">Upcoming <span class="sess-section-sub">live first</span></h2>
-      <div class="session-list" id="upcomingList">
-        <div class="empty">Loading…</div>
-      </div>
+      <h2 class="sess-section-title">Live &amp; upcoming <span class="sess-section-sub">rooms you can enter now</span></h2>
+      <div class="session-list" id="upcomingList"><div class="empty">Loading…</div></div>
     </section>
 
     <section class="sess-section">
-      <h2 class="sess-section-title">Past</h2>
-      <div class="session-list" id="pastList">
-        <div class="empty">Loading…</div>
-      </div>
+      <h2 class="sess-section-title">Past <span class="sess-section-sub">results</span></h2>
+      <div class="session-list" id="pastList"><div class="empty">Loading…</div></div>
     </section>
   `;
 
   const $ = id => el.querySelector('#' + id);
   let sessions = [];
   let resultsBySession = new Map();
-  let organizersById = new Map();   // user_id -> { display_name, avatar_url }
+  let organizersById = new Map();        // user_id -> { display_name, avatar_url }
+  const roomCounts = new Map();          // sessionId -> people currently in the room (presence)
+  const roomChannels = new Map();        // sessionId -> presence channel (observer, never tracks)
 
   async function loadSessions(){
     const [{ data, error }, resRes] = await Promise.all([
@@ -43,7 +56,7 @@ export function mount(el){
       supabase.from('results').select('session_id, avg, verified'),
     ]);
     if(error){
-      $('sessionList').innerHTML = '<div class="empty">Could not load sessions: ' + error.message + '</div>';
+      $('upcomingList').innerHTML = '<div class="empty">Could not load sessions: ' + esc(error.message) + '</div>';
       return;
     }
     resultsBySession = new Map();
@@ -58,7 +71,7 @@ export function mount(el){
     organizersById = new Map();
     if(organizerIds.length){
       const { data: profs } = await supabase
-        .from('profiles').select('id, display_name, avatar_url').in('id', organizerIds);
+        .from('profiles').select('id, display_name, avatar_url, is_practitioner').in('id', organizerIds);
       for(const p of (profs || [])) organizersById.set(p.id, p);
     }
     renderSessions();
@@ -104,67 +117,120 @@ export function mount(el){
     return 'less than a minute';
   }
 
-  function buildSessionCard(s, state, now){
-    const start = new Date(s.scheduled_start).getTime();
-    const card = document.createElement('div');
-    card.className = 'session-card ' + state;
-    card.dataset.start = start;
-    card.dataset.end = start + (s.duration_minutes || 0) * 60000;
+  function activityText(base, count){
+    if(base === 'finished') return '';
+    if(count > 0) return `${count} in room`;
+    return base === 'live' ? 'Starting' : 'Room open';
+  }
 
-    const main = document.createElement('div');
-    main.className = 'session-main';
-    const name = document.createElement('div');
-    name.className = 'session-name';
-    name.textContent = s.name || 'Untitled session';
-    if(s.verified_only){
-      const vt = document.createElement('span');
-      vt.className = 'sess-verified';
-      vt.textContent = '✓ Verified';
-      name.appendChild(vt);
-    }
+  function buildSessionCard(s, st, now){
+    const start = new Date(s.scheduled_start).getTime();
+    const end = start + (s.duration_minutes || 0) * 60000;
+    const count = roomCounts.get(s.id) || 0;
+
+    // Base state; "practice" is derived live from the room's presence count.
+    let base;
+    if(st === 'live') base = 'live';
+    else if(st === 'finished') base = 'finished';
+    else base = (start - now <= STARTING_SOON_MS) ? 'soon' : 'upcoming';
+    const shown = (count > 0 && (base === 'upcoming' || base === 'soon')) ? 'practice' : base;
+
     const prof = s.created_by_user_id ? organizersById.get(s.created_by_user_id) : null;
     const organizerName = (prof && prof.display_name) || s.created_by || 'unknown';
-    const meta = document.createElement('div');
-    meta.className = 'session-meta';
-    meta.innerHTML = `${esc(formatStart(s.scheduled_start))} · ${s.duration_minutes} min`
-      + ` · <span class="session-organizer">${avatarHtml(prof && prof.avatar_url, organizerName)}`
-      + `<span class="organizer-name">${esc(organizerName)}</span></span>`;
-    main.append(name, meta);
 
-    const right = document.createElement('div');
-    right.className = 'session-right';
-    const badge = document.createElement('span');
-    badge.className = 'badge ' + state;
-    badge.innerHTML = state === 'live'     ? '<span class="badge-dot"></span>Live'
-                    : state === 'upcoming' ? 'Upcoming'
-                    :                         'Finished';
-    const cd = document.createElement('div');
-    cd.className = 'countdown' + (state === 'live' ? ' live' : '');
-    cd.dataset.role = 'countdown';
-    const join = document.createElement('a');
-    join.className = 'btn-join';
-    join.href = '#/room/' + s.id;
-    join.textContent = state === 'finished' ? 'View' : 'Join';
-    right.append(badge, cd);
-    if(state === 'finished'){
+    // Right-hand action — names what the user actually does right now.
+    const actionMain = base === 'finished'
+      ? `<a class="btn-join sess-view" href="#/room/${s.id}">View results</a>`
+      : base === 'live'
+        ? `<a class="btn-join" href="#/room/${s.id}">Join live</a>`
+        : `<a class="btn-join" href="#/room/${s.id}">Enter room</a>`;
+
+    // Finished sessions show the group average (verified-only if the session was).
+    let avgHtml = '';
+    if(base === 'finished'){
       const rs = resultsBySession.get(s.id) || [];
       const arr = (s.verified_only ? rs.filter(r => r.verified) : rs).map(r => r.avg);
       if(arr.length){
         const avg = arr.reduce((x, y) => x + y, 0) / arr.length;
-        const avgEl = document.createElement('div');
-        avgEl.className = 'session-avg';
-        avgEl.innerHTML = `Avg <b>${avg.toFixed(1)}</b>`;
-        right.append(avgEl);
+        avgHtml = `<div class="session-avg">Avg <b>${avg.toFixed(1)}</b></div>`;
       }
     }
-    // Let visitors put an upcoming session into their own calendar (Google / .ics).
-    if(state === 'upcoming'){
-      right.append(createAddToCalendar({ ...s, _hostName: organizerName }));
-    }
-    right.append(join);
+    // Finished activity = racer count; live/upcoming = presence count.
+    const activity = base === 'finished'
+      ? ((resultsBySession.get(s.id) || []).length
+          ? `${(resultsBySession.get(s.id) || []).length} ${(resultsBySession.get(s.id) || []).length === 1 ? 'racer' : 'racers'}`
+          : '')
+      : activityText(base, count);
 
-    card.append(main, right);
+    const card = document.createElement('div');
+    card.className = 'session-card ' + shown;
+    card.dataset.start = start;
+    card.dataset.end = end;
+    card.dataset.id = s.id;
+    card.dataset.base = base;
+
+    // Past: compact "Hosted by X" meta. Upcoming/live: the host is a focal trust
+    // anchor — you're entering someone's room — so give them a prominent strip.
+    const isPract = !!(prof && prof.is_practitioner);
+    const nameRow = `<div class="session-name">${esc(s.name || 'Untitled session')}${s.verified_only ? '<span class="sess-verified">✓ Verified</span>' : ''}</div>`;
+    const leftHtml = base === 'finished'
+      ? `${nameRow}
+        <div class="session-meta">Hosted by <span class="session-organizer">${avatarHtml(prof && prof.avatar_url, organizerName)}<span class="organizer-name">${esc(organizerName)}</span></span> · ${esc(formatStart(s.scheduled_start))} · ${s.duration_minutes} min</div>`
+      : `${nameRow}
+        <div class="sess-host">
+          <span class="sess-host-av">${avatarHtml(prof && prof.avatar_url, organizerName)}</span>
+          <div class="sess-host-txt">
+            <div class="sess-host-line"><span class="sess-host-pre">${base === 'live' ? 'Live with' : 'Practice with'}</span> <span class="sess-host-name">${esc(organizerName)}</span></div>
+            ${isPract ? '<span class="sess-host-tag">✓ Spiritual Maker</span>' : ''}
+          </div>
+        </div>
+        <div class="session-meta sess-when">${esc(formatStart(s.scheduled_start))} · ${s.duration_minutes} min</div>`;
+
+    card.innerHTML = `
+      <div class="sess-left">${leftHtml}</div>
+      <div class="sess-mid">
+        ${pillHtml(shown)}
+        <span class="sess-activity">${esc(activity)}</span>
+      </div>
+      <div class="sess-right">
+        <div class="countdown${base === 'live' ? ' live' : ''}" data-role="countdown"></div>
+        ${avgHtml}
+        <div class="sess-actions">${actionMain}</div>
+      </div>`;
+
+    // "Remind me" (calendar) for anything not yet finished or live.
+    if(base !== 'live' && base !== 'finished'){
+      card.querySelector('.sess-actions').append(createAddToCalendar({ ...s, _hostName: organizerName }));
+    }
     return card;
+  }
+
+  // Sort rank for the Upcoming section: live → active practice room → soon → later.
+  function rank(s, st, now){
+    if(st === 'live') return 0;
+    if((roomCounts.get(s.id) || 0) > 0) return 1;
+    const start = new Date(s.scheduled_start).getTime();
+    if(start - now <= STARTING_SOON_MS) return 2;
+    return 3;
+  }
+
+  function renderSummary(){
+    const sumEl = $('sessSummary');
+    if(!sumEl) return;
+    const now = Date.now();
+    let live = 0, practice = 0, upcoming = 0, past = 0;
+    for(const s of sessions){
+      const st = sessionState(s, now);
+      if(st === 'live') live++;
+      else if(st === 'finished') past++;
+      else if((roomCounts.get(s.id) || 0) > 0) practice++;
+      else upcoming++;
+    }
+    sumEl.innerHTML = `
+      <div class="sess-sum${live ? ' on' : ''}"><div class="sess-sum-n">${live}</div><div class="sess-sum-l">Live now</div></div>
+      <div class="sess-sum${practice ? ' on cyan' : ''}"><div class="sess-sum-n">${practice}</div><div class="sess-sum-l">Practice rooms</div></div>
+      <div class="sess-sum"><div class="sess-sum-n">${upcoming}</div><div class="sess-sum-l">Upcoming</div></div>
+      <div class="sess-sum"><div class="sess-sum-n">${past}</div><div class="sess-sum-l">Past results</div></div>`;
   }
 
   function renderSessions(){
@@ -179,17 +245,16 @@ export function mount(el){
       const st = sessionState(s, now);
       if(st === 'finished') past.push({ s, st }); else upcoming.push({ s, st });
     }
-    // Upcoming: live first, then nearest start time.
     upcoming.sort((a, b) => {
-      if(a.st !== b.st) return a.st === 'live' ? -1 : 1;
+      const ra = rank(a.s, a.st, now), rb = rank(b.s, b.st, now);
+      if(ra !== rb) return ra - rb;
       return new Date(a.s.scheduled_start) - new Date(b.s.scheduled_start);
     });
-    // Past: most recent first.
     past.sort((a, b) => new Date(b.s.scheduled_start) - new Date(a.s.scheduled_start));
 
     upcomingEl.innerHTML = '';
     if(!upcoming.length){
-      upcomingEl.innerHTML = '<div class="empty">No sessions on the horizon — start one from the + button.</div>';
+      upcomingEl.innerHTML = '<div class="empty">No live or upcoming rooms right now — start one from the + button.</div>';
     } else {
       for(const { s, st } of upcoming) upcomingEl.appendChild(buildSessionCard(s, st, now));
     }
@@ -201,7 +266,46 @@ export function mount(el){
       for(const { s, st } of past) pastEl.appendChild(buildSessionCard(s, st, now));
     }
 
+    // Watch the room presence of every live/upcoming session (graceful: 0 → "Room open").
+    let watched = 0;
+    for(const { s } of upcoming){
+      if(watched++ >= MAX_WATCH) break;
+      watchRoom(s.id);
+    }
+
+    renderSummary();
     tickCountdowns();
+  }
+
+  // Update one card's activity + pill in place when its room presence changes —
+  // cheap, and avoids re-rendering (which would flicker the countdowns).
+  function applyRoomCount(id){
+    const card = el.querySelector(`.session-card[data-id="${CSS.escape(String(id))}"]`);
+    if(!card) return;
+    const base = card.dataset.base;
+    if(base === 'finished') return;
+    const count = roomCounts.get(id) || 0;
+    const act = card.querySelector('.sess-activity');
+    if(act) act.textContent = activityText(base, count);
+    if(base === 'live') return;   // official-live pill never becomes "practice"
+    const shown = count > 0 ? 'practice' : base;
+    card.className = 'session-card ' + shown;
+    const badge = card.querySelector('.badge');
+    if(badge) badge.outerHTML = pillHtml(shown);
+  }
+
+  // Observer subscription — we read the room's presence WITHOUT tracking, so the
+  // list page is never counted as a participant. (Per-session channel; fine at this
+  // scale. A server-side aggregate would be the move if sessions grow large.)
+  function watchRoom(id){
+    if(roomChannels.has(id)) return;
+    const ch = supabase.channel('room-' + id, { config: { presence: { key: 'sessions-lobby' } } });
+    ch.on('presence', { event: 'sync' }, () => {
+      roomCounts.set(id, Object.keys(ch.presenceState()).length);
+      applyRoomCount(id);
+      renderSummary();
+    }).subscribe();
+    roomChannels.set(id, ch);
   }
 
   function tickCountdowns(){
@@ -213,8 +317,9 @@ export function mount(el){
       const cd = card.querySelector('[data-role="countdown"]');
       const isLive = card.classList.contains('live');
       const isFinished = card.classList.contains('finished');
+      if(!cd) return;
       if(now < start){
-        cd.textContent = 'in ' + formatUntil(start - now);
+        cd.textContent = 'Official session in ' + formatUntil(start - now);
         if(isLive || isFinished) needsReorder = true;
       } else if(now <= end){
         cd.textContent = formatCountdown(end - now) + ' left';
@@ -238,5 +343,7 @@ export function mount(el){
   return () => {
     clearInterval(tickTimer);
     supabase.removeChannel(channel);
+    for(const ch of roomChannels.values()) supabase.removeChannel(ch);
+    roomChannels.clear();
   };
 }

@@ -21,9 +21,10 @@ function connectUrl(handle){
 }
 
 // One optional URL field (Social Links + Affiliate share this shape).
+// Layout (columns/gaps) comes from the surrounding grid, not inline margins.
 function urlInput(id, label, placeholder, value){
   return `
-    <div class="field full" style="margin-top:12px">
+    <div class="field full">
       <label for="${id}">${esc(label)}</label>
       <input id="${id}" type="url" inputmode="url" maxlength="200" value="${esc(value || '')}" placeholder="${esc(placeholder)}">
     </div>`;
@@ -54,10 +55,10 @@ const SOCIAL = [
 ];
 
 // One prefixed username field: the platform domain is a fixed label; the user
-// only types the part after it.
+// only types the part after it. NOT "full" — sits in the 2-column socials grid.
 function prefixInput(id, label, prefix, ph, value){
   return `
-    <div class="field full" style="margin-top:12px">
+    <div class="field">
       <label for="${id}">${esc(label)}</label>
       <div class="prefix-input">
         <span class="prefix-input-pre">${esc(prefix)}</span>
@@ -109,56 +110,63 @@ export function mount(el){
     <div class="panel">
       <div class="panel-head">
         <h2>Basic Profile</h2>
-        <label class="toggle" title="When on, others can see that you're online — and your live wheel values while you measure.">
-          <span class="toggle-label">Show on Live</span>
-          <input type="checkbox" id="pfLive" ${s.showOnLive ? 'checked' : ''}>
-          <span class="toggle-track"><span class="toggle-knob"></span></span>
-        </label>
       </div>
-      <div class="profile-row">
-        <div class="profile-avatar" id="pfAvatar">${avatarHtml(avatarUrl, s.displayName)}</div>
-        <div class="field" style="flex:1">
-          <label for="pfName">Display name</label>
-          <input id="pfName" maxlength="60" value="${esc(s.displayName || '')}" placeholder="Your name">
+      <div class="pf-basic">
+        <div class="pf-side">
+          <div class="profile-avatar" id="pfAvatar">${avatarHtml(avatarUrl, s.displayName)}</div>
+          <button type="button" class="pf-upload" id="pfUploadBtn">Upload photo</button>
+          <input id="pfFile" type="file" accept="image/*" hidden>
+          <span class="pf-upload-hint">JPG or PNG — resized automatically.</span>
+          <label class="toggle pf-live" title="When on, others can see that you're online — and your live wheel values while you measure.">
+            <input type="checkbox" id="pfLive" ${s.showOnLive ? 'checked' : ''}>
+            <span class="toggle-track"><span class="toggle-knob"></span></span>
+            <span class="toggle-label">Show on Live</span>
+          </label>
         </div>
-      </div>
-      <div class="field full" style="margin-top:14px">
-        <label for="pfFile">Profile photo</label>
-        <input id="pfFile" type="file" accept="image/*">
-      </div>
-      <div class="field full" style="margin-top:14px">
-        <label for="pfBio">Short bio</label>
-        <textarea id="pfBio" maxlength="400" rows="3" placeholder="A few words about you — shown on your connection page.">${esc(s.bio || '')}</textarea>
-      </div>
-      <div class="field full" style="margin-top:14px">
-        <label for="pfCountry">Country <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;font-size:11px">— auto-detected; shown as a flag on Live</span></label>
-        <select id="pfCountry">${countryOptions(s.country)}</select>
+        <div class="pf-main">
+          <div class="field">
+            <label for="pfName">Display name</label>
+            <input id="pfName" maxlength="60" value="${esc(s.displayName || '')}" placeholder="Your name">
+          </div>
+          <div class="field">
+            <label for="pfBio">Short bio</label>
+            <textarea id="pfBio" maxlength="400" rows="3" placeholder="A few words about you — shown on your connection page.">${esc(s.bio || '')}</textarea>
+          </div>
+          <div class="field">
+            <label for="pfCountry">Country <span class="pf-label-note">— auto-detected; shown as a flag on Live</span></label>
+            <select id="pfCountry">${countryOptions(s.country)}</select>
+          </div>
+        </div>
       </div>
     </div>
 
     <div class="panel">
       <h2>Social Links</h2>
       <p class="page-sub" style="margin:-8px 0 14px">All optional — just your username, we build the link.</p>
-      ${urlInput('pfWebsite', 'Website', 'https://yoursite.com', s.website)}
-      ${prefixInput('pfInsta', 'Instagram', 'instagram.com/', 'yourhandle', handleFromUrl(s.instagram, 'instagram.com/'))}
-      ${prefixInput('pfYt', 'YouTube', 'youtube.com/', '@yourchannel', handleFromUrl(s.youtube, 'youtube.com/'))}
-      ${prefixInput('pfTt', 'TikTok', 'tiktok.com/', '@yourhandle', handleFromUrl(s.tiktok, 'tiktok.com/'))}
-      ${prefixInput('pfFb', 'Facebook', 'facebook.com/', 'yourpage', handleFromUrl(s.facebook, 'facebook.com/'))}
+      <div class="pf-socials">
+        ${urlInput('pfWebsite', 'Website', 'https://yoursite.com', s.website)}
+        ${prefixInput('pfInsta', 'Instagram', 'instagram.com/', 'yourhandle', handleFromUrl(s.instagram, 'instagram.com/'))}
+        ${prefixInput('pfYt', 'YouTube', 'youtube.com/', '@yourchannel', handleFromUrl(s.youtube, 'youtube.com/'))}
+        ${prefixInput('pfTt', 'TikTok', 'tiktok.com/', '@yourhandle', handleFromUrl(s.tiktok, 'tiktok.com/'))}
+        ${prefixInput('pfFb', 'Facebook', 'facebook.com/', 'yourpage', handleFromUrl(s.facebook, 'facebook.com/'))}
+      </div>
     </div>
 
     <div class="panel">
       <h2>Promotion</h2>
       <p class="page-sub" style="margin:-8px 0 14px">Optional — used later to support your recommendations.</p>
-      ${urlInput('pfAff', 'Affiliate link', 'https://egelywheel.com/?ref=you', s.affiliateLink)}
-      <div class="field full" style="margin-top:12px">
-        <label for="pfCoupon">Coupon code</label>
-        <input id="pfCoupon" maxlength="40" value="${esc(s.couponCode || '')}" placeholder="e.g. SPIRIT10">
+      <div class="pf-promo">
+        ${urlInput('pfAff', 'Affiliate link', 'https://egelywheel.com/?ref=you', s.affiliateLink)}
+        <div class="field">
+          <label for="pfCoupon">Coupon code</label>
+          <input id="pfCoupon" maxlength="40" value="${esc(s.couponCode || '')}" placeholder="e.g. SPIRIT10">
+        </div>
       </div>
     </div>
 
-    <div class="form-actions">
-      <button id="pfSave">Save profile</button>
+    <div class="pf-savebar">
       <span class="form-msg" id="pfMsg"></span>
+      <button id="pfSave">Save profile</button>
     </div>
 
     <div class="panel">
@@ -166,12 +174,18 @@ export function mount(el){
       <p class="page-sub" style="margin:-8px 0 16px">Every saved measurement carries one of these.</p>
       <div class="verify-help">
         <div class="verify-row">
-          <span class="verify-mark"><span class="v-badge verified">✓</span></span>
-          <div><b>Verified</b> — your wheel turned smoothly and steadily, so the reading counts as genuine. Verified measurements unlock the verification badges and raise your Verified score.</div>
+          <span class="verify-mark"><span class="v-badge verified">✓ Verified</span></span>
+          <div class="verify-body">
+            <div class="verify-title">Verified measurement</div>
+            <p>Your wheel turned smoothly and steadily — the reading counts as genuine, unlocks the verification badges and raises your Verified score.</p>
+          </div>
         </div>
         <div class="verify-row">
           <span class="verify-mark"><span class="v-badge unverified">unverified</span></span>
-          <div><b>Irregular</b> — the value swung around too much to be a steady reading. It's still saved and counts toward your overall progress — it just doesn't earn the verification marks.</div>
+          <div class="verify-body">
+            <div class="verify-title">Unverified measurement</div>
+            <p>The value swung around too much to be a steady reading. It is still saved and counts toward your overall progress — it just does not earn the verification marks.</p>
+          </div>
         </div>
       </div>
     </div>
@@ -181,6 +195,9 @@ export function mount(el){
 
   const $ = id => el.querySelector('#' + id);
   const msg = $('pfMsg');
+
+  // Custom upload pill — the native input stays (hidden) and keeps its logic.
+  $('pfUploadBtn').addEventListener('click', () => $('pfFile').click());
 
   $('pfFile').addEventListener('change', async () => {
     const file = $('pfFile').files[0];

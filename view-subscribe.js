@@ -28,7 +28,7 @@ const PRODUCTS = {
   ewr: {
     name: 'EWR Access',
     tagline: 'Already own an Egely Wheel? Just add the digital layer.',
-    image: 'https://cdn.shopify.com/s/files/1/0946/2382/6306/files/EWR-App.jpg?v=1777372563',
+    image: 'assets/ewr-access-product-card.png',
     url: SHOP + '/products/ewr-subscription',
     price: '$49',
     priceNote: '1 year of access',
@@ -37,7 +37,6 @@ const PRODUCTS = {
       'Connect your Egely Wheel over Bluetooth',
       'Live group races & solo measurements',
       'History, achievements, XP & levels',
-      'Appear on the Live page with the community',
     ],
     cta: 'Get EWR Access',
   },
@@ -70,69 +69,99 @@ function styles(){
   el.textContent = `
   .sub-wrap{max-width:980px;margin:0 auto}
   .sub-hero{text-align:center;padding:18px 0 8px}
-  .sub-eyebrow{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:14px}
-  .sub-hero h1{font-family:'Montserrat',sans-serif;font-weight:600;font-size:40px;line-height:1.08;margin:0 0 14px;
-    background:linear-gradient(100deg,#fff 10%,#b9a7ff 55%,#7d9bff 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
-  .sub-hero p{color:var(--muted);font-size:16px;max-width:620px;margin:0 auto;line-height:1.55}
+  .sub-eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+    color:#5a6571;font-weight:700;margin-bottom:14px}
+  .sub-eyebrow::before{content:'';width:7px;height:7px;border-radius:50%;flex-shrink:0;
+    background:linear-gradient(135deg,#37dbff,#5230da)}
+  .sub-hero h1{font-family:'Montserrat',sans-serif;font-weight:600;font-size:40px;line-height:1.1;margin:0 0 14px;
+    color:#011624;letter-spacing:-0.5px}
+  .sub-hero p{color:#67737c;font-size:16px;max-width:620px;margin:0 auto;line-height:1.6}
   .sub-banner{display:flex;align-items:center;gap:10px;justify-content:center;margin:18px auto 0;max-width:560px;
-    background:rgba(60,201,138,.12);border:1px solid rgba(60,201,138,.4);color:#9be8c2;border-radius:12px;padding:12px 16px;font-size:14px}
+    background:rgba(32,178,107,.12);border:1px solid rgba(32,178,107,.35);color:#0f8a52;border-radius:12px;padding:12px 16px;font-size:14px;font-weight:600}
+  .sub-banner svg{width:18px;height:18px;flex-shrink:0}
+
+  /* Telemetry card — quiet "this is what measuring looks like" proof:
+     light card, zone-banded chart, violet line, current-vitality pill. */
+  .sub-band{position:relative;max-width:640px;height:132px;margin:26px auto 0;border-radius:16px;overflow:hidden;
+    background:#fff;border:1px solid #dfe3e6;box-shadow:0 10px 28px rgba(1,22,36,.08);
+    padding:14px 16px;box-sizing:border-box}
+  .sub-band-curve{position:absolute;left:16px;right:16px;top:14px;bottom:14px;
+    width:calc(100% - 32px);height:calc(100% - 28px);border-radius:8px}
+  .sub-band-pill{position:absolute;left:26px;top:22px;display:inline-flex;align-items:baseline;gap:7px;
+    background:#fff;border:1px solid #dfe3e6;border-radius:999px;padding:6px 13px;box-shadow:0 4px 14px rgba(1,22,36,.10)}
+  .sub-band-big{font-family:'Montserrat',sans-serif;font-size:20px;font-weight:600;color:#0f8a52;line-height:1;font-variant-numeric:tabular-nums}
+  .sub-band-cap{font-size:9px;letter-spacing:.12em;font-weight:700;color:#5a6571;text-transform:uppercase}
 
   .sub-cards{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:30px 0 8px}
-  .sub-card{position:relative;display:flex;flex-direction:column;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));
-    border:1px solid var(--panel-border);border-radius:18px;padding:22px;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
-  .sub-card:hover{transform:translateY(-4px);border-color:rgba(155,140,255,.5);box-shadow:0 18px 50px -28px rgba(82,48,218,.8)}
-  .sub-card.feature{border-color:rgba(155,140,255,.45);background:linear-gradient(180deg,rgba(82,48,218,.16),rgba(82,48,218,.04))}
+  .sub-card{position:relative;display:flex;flex-direction:column;background:#fff;
+    border:1px solid #dfe3e6;border-radius:18px;padding:22px;box-shadow:0 10px 28px rgba(1,22,36,.08);
+    transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
+  .sub-card:hover{transform:translateY(-4px);border-color:#5230da;box-shadow:0 18px 50px -20px rgba(82,48,218,.35)}
+  .sub-card.feature{border-color:rgba(82,48,218,.45);box-shadow:0 16px 40px rgba(82,48,218,.16)}
   .sub-ribbon{position:absolute;top:16px;right:16px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;
-    color:#fff;background:linear-gradient(90deg,var(--accent),#7d5cff);padding:5px 11px;border-radius:20px}
-  .sub-img{width:100%;height:190px;border-radius:12px;object-fit:cover;background:#0c0f24;margin-bottom:18px}
-  .sub-eyetag{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:6px}
-  .sub-name{font-family:'Montserrat',sans-serif;font-size:22px;font-weight:600;margin:0 0 6px}
-  .sub-tag{color:var(--muted);font-size:14px;line-height:1.5;margin:0 0 16px}
+    color:#fff;background:linear-gradient(135deg,#37dbff,#5230da);padding:5px 11px;border-radius:20px}
+  .sub-img{width:100%;height:190px;border-radius:12px;object-fit:contain;object-position:center;box-sizing:border-box;padding:12px;margin-bottom:18px;
+    background:#f7f8f8;border:1px solid #eef0f2}
+  .sub-eyetag{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#5230da;font-weight:700;margin-bottom:6px}
+  .sub-name{font-family:'Montserrat',sans-serif;font-size:22px;font-weight:600;margin:0 0 6px;color:#011624}
+  .sub-tag{color:#67737c;font-size:14px;line-height:1.5;margin:0 0 16px}
   .sub-feats{list-style:none;padding:0;margin:0 0 18px;display:flex;flex-direction:column;gap:10px}
-  .sub-feats li{display:flex;gap:10px;align-items:flex-start;font-size:14px;color:#e7e6f6;line-height:1.45}
-  .sub-feats svg{width:18px;height:18px;flex-shrink:0;color:#3CC98A;margin-top:1px}
+  .sub-feats li{display:flex;gap:10px;align-items:flex-start;font-size:14px;color:#011624;line-height:1.45}
+  .sub-feats svg{width:18px;height:18px;flex-shrink:0;color:#20b26b;margin-top:1px}
   .sub-price{display:flex;align-items:baseline;gap:8px;margin:auto 0 16px}
-  .sub-price b{font-family:'Montserrat',sans-serif;font-size:30px;font-weight:600;color:#fff}
-  .sub-price span{font-size:13px;color:var(--muted)}
+  .sub-price b{font-family:'Montserrat',sans-serif;font-size:30px;font-weight:600;color:#011624}
+  .sub-price span{font-size:13px;color:#67737c}
   .sub-cta{display:inline-flex;align-items:center;justify-content:center;gap:9px;width:100%;text-decoration:none;
-    font-family:'Inter',sans-serif;font-size:15px;font-weight:600;padding:14px 18px;border-radius:11px;transition:filter .15s ease,transform .15s ease}
+    font-family:'Inter',sans-serif;font-size:14px;font-weight:700;letter-spacing:0;
+    padding:14px 18px;border-radius:999px;transition:background .15s ease,color .15s ease,border-color .15s ease,transform .15s ease}
   .sub-cta svg{width:18px;height:18px}
-  .sub-cta.primary{background:linear-gradient(90deg,var(--accent),#7d5cff);color:#fff}
-  .sub-cta.secondary{background:rgba(255,255,255,.07);color:#fff;border:1px solid var(--panel-border)}
-  .sub-cta:hover{filter:brightness(1.08);transform:translateY(-1px)}
+  .sub-cta.primary{background:#401d91;color:#fff}
+  .sub-cta.primary:hover{background:#011624;transform:translateY(-1px)}
+  .sub-cta.secondary{background:#fff;color:#011624;border:1px solid #dfe3e6}
+  .sub-cta.secondary:hover{border-color:#5230da;color:#5230da;transform:translateY(-1px)}
 
-  .sub-h2{font-family:'Montserrat',sans-serif;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+  .sub-h2{font-family:'Montserrat',sans-serif;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#5a6571;
     text-align:center;margin:42px 0 18px;font-weight:600}
+  /* Quiet benefit tiles — the white elevated cards stay reserved for products. */
   .sub-unlocks{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-  .sub-tile{background:rgba(255,255,255,.035);border:1px solid var(--panel-border);border-radius:13px;padding:16px}
-  .sub-tile-h{font-family:'Montserrat',sans-serif;font-size:15px;font-weight:600;margin:0 0 4px;color:#fff}
-  .sub-tile-p{font-size:13px;color:var(--muted);line-height:1.45;margin:0}
+  .sub-tile{background:#f7f8f8;border-radius:13px;padding:16px}
+  .sub-tile-h{font-family:'Montserrat',sans-serif;font-size:15px;font-weight:600;margin:0 0 4px;color:#011624}
+  .sub-tile-h::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;
+    background:linear-gradient(135deg,#37dbff,#5230da);margin-right:8px;vertical-align:2px}
+  .sub-tile-p{font-size:13px;color:#67737c;line-height:1.45;margin:0}
 
   .sub-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-  .sub-step{background:rgba(255,255,255,.035);border:1px solid var(--panel-border);border-radius:14px;padding:18px}
+  .sub-step{background:#f7f8f8;border-radius:14px;padding:18px}
   .sub-step-n{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-    font-family:'Montserrat',sans-serif;font-weight:600;font-size:15px;color:#fff;background:linear-gradient(135deg,var(--blue),var(--accent));margin-bottom:12px}
-  .sub-step-h{font-family:'Montserrat',sans-serif;font-size:16px;font-weight:600;margin:0 0 6px}
-  .sub-step-p{font-size:13.5px;color:var(--muted);line-height:1.5;margin:0}
-  .sub-step-p b{color:#cdbcff;font-weight:600}
+    font-family:'Montserrat',sans-serif;font-weight:600;font-size:15px;color:#fff;background:linear-gradient(135deg,#37dbff,#5230da);margin-bottom:12px}
+  .sub-step-h{font-family:'Montserrat',sans-serif;font-size:16px;font-weight:600;margin:0 0 6px;color:#011624}
+  .sub-step-p{font-size:13.5px;color:#67737c;line-height:1.5;margin:0}
+  .sub-step-p b{color:#401d91;font-weight:700}
 
-  .sub-note{display:flex;gap:12px;align-items:flex-start;background:rgba(0,51,255,.10);border:1px solid rgba(125,155,255,.35);
-    border-radius:14px;padding:16px 18px;margin:24px 0;color:#cdd8ff;font-size:14px;line-height:1.55}
-  .sub-note b{color:#fff}
+  .sub-note{display:flex;gap:12px;align-items:flex-start;background:rgba(82,48,218,.08);
+    border-radius:14px;padding:16px 18px;margin:24px 0;color:#404b55;font-size:14px;line-height:1.55}
+  .sub-note b{color:#011624}
 
   .sub-foot{text-align:center;padding:18px 0 8px}
-  .sub-foot-h{font-family:'Montserrat',sans-serif;font-size:20px;font-weight:500;margin:0 0 6px}
-  .sub-foot-p{color:var(--muted);font-size:14px;margin:0 0 18px}
+  .sub-foot-h{font-family:'Montserrat',sans-serif;font-size:20px;font-weight:600;margin:0 0 6px;color:#011624}
+  .sub-foot-p{color:#67737c;font-size:14px;margin:0 0 18px}
   .sub-foot-actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-  .sub-link{display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-size:14px;font-weight:600;
-    padding:12px 20px;border-radius:11px;background:rgba(255,255,255,.07);border:1px solid var(--panel-border);color:#fff}
-  .sub-link.ghost{background:transparent}
-  .sub-link:hover{filter:brightness(1.12)}
-  .sub-login{text-align:center;margin-top:22px;color:var(--muted);font-size:13.5px}
-  .sub-login a{color:#cdbcff;font-weight:600;text-decoration:none}
+  .sub-link{display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-size:14px;font-weight:700;
+    padding:12px 22px;border-radius:999px;
+    background:#fff;border:1px solid #dfe3e6;color:#011624;transition:border-color .15s,color .15s}
+  .sub-link svg{width:16px;height:16px}
+  .sub-link:hover{border-color:#5230da;color:#5230da}
+  .sub-link.ghost{background:transparent;border-color:transparent;color:#67737c}
+  .sub-link.ghost:hover{color:#5230da}
+  .sub-login{text-align:center;margin-top:22px;color:#67737c;font-size:13.5px}
+  .sub-login a{color:#5230da;font-weight:600;text-decoration:none}
 
   @media (max-width:760px){
-    .sub-hero h1{font-size:30px}
+    .sub-hero{padding:10px 0 4px}
+    .sub-hero h1{font-size:28px;margin-bottom:10px}
+    .sub-hero p{font-size:15px}
+    .sub-band{height:108px}
+    .sub-band-pill{left:22px;top:18px}
     .sub-cards{grid-template-columns:1fr}
     .sub-unlocks{grid-template-columns:1fr 1fr}
     .sub-steps{grid-template-columns:1fr}
@@ -148,7 +177,7 @@ function card(p, recommended){
   <div class="sub-card${recommended ? ' feature' : ''}">
     ${p.badge ? `<span class="sub-ribbon">${esc(p.badge)}</span>` : ''}
     ${img}
-    <div class="sub-eyetag">${recommended ? 'Start here' : 'Already have a wheel?'}</div>
+    <div class="sub-eyetag">${recommended ? 'Need the wheel?' : 'Already have a wheel?'}</div>
     <div class="sub-name">${esc(p.name)}</div>
     <p class="sub-tag">${esc(p.tagline)}</p>
     <ul class="sub-feats">
@@ -171,12 +200,24 @@ export function mount(el){
   el.innerHTML = `
   <div class="sub-wrap">
     <div class="sub-hero">
-      <div class="sub-eyebrow">Watching is free · Measuring needs a wheel</div>
+      <div class="sub-eyebrow">Watching is free · Measuring unlocks with a wheel</div>
       <h1>Bring your own vitality<br>into EWR Live</h1>
       <p>Exploring sessions, the leaderboard and the Live wall is always free. To connect your own
          Egely Wheel over Bluetooth and record your vitality, you need an Egely Wheel and EWR access.
          Here is how to get set up.</p>
       ${banner}
+      <div class="sub-band" aria-hidden="true">
+        <svg class="sub-band-curve" viewBox="0 0 600 100" preserveAspectRatio="none">
+          <rect x="0" y="0" width="600" height="46" fill="rgba(32,178,107,.10)"/>
+          <rect x="0" y="46" width="600" height="27" fill="rgba(245,183,0,.12)"/>
+          <rect x="0" y="73" width="600" height="27" fill="rgba(240,68,56,.09)"/>
+          <path d="M0,88 C50,85 80,78 130,76 C180,74 210,56 270,50 C330,44 360,52 420,40 C480,30 530,26 600,22"
+            fill="none" stroke="#5230da" stroke-width="3" stroke-linecap="round"/>
+          <circle cx="600" cy="22" r="6.5" fill="#ffffff"/>
+          <circle cx="600" cy="22" r="4" fill="#20b26b"/>
+        </svg>
+        <span class="sub-band-pill"><span class="sub-band-big">17</span><span class="sub-band-cap">Live vitality</span></span>
+      </div>
     </div>
 
     <div class="sub-cards">
