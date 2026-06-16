@@ -138,7 +138,14 @@ a{color:var(--ewr-accent)}
   box-shadow:var(--ewr-shadow-card);
 }
 .fab-item{color:var(--ewr-text)}
-.fab-item:hover{background:var(--ewr-surface-muted)}
+.fab-item:hover{background:var(--ewr-accent-tint)}
+.fab-label{color:var(--ewr-text)}
+/* Action icons → a soft rounded tile + custom 2-colour glyph (navy + accent). */
+.fab-icon{width:32px;height:32px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;
+  background:var(--ewr-surface-muted);color:var(--ewr-text);flex-shrink:0;
+  transition:background .15s,transform .15s}
+.fab-icon svg{width:20px;height:20px;display:block}
+.fab-item:hover .fab-icon{background:#fff;transform:translateX(1px)}
 
 /* ---- Shared view primitives ---------------------------------------------- */
 .page-title{font-family:'Montserrat',sans-serif;font-weight:600;letter-spacing:-0.5px;color:var(--ewr-text)}
