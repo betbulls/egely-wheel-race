@@ -164,6 +164,18 @@ export function mount(el){
         counts.get(r.session_id).add(r.user_id);
       }
       for(const s of upcoming) s._participants = (counts.get(s.id) || new Set()).size;
+
+      // Host face + name for each card — the host is a trust/community anchor.
+      const hostIds = [...new Set(upcoming.map(s => s.created_by_user_id).filter(Boolean))];
+      if(hostIds.length){
+        const { data: hp } = await supabase.from('profiles')
+          .select('id, display_name, avatar_url').in('id', hostIds);
+        const hostById = new Map((hp || []).map(p => [p.id, p]));
+        for(const s of upcoming){
+          const p = s.created_by_user_id ? hostById.get(s.created_by_user_id) : null;
+          s._host = { name: (p && p.display_name) || s.created_by || 'Host', avatar: p && p.avatar_url };
+        }
+      }
     }
 
     // ---- "Once earned, always shown" ----------------------------------------
@@ -372,6 +384,12 @@ function formatUntil(ms){
   return 'less than a minute';
 }
 
+function hsAvatar(host){
+  const name = (host && host.name) || 'Host';
+  if(host && host.avatar) return `<img class="sess-avatar" src="${esc(host.avatar)}" alt="">`;
+  return `<span class="sess-avatar sess-avatar-initial">${esc(name.charAt(0).toUpperCase())}</span>`;
+}
+
 function renderUpcoming(sessions){
   if(!sessions.length) return '';
   const now = Date.now();
@@ -384,7 +402,7 @@ function renderUpcoming(sessions){
         const isLive = now >= start && now <= end;
         const time  = isLive ? '<span class="hs-live">● Live now</span>'
                              : `in ${esc(formatUntil(start - now))}`;
-        const host  = s.created_by || 'Host';
+        const host  = s._host || { name: s.created_by || 'Host', avatar: null };
         const verified = s.verified_only ? ' <span class="sess-verified">✓ Verified</span>' : '';
         const partsTxt = s._participants > 0 ? ` · ${s._participants} measuring` : '';
         return `
@@ -393,7 +411,13 @@ function renderUpcoming(sessions){
               <div class="hs-name">${esc(s.name || 'Untitled session')}${verified}</div>
               <span class="hs-action">${isLive ? 'Join' : 'View'} →</span>
             </div>
-            <div class="hs-meta">Hosted by ${esc(host)} · ${time}${partsTxt}</div>
+            <div class="hs-host">
+              <span class="hs-host-av">${hsAvatar(host)}</span>
+              <div class="hs-host-info">
+                <span class="hs-host-name">Hosted by <b>${esc(host.name)}</b></span>
+                <span class="hs-host-when">${time}${partsTxt}</span>
+              </div>
+            </div>
           </a>`;
       }).join('')}
     </div>`;

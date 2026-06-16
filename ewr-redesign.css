@@ -1481,3 +1481,13 @@ a.xp-topic:hover{border-color:var(--ewr-accent)}
   .room-actions .cal-btn{width:100%;justify-content:center}
   .room-actions .cal-btn span{display:inline}   /* labels fit on the full-width room pills */
 }
+
+/* Home "Upcoming Sessions" teaser — host face + name (mirrors the Sessions page,
+   lighter: just the avatar, name and time). */
+.hs-host{display:flex;align-items:center;gap:10px;margin-top:9px}
+.hs-host-av{flex-shrink:0;display:inline-flex}
+.hs-host-av .sess-avatar{width:30px;height:30px;font-size:13px}
+.hs-host-info{display:flex;flex-direction:column;min-width:0}
+.hs-host-name{font-size:13px;color:var(--ewr-text-muted)}
+.hs-host-name b{color:var(--ewr-text);font-weight:600}
+.hs-host-when{font-size:12px;color:var(--ewr-text-soft);margin-top:1px}
