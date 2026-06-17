@@ -17,6 +17,7 @@ import { mount as mountJourney } from './view-journey.js';
 import { mount as mountSubscribe } from './view-subscribe.js';
 import { mount as mountWelcome } from './view-welcome.js';
 import { mount as mountAdmin } from './view-admin.js';
+import { mount as mountHowToConnect } from './view-how-to-connect.js';
 import * as presence from './presence.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
@@ -56,6 +57,7 @@ function router(){
   else if(path === '/me') setView(mountMeasurements);
   else if(path === '/profile') setView(mountProfile);
   else if(path === '/admin') setView(mountAdmin);
+  else if(path === '/how-to-connect') setView(mountHowToConnect);
   else if(path === '/clients') setView(mountClients, param);
   else if(path === '/leaderboard') setView(mountLeaderboard);
   else if(path === '/connect') setView(mountConnect, param);
@@ -143,6 +145,17 @@ function mountLogin(el){
 const bleBar = document.getElementById('bleBar');
 const bleText = document.getElementById('bleText');
 const bleBtn = document.getElementById('bleBtn');
+
+// On browsers without Web Bluetooth (notably iOS Safari), point users to the connect
+// guide right beside the status bar. Display-only — the BLE flow itself is untouched.
+if(bleBar && !navigator.bluetooth){
+  bleBar.classList.add('bt-unsupported');
+  const help = document.createElement('a');
+  help.className = 'ble-help';
+  help.href = '#/how-to-connect';
+  help.textContent = 'How to connect?';
+  bleBar.appendChild(help);
+}
 
 function statusText(s){
   if(s.status === 'connected') return 'Egely Wheel connected' + (s.deviceName ? ` · ${s.deviceName}` : '');
@@ -241,6 +254,7 @@ function renderAuthArea(){
         ${clientsItem}
         <a href="#/profile" data-route="/profile">Profile</a>
         ${adminItem}
+        <a href="#/how-to-connect" data-route="/how-to-connect">How to connect</a>
         <hr>
         <a class="account-ext" href="https://egelywheel.com">Visit EgelyWheel.com ↗</a>
         <hr>

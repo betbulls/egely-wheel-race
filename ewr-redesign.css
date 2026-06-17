@@ -86,7 +86,14 @@ a{color:var(--ewr-accent)}
 .account-menu a:hover,
 .account-menu button:hover{background:var(--ewr-surface-muted)}
 .account-menu hr{border-top:1px solid var(--ewr-border)}
-.account-trigger:hover{background:var(--ewr-surface-muted)}
+/* Neutralise the brand.css global button styling (accent bg + purple hover) leaking
+   into the identity pill — keep it transparent/grey with readable text in every state. */
+.account-trigger,
+.account-trigger:hover,
+.account-trigger:focus,
+.account-trigger[aria-expanded="true"]{background:transparent;color:var(--ewr-text)}
+.account-trigger:hover,
+.account-trigger[aria-expanded="true"]{background:var(--ewr-surface-muted)}
 .account-chevron,
 .auth-email{color:var(--ewr-text-muted)}
 
@@ -456,6 +463,9 @@ input[type=file]{color:var(--ewr-text-muted)}
   color:#fff;background:var(--ewr-accent-strong);border-radius:var(--ewr-radius-pill);padding:9px 16px;
   text-decoration:none;transition:background .15s}
 .lbm-invite:hover{background:var(--ewr-text)}
+/* "How to connect?" pointer shown in the status bar on browsers without Web Bluetooth. */
+.ble-help{font-size:11px;font-weight:600;color:var(--ewr-accent-strong);text-decoration:none;white-space:nowrap;margin-left:2px}
+.ble-help:hover{text-decoration:underline}
 
 /* Status pills — light variants (ONLINE comes from the view's injected styles). */
 .live-pill.connected{background:rgba(0,51,255,0.10);color:#0033ff}
