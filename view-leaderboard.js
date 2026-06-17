@@ -62,7 +62,7 @@ function renderRare(badges){
 function statusTitle(u){
   const has = id => u.badgesAll.some(b => b.id === id);
 
-  if(u.isPractitioner){
+  if(u.isApprovedMaker){
     if(has('practitioner-clients-10')) return 'Senior Guide';
     if(has('practitioner-clients-5'))  return 'Spiritual Maker Guide';
     if(has('practitioner-mentor-3'))   return 'Verified Spiritual Maker';
@@ -116,7 +116,7 @@ function renderPodium(podium, profMap, showActivity){
     <div class="lb-podium">
       ${podium.map((u, i) => {
         const p = profMap.get(u.user_id) || {};
-        const isP = !!p.is_practitioner;
+        const isP = !!p.approved_maker;
         return `
           <div class="lb-podium-card place-${i + 1}" data-user-id="${esc(u.user_id)}">
             <div class="lb-medal">${medals[i]}</div>
@@ -185,7 +185,7 @@ function renderList(rest, profMap, myId, showActivity){
         const rank = i + 4;
         const p = profMap.get(u.user_id) || {};
         const mine = u.user_id === myId;
-        const isP = !!p.is_practitioner;
+        const isP = !!p.approved_maker;
         return `
           <div class="lb-row${mine ? ' mine' : ''}" data-user-id="${esc(u.user_id)}">
             <div class="lb-row-rank">#${rank}</div>
@@ -238,7 +238,7 @@ function renderEmpty(period, journeyCount){
 
 // ---- Mini-profile popup ---------------------------------------------------
 function openMiniProfile(u, profile){
-  const isP = !!(profile && profile.is_practitioner);
+  const isP = !!(profile && profile.approved_maker);
   const name = (profile && profile.display_name) || 'Player';
   const lvl = levelFromXP(u.xpAll);
   const verifiedRatio = u.sessionCount > 0
@@ -280,6 +280,9 @@ function openMiniProfile(u, profile){
             <div class="lbm-lbl">${esc(s.label)}</div>
           </div>`).join('')}
       </div>
+      ${(isP && profile && profile.practitioner_handle)
+        ? `<a class="lbm-invite" href="#/connect/${esc(profile.practitioner_handle)}">View invite page ↗</a>`
+        : ''}
     </div>`;
 
   document.body.appendChild(backdrop);
@@ -295,6 +298,7 @@ function openMiniProfile(u, profile){
   document.addEventListener('keydown', onEsc);
   backdrop.addEventListener('click', (e) => {
     if(e.target === backdrop || e.target.closest('.lb-modal-close')) close();
+    else if(e.target.closest('.lbm-invite')) close();   // let the link navigate, then dismiss the modal
   });
 
   return close;
@@ -365,7 +369,7 @@ export function mount(el){
         u = { user_id: id, xpAll: 0, xpPeriod: 0, badgesAll: [],
               sessionCount: 0, hostedCount: 0,
               bestSessAvg: 0, bestSessPeak: 0, verifiedCount: 0,
-              isPractitioner: false, activeThisWeek: false };
+              isApprovedMaker: false, activeThisWeek: false };
         userMap.set(id, u);
       }
       return u;
@@ -426,11 +430,11 @@ export function mount(el){
     const ids = new Set(top.map(u => u.user_id));
     if(myId) ids.add(myId);
     const { data: profs } = await supabase
-      .from('profiles').select('id, display_name, avatar_url, is_practitioner').in('id', [...ids]);
+      .from('profiles').select('id, display_name, avatar_url, approved_maker, practitioner_handle').in('id', [...ids]);
     const profMap = new Map((profs || []).map(p => [p.id, p]));
     for(const u of userMap.values()){
       const p = profMap.get(u.user_id);
-      u.isPractitioner = !!(p && p.is_practitioner);
+      u.isApprovedMaker = !!(p && p.approved_maker);
     }
 
     const podium = top.slice(0, 3);

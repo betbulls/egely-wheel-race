@@ -50,7 +50,7 @@ export function mount(el, handle){
         </div>`;
       return;
     }
-    const name = pr.display_name || 'A Spiritual Maker';
+    const name = pr.display_name || 'A member';
     const now = Date.now();
 
     // ---- Public stats --------------------------------------------------------
@@ -207,7 +207,7 @@ function renderHero(pr, name, socials, connectedMembers){
   return `
     <section class="cn-hero">
       <div class="cn-hero-avatar">${avatarHtml(pr.avatar_url, name)}</div>
-      <div class="cn-badge">✦ Spiritual Maker</div>
+      ${pr.approved_maker ? '<div class="cn-badge">✦ Spiritual Maker</div>' : ''}
       <h1 class="cn-name">${esc(name)}</h1>
       ${pr.bio ? `<p class="cn-intro">${esc(pr.bio)}</p>` : ''}
       ${socialHtml}

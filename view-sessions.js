@@ -71,7 +71,7 @@ export function mount(el){
     organizersById = new Map();
     if(organizerIds.length){
       const { data: profs } = await supabase
-        .from('profiles').select('id, display_name, avatar_url, is_practitioner').in('id', organizerIds);
+        .from('profiles').select('id, display_name, avatar_url, approved_maker, practitioner_handle').in('id', organizerIds);
       for(const p of (profs || [])) organizersById.set(p.id, p);
     }
     renderSessions();
@@ -171,7 +171,7 @@ export function mount(el){
 
     // Past: compact "Hosted by X" meta. Upcoming/live: the host is a focal trust
     // anchor — you're entering someone's room — so give them a prominent strip.
-    const isPract = !!(prof && prof.is_practitioner);
+    const isPract = !!(prof && prof.approved_maker);
     const nameRow = `<div class="session-name">${esc(s.name || 'Untitled session')}${s.verified_only ? '<span class="sess-verified">✓ Verified</span>' : ''}</div>`;
     const leftHtml = base === 'finished'
       ? `${nameRow}
@@ -180,7 +180,7 @@ export function mount(el){
         <div class="sess-host">
           <span class="sess-host-av">${avatarHtml(prof && prof.avatar_url, organizerName)}</span>
           <div class="sess-host-txt">
-            <div class="sess-host-line"><span class="sess-host-pre">${base === 'live' ? 'Live with' : 'Practice with'}</span> <span class="sess-host-name">${esc(organizerName)}</span></div>
+            <div class="sess-host-line"><span class="sess-host-pre">${base === 'live' ? 'Live with' : 'Practice with'}</span> <span class="sess-host-name">${(isPract && prof && prof.practitioner_handle) ? `<a class="maker-name-link" href="#/connect/${esc(prof.practitioner_handle)}">${esc(organizerName)}</a>` : esc(organizerName)}</span></div>
             ${isPract ? '<span class="sess-host-tag">✓ Spiritual Maker</span>' : ''}
           </div>
         </div>

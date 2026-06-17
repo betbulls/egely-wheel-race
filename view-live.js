@@ -106,8 +106,9 @@ export function mount(el){
   // Merge the full roster with the live presence list → everyone, with a status.
   function buildPeople(presenceList){
     const byUid = new Map();
-    for(const pr of roster) byUid.set(pr.uid, { uid: pr.uid, name: pr.name, avatar: pr.avatar, country: pr.country, status: 'offline' });
-    for(const p of presenceList) byUid.set(p.uid, { uid: p.uid, name: p.name, avatar: p.avatar, country: p.country, status: p.status }); // presence wins (fresher + online)
+    const rosterByUid = new Map(roster.map(pr => [pr.uid, pr]));   // approved_maker + handle are DB truth (roster), not carried by presence
+    for(const pr of roster) byUid.set(pr.uid, { uid: pr.uid, name: pr.name, avatar: pr.avatar, country: pr.country, maker: pr.maker, handle: pr.handle, status: 'offline' });
+    for(const p of presenceList){ const r = rosterByUid.get(p.uid); byUid.set(p.uid, { uid: p.uid, name: p.name, avatar: p.avatar, country: p.country, maker: !!(r && r.maker), handle: r ? r.handle : null, status: p.status }); } // presence wins (fresher + online)
     return [...byUid.values()];
   }
 
@@ -144,7 +145,7 @@ export function mount(el){
           <div class="live-row">
             <div class="live-avatar">${avatarHtml(p.avatar, p.name)}</div>
             <div class="live-main">
-              <div class="live-name">${esc(p.name || 'Explorer')}${flagHtml(p.country)}${isMe ? ' <span class="live-you">You</span>' : ''}</div>
+              <div class="live-name">${(p.maker && p.handle) ? `<a class="maker-name-link" href="#/connect/${esc(p.handle)}">${esc(p.name || 'Explorer')}</a>` : esc(p.name || 'Explorer')}${flagHtml(p.country)}${p.maker ? '<span class="live-maker">✓ Spiritual Maker</span>' : ''}${isMe ? ' <span class="live-you">You</span>' : ''}</div>
               <div class="live-status"><span class="live-pill ${st.cls}">${esc(st.label)}</span></div>
             </div>
             ${value}
@@ -212,9 +213,9 @@ export function mount(el){
 
   // Load the full roster (everyone who hasn't hidden themselves), then render.
   (async () => {
-    let { data, error } = await supabase.from('profiles').select('id, display_name, avatar_url, country').neq('show_on_live', false);
-    if(error){ ({ data } = await supabase.from('profiles').select('id, display_name, avatar_url').neq('show_on_live', false)); }   // country column not present yet → still works
-    roster = (data || []).map(p => ({ uid: p.id, name: p.display_name || 'Explorer', avatar: p.avatar_url, country: p.country || null }));
+    let { data, error } = await supabase.from('profiles').select('id, display_name, avatar_url, country, approved_maker, practitioner_handle').neq('show_on_live', false);
+    if(error){ ({ data } = await supabase.from('profiles').select('id, display_name, avatar_url').neq('show_on_live', false)); }   // older columns not present yet → still works
+    roster = (data || []).map(p => ({ uid: p.id, name: p.display_name || 'Explorer', avatar: p.avatar_url, country: p.country || null, maker: !!p.approved_maker, handle: p.practitioner_handle || null }));
     render(presence.getList());
   })();
 

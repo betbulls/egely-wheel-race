@@ -1343,17 +1343,24 @@
 <body>
 
 <header class="app-header">
-  <div class="wordmark">EWR Live</div>
+  <div class="brand">
+    <span class="wordmark">EWR Live</span>
+  </div>
   <nav class="nav">
     <a href="#/home" data-route="/home">Home</a>
-    <a href="#/live" data-route="/live">Live</a>
+    <a href="#/live" data-route="/live">Live<span class="nav-live" aria-hidden="true"><svg viewBox="0 0 16 16"><circle class="nl-ring" cx="8" cy="8" r="6" fill="none" stroke="#20b26b" stroke-width="1.4"/><circle cx="8" cy="8" r="2.3" fill="#20b26b"/></svg></span></a>
     <a href="#/experiments" data-route="/experiments">Experiments</a>
-    <a href="#/sessions" data-route="/sessions" class="nav-secondary">Sessions</a>
-    <a href="#/leaderboard" data-route="/leaderboard" class="nav-secondary">Global Ranking</a>
-    <button type="button" class="nav-more" id="navMore" aria-label="More" aria-haspopup="true" aria-expanded="false">⋯</button>
+    <a href="#/sessions" data-route="/sessions">Sessions</a>
+    <a href="#/leaderboard" data-route="/leaderboard">Ranking</a>
+    <button type="button" class="nav-more" id="navMore" aria-label="Menu" aria-haspopup="true" aria-expanded="false">☰</button>
     <div class="nav-more-menu" id="navMoreMenu" hidden>
+      <a href="#/home" data-route="/home">Home</a>
+      <a href="#/live" data-route="/live">Live<span class="nav-live" aria-hidden="true"><svg viewBox="0 0 16 16"><circle class="nl-ring" cx="8" cy="8" r="6" fill="none" stroke="#20b26b" stroke-width="1.4"/><circle cx="8" cy="8" r="2.3" fill="#20b26b"/></svg></span></a>
+      <a href="#/experiments" data-route="/experiments">Experiments</a>
       <a href="#/sessions" data-route="/sessions">Sessions</a>
-      <a href="#/leaderboard" data-route="/leaderboard">Global Ranking</a>
+      <a href="#/leaderboard" data-route="/leaderboard">Ranking</a>
+      <hr class="nav-more-sep">
+      <a class="nav-more-ext" href="https://egelywheel.com">Visit EgelyWheel.com <span class="ext-ar" aria-hidden="true">↗</span></a>
     </div>
   </nav>
   <div class="ble-bar idle" id="bleBar">

@@ -206,6 +206,7 @@ export function mount(el, sessionId){
   `;
 
   const $ = id => el.querySelector('#' + id);
+  let hostHandle = null, hostIsMaker = false;   // approved-maker host → racer card links to their invite page
 
   // ---- Load session ---------------------------------------------------------
   (async () => {
@@ -234,6 +235,13 @@ export function mount(el, sessionId){
       actionsEl.appendChild(createShareButton(session));
     }
     if(phaseNow === 'pre'){ const note = $('roomPracticeNote'); if(note) note.hidden = false; }
+
+    // Approved-maker host → their racer card links to their invite (connect) page.
+    if(session.created_by_user_id){
+      const { data: hp } = await supabase.from('profiles')
+        .select('practitioner_handle, approved_maker').eq('id', session.created_by_user_id).maybeSingle();
+      if(hp){ hostHandle = hp.practitioner_handle || null; hostIsMaker = !!hp.approved_maker; }
+    }
 
     if(Date.now() > endMs) renderResults();
     else start();
@@ -323,7 +331,7 @@ export function mount(el, sessionId){
 
   function trackPresence(){
     if(!channel) return;
-    channel.track({ name: myName, ble: bleConnected, country: auth.getState().country || null })
+    channel.track({ name: myName, ble: bleConnected, country: auth.getState().country || null, avatar: auth.getState().avatarUrl || null })
       .catch(() => {});   // best-effort; the roster also works off broadcasts
   }
 
@@ -332,14 +340,14 @@ export function mount(el, sessionId){
     const state = channel ? channel.presenceState() : {};
     for(const metas of Object.values(state)){
       const m = metas[metas.length - 1];   // latest track wins per key
-      if(m && m.name) present.set(m.name, { ble: !!m.ble, country: m.country || null });
+      if(m && m.name) present.set(m.name, { ble: !!m.ble, country: m.country || null, avatar: m.avatar || null });
     }
     // Presence-only participants join the roster; entries that never produced
     // wheel data leave it when their presence drops (broadcasters stay).
     for(const [name, p] of present){
       if(!racers.has(name)){
         racers.set(name, { name, led: 0, avg: 0, count: 0, peak: 0, host: isHostName(name),
-          verified: true, country: p.country, history: [], el: null, hasData: false });
+          verified: true, country: p.country, avatar: p.avatar || null, history: [], el: null, hasData: false });
       }
     }
     for(const [name, r] of racers){
@@ -350,13 +358,13 @@ export function mount(el, sessionId){
 
   function applyTick(p){
     if(!p || !p.name) return;
-    upsertRacer(p.name, { led: p.led, avg: p.avg, count: p.count, peak: p.peak, host: isHostName(p.name), verified: p.verified, country: p.country });
+    upsertRacer(p.name, { led: p.led, avg: p.avg, count: p.count, peak: p.peak, host: isHostName(p.name), verified: p.verified, country: p.country, avatar: p.avatar });
   }
 
-  function upsertRacer(name, { led, avg, count, peak, host, verified, country }){
+  function upsertRacer(name, { led, avg, count, peak, host, verified, country, avatar }){
     let r = racers.get(name);
     if(!r){
-      r = { name, led: 0, avg: 0, count: 0, peak: 0, host, verified: true, country: null, history: [], el: null };
+      r = { name, led: 0, avg: 0, count: 0, peak: 0, host, verified: true, country: null, avatar: null, history: [], el: null };
       racers.set(name, r);
     }
     r.hasData = true;   // produced wheel data (vs. presence-only participant)
@@ -364,6 +372,7 @@ export function mount(el, sessionId){
     r.peak = Math.max(r.peak || 0, peak || 0);
     if(verified !== undefined) r.verified = verified;
     if(country) r.country = country;
+    if(avatar) r.avatar = avatar;
     // t may be NEGATIVE before the scheduled window — the pre-session practice
     // room shows those points on a rolling chart; official renderers filter t>=0.
     const t = Date.now() - startMs;
@@ -394,10 +403,11 @@ export function mount(el, sessionId){
     const avg = slots > 0 ? mySum / slots : 0;
     const verified = !cheatDetected;
     const myCountry = auth.getState().country || null;
-    upsertRacer(myName, { led: myLed, avg, count: myCount, peak: myPeak, host: isHostName(myName), verified, country: myCountry });
+    const myAvatar = auth.getState().avatarUrl || null;
+    upsertRacer(myName, { led: myLed, avg, count: myCount, peak: myPeak, host: isHostName(myName), verified, country: myCountry, avatar: myAvatar });
     if(channel){
       channel.send({ type: 'broadcast', event: 'tick',
-        payload: { name: myName, led: myLed, avg, count: myCount, peak: myPeak, verified, country: myCountry } });
+        payload: { name: myName, led: myLed, avg, count: myCount, peak: myPeak, verified, country: myCountry, avatar: myAvatar } });
     }
   }
 
@@ -493,7 +503,14 @@ export function mount(el, sessionId){
 
     const avatar = document.createElement('div');
     avatar.className = 'avatar';
-    avatar.textContent = r.name.charAt(0).toUpperCase();
+    if(r.avatar){
+      const img = document.createElement('img');
+      img.src = r.avatar; img.alt = '';
+      img.addEventListener('error', () => { avatar.textContent = r.name.charAt(0).toUpperCase(); });
+      avatar.appendChild(img);
+    } else {
+      avatar.textContent = r.name.charAt(0).toUpperCase();
+    }
 
     const mid = document.createElement('div');
     mid.className = 'racer-mid';
@@ -501,7 +518,15 @@ export function mount(el, sessionId){
     nameRow.className = 'racer-name-row';
     const name = document.createElement('div');
     name.className = 'racer-name';
-    name.textContent = r.name;
+    if(r.host && hostIsMaker && hostHandle){
+      const a = document.createElement('a');
+      a.className = 'maker-name-link';
+      a.href = '#/connect/' + hostHandle;
+      a.textContent = r.name;
+      name.appendChild(a);
+    } else {
+      name.textContent = r.name;
+    }
     nameRow.append(name);
     const flag = flagNode(r.country); if(flag) nameRow.append(flag);
     if(r.host){

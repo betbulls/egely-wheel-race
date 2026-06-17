@@ -16,6 +16,7 @@ import { mount as mountLive } from './view-live.js';
 import { mount as mountJourney } from './view-journey.js';
 import { mount as mountSubscribe } from './view-subscribe.js';
 import { mount as mountWelcome } from './view-welcome.js';
+import { mount as mountAdmin } from './view-admin.js';
 import * as presence from './presence.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
@@ -54,6 +55,7 @@ function router(){
   else if(path === '/m') setView(mountMeasurementDetail, param);
   else if(path === '/me') setView(mountMeasurements);
   else if(path === '/profile') setView(mountProfile);
+  else if(path === '/admin') setView(mountAdmin);
   else if(path === '/clients') setView(mountClients, param);
   else if(path === '/leaderboard') setView(mountLeaderboard);
   else if(path === '/connect') setView(mountConnect, param);
@@ -224,6 +226,9 @@ function renderAuthArea(){
     const clientsItem = a.isPractitioner
       ? `<a href="#/clients" data-route="/clients">Members</a>`
       : '';
+    const adminItem = a.isAdmin
+      ? `<a href="#/admin" data-route="/admin">Admin</a>`
+      : '';
     authArea.innerHTML = `
       ${levelPillHtml()}
       <button type="button" class="account-trigger" id="accountTrigger" aria-haspopup="true" aria-expanded="false">
@@ -235,6 +240,9 @@ function renderAuthArea(){
         <a href="#/me" data-route="/me">My measurements</a>
         ${clientsItem}
         <a href="#/profile" data-route="/profile">Profile</a>
+        ${adminItem}
+        <hr>
+        <a class="account-ext" href="https://egelywheel.com">Visit EgelyWheel.com ↗</a>
         <hr>
         <button type="button" id="logoutBtn">Log out</button>
       </div>`;

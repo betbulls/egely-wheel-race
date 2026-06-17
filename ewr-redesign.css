@@ -442,6 +442,20 @@ input[type=file]{color:var(--ewr-text-muted)}
 
 .live-name{color:var(--ewr-text);font-weight:600}
 .live-you{color:var(--ewr-accent-strong);border:1px solid rgba(82,48,218,0.35);background:var(--ewr-accent-tint)}
+/* Approved Spiritual Maker seal — gold, recognition. Sits in the name line, so it
+   stays next to the name in both the idle and the measuring (chart) card states. */
+.live-maker{display:inline-flex;align-items:center;gap:3px;margin-left:7px;vertical-align:middle;
+  font-size:11px;font-weight:700;line-height:1;white-space:nowrap;
+  color:#9a7400;background:rgba(245,183,0,0.16);border:1px solid rgba(245,183,0,0.30);
+  border-radius:var(--ewr-radius-pill);padding:3px 8px}
+/* Maker name → clickable link to their invite (connect) page. Used on Live, sessions, room. */
+.maker-name-link{color:inherit;text-decoration:none;cursor:pointer}
+.maker-name-link:hover{color:var(--ewr-accent-strong);text-decoration:underline}
+/* Leaderboard mini-profile → invite-page link (approved makers only). */
+.lbm-invite{display:inline-block;margin-top:14px;font-family:'Inter',sans-serif;font-size:13px;font-weight:700;
+  color:#fff;background:var(--ewr-accent-strong);border-radius:var(--ewr-radius-pill);padding:9px 16px;
+  text-decoration:none;transition:background .15s}
+.lbm-invite:hover{background:var(--ewr-text)}
 
 /* Status pills — light variants (ONLINE comes from the view's injected styles). */
 .live-pill.connected{background:rgba(0,51,255,0.10);color:#0033ff}
@@ -615,6 +629,7 @@ input[type=file]{color:var(--ewr-text-muted)}
 .lm-lbl{color:var(--ewr-text-muted)}
 
 .racer{background:#fff;border:1px solid var(--ewr-border);box-shadow:var(--ewr-shadow-card)}
+.racer .avatar img{width:100%;height:100%;border-radius:50%;object-fit:cover}
 .rank{color:var(--ewr-text-soft)}
 .racer-name{color:var(--ewr-text);font-weight:600}
 .host-tag{background:var(--ewr-accent-tint);border:1px solid rgba(82,48,218,0.35);color:var(--ewr-accent-strong)}
@@ -684,6 +699,18 @@ input[type="time"]::-webkit-calendar-picker-indicator{filter:none;opacity:.65}
    PROFILE — account control panel: two-column basics, custom upload pill,
    compact social grid, save bar, explained measurement marks, link card.
    ========================================================================== */
+/* Recognition banner — shown only to approved Spiritual Makers (an honor moment). */
+.pf-maker-banner{background:linear-gradient(135deg,rgba(55,219,255,.10),rgba(82,48,218,.10));
+  border:1px solid rgba(82,48,218,.18);border-radius:18px;padding:26px 24px;margin-bottom:18px;
+  text-align:center;box-shadow:0 10px 28px rgba(82,48,218,.12)}
+.pf-maker-logo{max-width:340px;width:100%;height:auto;display:block;margin:0 auto 14px;box-sizing:border-box;
+  background:#fff;border-radius:14px;padding:16px 20px;box-shadow:0 6px 18px rgba(1,22,36,.07)}
+.pf-maker-eyebrow{display:inline-block;font-family:'Inter',sans-serif;font-weight:700;font-size:12px;
+  letter-spacing:.12em;text-transform:uppercase;color:#0f8a52;background:rgba(32,178,107,.12);
+  border-radius:var(--ewr-radius-pill);padding:5px 12px;margin-bottom:10px}
+.pf-maker-sub{color:var(--ewr-text-muted);font-size:14px;line-height:1.55;margin:0 auto;max-width:440px}
+.pf-maker-sub b{color:var(--ewr-text)}
+@media (max-width:600px){.pf-maker-banner{padding:22px 16px}.pf-maker-logo{max-width:260px}}
 .pf-basic{display:grid;grid-template-columns:210px 1fr;gap:24px;align-items:start}
 .pf-side{display:flex;flex-direction:column;align-items:center;gap:11px;text-align:center;
   background:var(--ewr-bg-soft);border-radius:var(--ewr-radius-md);padding:20px 14px}
@@ -1498,3 +1525,50 @@ a.xp-topic:hover{border-color:var(--ewr-accent)}
 .hs-host-name{font-size:13px;color:var(--ewr-text-muted)}
 .hs-host-name b{color:var(--ewr-text);font-weight:600}
 .hs-host-when{font-size:12px;color:var(--ewr-text-soft);margin-top:1px}
+
+/* =============================================================================
+   APP SHELL NAV — separated layers: brand + external-site link · primary app nav
+   · status (device/level) · user menu. Cleaner mobile: the whole nav lives in
+   one ☰ sheet. EWR Live runs at live.egelywheel.com → easy link back to the site.
+   ========================================================================== */
+.brand{display:flex;align-items:center;gap:12px;flex-shrink:0}
+.brand-ext{font-family:'Inter',sans-serif;font-size:12px;font-weight:600;color:var(--ewr-text-muted);
+  text-decoration:none;padding:5px 11px;border-radius:var(--ewr-radius-pill);
+  border:1px solid var(--ewr-border);display:inline-flex;align-items:center;gap:5px;white-space:nowrap;
+  transition:border-color .15s,color .15s,background .15s}
+.brand-ext:hover{border-color:var(--ewr-accent);color:var(--ewr-accent);background:var(--ewr-accent-tint)}
+.ext-ar{font-size:11px;line-height:1}
+
+/* Active route — soft purple tint, not harsh. */
+.nav a.active{color:var(--ewr-accent-strong);background:var(--ewr-accent-tint);font-weight:600}
+
+/* ☰ menu: external link gets a separator + arrow; active route highlighted. */
+.nav-more-sep{border:none;border-top:1px solid var(--ewr-border);margin:6px 8px}
+.nav-more-menu .nav-more-ext{color:var(--ewr-text-muted);display:flex;align-items:center;gap:6px}
+.nav-more-menu .nav-more-ext:hover{color:var(--ewr-accent);background:var(--ewr-accent-tint)}
+.nav-more-menu a.active{color:var(--ewr-accent-strong);background:var(--ewr-accent-tint)}
+
+/* Account menu external link (separated from the app routes + log out). */
+.account-menu .account-ext{color:var(--ewr-text-muted)}
+.account-menu .account-ext:hover{color:var(--ewr-accent)}
+
+/* Live nav item — a subtle real-time "presence pulse" (dot + broadcast ring).
+   Faint when idle; stronger + a gentle pulse when Live is the active route.
+   Fixed 13px box → no layout shift. */
+.nav-live{display:inline-flex;align-items:center;margin-left:6px;vertical-align:middle;opacity:0.55}
+.nav-live svg{width:13px;height:13px;display:block}
+.nav a.active .nav-live{opacity:1}
+.nav a.active .nav-live .nl-ring{transform-box:fill-box;transform-origin:center;
+  animation:navLivePulse 2s ease-out infinite}
+@keyframes navLivePulse{0%{transform:scale(.55);opacity:.75}75%,100%{transform:scale(1.35);opacity:0}}
+@media (prefers-reduced-motion:reduce){ .nav a.active .nav-live .nl-ring{animation:none} }
+
+/* Mobile (≤760): primary nav collapses into the ☰ sheet; ☰ left, brand centred.
+   The brand fills the row after ☰, so a right pad equal to the ☰ footprint
+   (~32px + gap) pulls "EWR Live" to the true viewport centre. */
+@media (max-width:760px){
+  .nav > a{display:none}
+  .nav-more{display:inline-flex}
+  .nav{order:-1;flex:0 0 auto}
+  .brand{order:0;flex:1 1 auto;justify-content:center;padding-right:42px}
+}

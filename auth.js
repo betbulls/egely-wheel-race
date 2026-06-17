@@ -16,6 +16,8 @@ function state(){
     displayName: profile?.display_name || (user?.email ? user.email.split('@')[0] : null),
     avatarUrl: profile?.avatar_url || null,
     isPractitioner: !!profile?.is_practitioner,
+    approvedMaker: !!profile?.approved_maker,
+    isAdmin: !!profile?.is_admin,
     bio: profile?.bio || '',
     practitionerHandle: profile?.practitioner_handle || null,
     // Spiritual Maker public profile + promotion fields. Loaded via select('*'),

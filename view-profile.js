@@ -104,8 +104,15 @@ export function mount(el){
   el.innerHTML = `
     <div class="view-head">
       <h1 class="page-title">Profile</h1>
-      <p class="page-sub">Your Spiritual Maker profile — name, photo, links and promotion.</p>
+      <p class="page-sub">Your public profile — name, photo, links and promotion.</p>
     </div>
+
+    ${s.approvedMaker ? `
+    <div class="pf-maker-banner">
+      <img class="pf-maker-logo" src="assets/spiritual-maker-logo.png" alt="Spiritual Maker" onerror="this.style.display='none'">
+      <div class="pf-maker-eyebrow">✓ You're recognized</div>
+      <p class="pf-maker-sub">Egely Wheel has recognized you as a <b>Spiritual Maker</b>. Your badge now appears across EWR Live — on the leaderboard, in your sessions, and on your connect page.</p>
+    </div>` : ''}
 
     <div class="panel">
       <div class="panel-head">
