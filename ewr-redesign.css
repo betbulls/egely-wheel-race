@@ -1030,6 +1030,15 @@ select{appearance:none;-webkit-appearance:none;width:100%;
 /* Icon/cover — unified branded tile (cyan→violet); a real cover image overlays it. */
 .xp-cover{background:var(--ewr-gradient)}
 .xp-cover-icon{opacity:1;color:#fff}
+/* Custom colourful topic icons (Csaba's SVG set): contained + centered on a light tile.
+   .has-svg flips the gradient to light so the multi-colour art reads; on a missing file
+   the onerror handler removes .has-svg and reveals the white emoji on the gradient again. */
+.xp-cover.has-svg{background:#f4f6f8;border:1px solid var(--ewr-border)}
+.xp-cover img.xp-cover-svg{position:relative;inset:auto;width:72%;height:72%;object-fit:contain;z-index:1}
+/* Topic detail page H1 — the custom icon tile sits next to the title (replaces the inline emoji). */
+.xp-topic-head{display:flex;align-items:center;gap:14px}
+.xp-title-cover{width:48px;height:48px}
+.xp-title-cover .xp-cover-icon{font-size:26px}
 
 /* Continue / recommend hero — the focal "pick up where you left off" card. */
 .xp-hero{background:var(--ewr-surface);border:1px solid var(--ewr-border);

@@ -26,12 +26,20 @@ const CHEAT_WINDOW_MS = 2000, SWING_LIMIT = 7, MAX_SWINGS = 2;   // same anti-ch
 
 const durLabel = s => s >= 60 ? `${Math.round(s / 60)} min` : `${s}s`;
 
+// Topic ids whose custom icon file is named differently from the id.
+const ICON_FILE = { 'kundalini-energy': 'kundalini', 'rituals-and-tradition': 'rituals-and-human' };
+
 function coverHtml(item, extraClass){
-  // Cover image with a graceful icon+gradient fallback if the file is missing.
+  // Custom colourful topic icon (assets/experiment-icons/<slug>.svg) with a graceful
+  // emoji+gradient fallback if the file isn't uploaded yet. Topic carries .id; an
+  // experiment carries .topic (its parent topic) — either resolves the icon slug.
   const icon = item.icon || (getTopic(item.topic)?.icon) || '✦';
-  return `<div class="xp-cover ${extraClass || ''}">
-    ${item.cover ? `<img src="${esc(item.cover)}" alt="" onerror="this.remove()">` : ''}
-    <span class="xp-cover-icon">${icon}</span>
+  const topicId = item.topic || item.id;
+  const iconSrc = topicId ? `assets/experiment-icons/${ICON_FILE[topicId] || topicId}.svg` : '';
+  return `<div class="xp-cover ${extraClass || ''}${iconSrc ? ' has-svg' : ''}">
+    ${item.cover ? `<img class="xp-cover-photo" src="${esc(item.cover)}" alt="" onerror="this.remove()">` : ''}
+    ${iconSrc ? `<img class="xp-cover-svg" src="${esc(iconSrc)}" alt="" onerror="const c=this.closest('.xp-cover');if(c){c.classList.remove('has-svg');const e=c.querySelector('.xp-cover-icon');if(e)e.style.display='';}this.remove()">` : ''}
+    <span class="xp-cover-icon"${iconSrc ? ' style="display:none"' : ''}>${icon}</span>
   </div>`;
 }
 
@@ -157,8 +165,9 @@ function renderTopic(body, topicId, progByExp){
 
   body.innerHTML = `
     <p class="room-hint" style="text-align:left;margin:0 0 8px"><a href="#/experiments" class="link">← Experiments</a></p>
-    <div class="view-head">
-      <h1 class="page-title">${topic.icon} ${esc(topic.title)}</h1>
+    <div class="view-head xp-topic-head">
+      ${coverHtml(topic, 'xp-title-cover')}
+      <h1 class="page-title">${esc(topic.title)}</h1>
     </div>
     ${exps.length ? `<div class="xp-exps">${cards}</div>`
       : `<div class="panel"><p class="placeholder">New experiments are coming to this topic soon.</p></div>`}`;
