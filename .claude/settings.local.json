@@ -25,7 +25,9 @@
       "mcp__f4d5007b-023f-47c1-8b48-7dd5718656a4__graphql_query",
       "PowerShell(try { $r = Invoke-WebRequest -Uri \"http://localhost:8765/\" -UseBasicParsing -TimeoutSec 5; \"OK $\\($r.StatusCode\\)\" } catch { \"FAIL: $\\($_.Exception.Message\\)\" })",
       "PowerShell(python --version)",
-      "PowerShell($f = \"C:\\\\Users\\\\User\\\\Downloads\\\\egely_wheel_02 \\(1\\).json\"; $size = \\(Get-Item $f\\).Length; $j = Get-Content $f -Raw | ConvertFrom-Json; [PSCustomObject]@{ SizeKB = [math]::Round\\($size/1KB,1\\); v=$j.v; fr=$j.fr; ip=$j.ip; op=$j.op; w=$j.w; h=$j.h; layers=$j.layers.Count; assets=$j.assets.Count; hasImages = \\($j.assets | Where-Object { $_.p } | Measure-Object\\).Count } | Format-List)"
+      "PowerShell($f = \"C:\\\\Users\\\\User\\\\Downloads\\\\egely_wheel_02 \\(1\\).json\"; $size = \\(Get-Item $f\\).Length; $j = Get-Content $f -Raw | ConvertFrom-Json; [PSCustomObject]@{ SizeKB = [math]::Round\\($size/1KB,1\\); v=$j.v; fr=$j.fr; ip=$j.ip; op=$j.op; w=$j.w; h=$j.h; layers=$j.layers.Count; assets=$j.assets.Count; hasImages = \\($j.assets | Where-Object { $_.p } | Measure-Object\\).Count } | Format-List)",
+      "WebFetch(domain:live.egelywheel.com)",
+      "PowerShell($f = \"C:\\\\Users\\\\User\\\\Documents\\\\ewr-bot-console\\\\measurements.json\"; $info = Get-Item $f; \"Size: {0:N0} bytes \\({1:N1} MB\\)\" -f $info.Length, \\($info.Length/1MB\\); \"--- first 600 chars ---\"; \\(Get-Content $f -Raw\\).Substring\\(0, [Math]::Min\\(600, $info.Length\\)\\))"
     ]
   }
 }

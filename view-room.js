@@ -3,7 +3,7 @@ import * as ble from './ble.js';
 import * as auth from './auth.js';
 import * as presence from './presence.js';
 import { computeStats, CATEGORIES, METRIC_HELP, icon, trendLabel, vitalityColor } from './analytics.js';
-import { drawTrio } from './chart.js';
+import { drawTrio, drawVitalityChart } from './chart.js';
 import { flagUrl } from './countries.js';
 import { createAddToCalendar } from './calendar.js';
 
@@ -87,7 +87,22 @@ function injectRoomStyles(){
   if(document.getElementById('roomMobileStyles')) return;
   const st = document.createElement('style');
   st.id = 'roomMobileStyles';
-  st.textContent = '@media (max-width:600px){.racer{flex-wrap:wrap}.racer .metrics{flex-basis:100%;width:100%;justify-content:space-around;margin-top:6px}}';
+  st.textContent = `
+  .racer{flex-wrap:wrap}
+  .racer-expand{margin-left:8px;align-self:center;padding:6px 12px;border-radius:999px;display:inline-flex;align-items:center;gap:5px;
+    background:#fff;border:1px solid var(--ewr-border);color:var(--ewr-accent-strong);cursor:pointer;
+    font-family:'Inter',sans-serif;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+  .racer-expand:hover{background:var(--ewr-accent-tint);border-color:var(--ewr-accent);color:var(--ewr-accent)}
+  .re-hide{display:none}
+  .racer.expanded .re-show{display:none}
+  .racer.expanded .re-hide{display:inline}
+  .re-car{display:inline-block;transition:transform .2s;font-size:9px}
+  .racer.expanded .re-car{transform:rotate(180deg)}
+  .racer-expanded{display:none;flex-basis:100%;width:100%;margin-top:10px}
+  .racer.expanded .racer-expanded{display:block}
+  .racer-big-wrap{background:#fff;border:1px solid var(--ewr-border);border-radius:14px;box-shadow:var(--ewr-shadow-card);padding:14px;height:220px}
+  .racer-big-wrap canvas{display:block;width:100%;height:100%}
+  @media (max-width:600px){.racer .metrics{flex-basis:100%;width:100%;justify-content:space-around;margin-top:6px}.racer-expand{margin-left:0;margin-top:6px}}`;
   document.head.appendChild(st);
 }
 
@@ -553,9 +568,41 @@ export function mount(el, sessionId){
     const avg = mkMetric('avg', 'Avg');
     metrics.append(live.wrap, peak.wrap, avg.wrap);
 
-    card.append(rank, avatar, mid, metrics);
-    r.el = { card, rank, liveVal: live.val, peakVal: peak.val, avgVal: avg.val, spark, vbadge, status };
+    // Expand control + full vitality chart (same as the Live wall).
+    const expandBtn = document.createElement('button');
+    expandBtn.type = 'button';
+    expandBtn.className = 'racer-expand';
+    expandBtn.hidden = true;
+    expandBtn.setAttribute('aria-label', 'Show full chart');
+    expandBtn.setAttribute('aria-expanded', 'false');
+    expandBtn.innerHTML = '<span class="re-show">Chart</span><span class="re-hide">Hide</span><span class="re-car">▾</span>';
+    const bigWrap = document.createElement('div');
+    bigWrap.className = 'racer-expanded';
+    const bigInner = document.createElement('div');
+    bigInner.className = 'racer-big-wrap';
+    const bigCanvas = document.createElement('canvas');
+    bigInner.appendChild(bigCanvas);
+    bigWrap.appendChild(bigInner);
+
+    card.append(rank, avatar, mid, metrics, expandBtn, bigWrap);
+    r.el = { card, rank, liveVal: live.val, peakVal: peak.val, avgVal: avg.val, spark, vbadge, status, expandBtn, bigCanvas };
+
+    expandBtn.addEventListener('click', () => {
+      r.expanded = !r.expanded;
+      card.classList.toggle('expanded', r.expanded);
+      expandBtn.setAttribute('aria-expanded', r.expanded ? 'true' : 'false');
+      if(r.expanded) drawBig(r);
+    });
     return card;
+  }
+
+  // Full vitality chart for an expanded racer card — mirrors the Live wall's
+  // drawVitalityChart (zone bands + axes), fed by the racer's own history.
+  function drawBig(r){
+    if(!r.el || !r.el.bigCanvas || !r.history || r.history.length < 2) return;
+    const src = phase() === 'active' ? r.history.filter(pt => pt.t >= 0) : rolling(r.history);
+    const leds = src.map(pt => pt.led);
+    if(leds.length > 1) drawVitalityChart(r.el.bigCanvas, leds, Math.round(leds.length * 0.5));
   }
 
   // Map history (t = ms from session start, may be negative) onto a rolling
@@ -691,9 +738,13 @@ export function mount(el, sessionId){
         if(r.hasData && r.history.length > 1){
           if(ph === 'active') drawCurve(r.el.spark, r.history.filter(pt => pt.t >= 0), vitalityColor(r.led), { fill: true });
           else drawCurve(r.el.spark, rolling(r.history), vitalityColor(r.led), { span: 60000, fill: true });
+          r.el.expandBtn.hidden = false;
+          if(r.expanded) drawBig(r);
         } else {
           const c = r.el.spark.getContext('2d');
           if(c) c.clearRect(0, 0, r.el.spark.width, r.el.spark.height);
+          r.el.expandBtn.hidden = true;
+          if(r.expanded){ r.expanded = false; r.el.card.classList.remove('expanded'); }
         }
       });
     }
