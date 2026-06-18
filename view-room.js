@@ -102,6 +102,17 @@ function injectRoomStyles(){
   .racer.expanded .racer-expanded{display:block}
   .racer-big-wrap{background:#fff;border:1px solid var(--ewr-border);border-radius:14px;box-shadow:var(--ewr-shadow-card);padding:14px;height:220px}
   .racer-big-wrap canvas{display:block;width:100%;height:100%}
+  .res-expand-row{display:flex;justify-content:flex-end;margin-top:8px}
+  .res-expand{padding:6px 12px;border-radius:999px;display:inline-flex;align-items:center;gap:5px;background:#fff;border:1px solid var(--ewr-border);
+    color:var(--ewr-accent-strong);cursor:pointer;font-family:'Inter',sans-serif;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+  .res-expand:hover{background:var(--ewr-accent-tint);border-color:var(--ewr-accent);color:var(--ewr-accent)}
+  .res-card.expanded .re-show{display:none}
+  .res-card.expanded .re-hide{display:inline}
+  .res-card.expanded .re-car{transform:rotate(180deg)}
+  .res-expanded{display:none;margin-top:10px}
+  .res-card.expanded .res-expanded{display:block}
+  .res-big-wrap{background:#fff;border:1px solid var(--ewr-border);border-radius:14px;box-shadow:var(--ewr-shadow-card);padding:14px;height:210px}
+  .res-big-wrap canvas{display:block;width:100%;height:100%}
   @media (max-width:600px){.racer .metrics{flex-basis:100%;width:100%;justify-content:space-around;margin-top:6px}.racer-expand{margin-left:0;margin-top:6px}}`;
   document.head.appendChild(st);
 }
@@ -258,7 +269,7 @@ export function mount(el, sessionId){
       if(hp){ hostHandle = hp.practitioner_handle || null; hostIsMaker = !!hp.approved_maker; }
     }
 
-    if(Date.now() > endMs) renderResults();
+    if(Date.now() > endMs){ renderResults(); resultsShown = true; }   // build once; a later resize must not wipe an expanded chart
     else start();
   })();
 
@@ -1041,13 +1052,15 @@ export function mount(el, sessionId){
     const vBadge = r => r.verified === true ? '<span class="v-badge verified">✓</span>'
       : r.verified === false ? '<span class="v-badge unverified">unverified</span>' : '';
     const racerCard = (r, rankLabel, canvasId, note) => `
-      <div class="res-card${r.mine ? ' mine' : ''}">
+      <div class="res-card${r.mine ? ' mine' : ''}" data-cid="${canvasId}">
         <div class="res-rank">${rankLabel}</div>
         <div class="res-main">
           <div class="racer-name-row"><span class="racer-name">${esc(r.name)}</span>${flagImg(r.country)}${r.host ? '<span class="host-tag">Host</span>' : ''}${vBadge(r)}</div>
           ${note ? `<div class="res-note" style="font-size:12px;color:#e9b84a;margin:2px 0 6px">${esc(note)}</div>` : ''}
           <canvas class="res-curve" id="${canvasId}"></canvas>
           ${zoneBar(r.stats.zone)}
+          <div class="res-expand-row"><button type="button" class="res-expand" aria-label="Show full chart" aria-expanded="false"><span class="re-show">Chart</span><span class="re-hide">Hide</span><span class="re-car">▾</span></button></div>
+          <div class="res-expanded"><div class="res-big-wrap"><canvas id="${canvasId}-big"></canvas></div></div>
         </div>
         <div class="res-stats">
           <div class="rs"><div class="rs-val">${r.stats.avg.toFixed(1)}</div><div class="rs-lbl">Avg</div></div>
@@ -1116,14 +1129,33 @@ export function mount(el, sessionId){
       <p class="room-hint"><a href="#/sessions" class="link">← Back to sessions</a></p>
     `;
 
+    const bigData = {};
+    const sessDur = (session && session.duration_minutes) ? session.duration_minutes * 60 : 0;
     counted.forEach((r, i) => {
       const cv = body.querySelector('#rc' + i);
       if(cv) drawCurve(cv, ledsToHist(r.curve), vitalityColor(Math.round(r.stats.avg)));
+      bigData['rc' + i] = { leds: (r.curve || []).filter(v => v != null), dur: sessDur };
     });
     if(myExcluded){
       const cv = body.querySelector('#rcMine');
       if(cv) drawCurve(cv, ledsToHist(myRow.curve), vitalityColor(Math.round(myRow.stats.avg)));
+      bigData['rcMine'] = { leds: (myRow.curve || []).filter(v => v != null), dur: sessDur };
     }
+    // Expandable full chart per racer (same as the Live wall) — drawn on open
+    // (a hidden canvas has no size, so it can't be drawn ahead of time).
+    body.addEventListener('click', (e) => {
+      const btn = e.target.closest('.res-expand');
+      if(!btn) return;
+      const card = btn.closest('.res-card');
+      if(!card) return;
+      const open = card.classList.toggle('expanded');
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if(open){
+        const d = bigData[card.dataset.cid];
+        const big = body.querySelector('#' + card.dataset.cid + '-big');
+        if(d && big && d.leds.length > 1) drawVitalityChart(big, d.leds, d.dur || Math.round(d.leds.length * 0.75));
+      }
+    });
 
     drawTrio(body.querySelector('#spChartRes'), pulseHist, { durationMs });
   }
