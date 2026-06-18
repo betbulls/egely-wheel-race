@@ -704,8 +704,10 @@ export function mount(el, sessionId){
       const sorted = list.sort((a, c) => c.led - a.led);
       const ph = phase();
       sorted.forEach((r, i) => {
-        if(!r.el){ b.appendChild(buildCard(r)); }
-        b.appendChild(r.el.card); // reorder, preserves canvas
+        if(!r.el){ buildCard(r); }
+        // Reorder by moving ONLY out-of-place cards. Re-appending every card each
+        // tick detaches it under the cursor → a hovered button flickers.
+        if(b.children[i] !== r.el.card) b.insertBefore(r.el.card, b.children[i] || null);
         r.el.rank.textContent = i + 1;
 
         // Live value: only for participants with wheel data.
