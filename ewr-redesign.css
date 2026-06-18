@@ -467,6 +467,88 @@ input[type=file]{color:var(--ewr-text-muted)}
 .ble-help{font-size:11px;font-weight:600;color:var(--ewr-accent-strong);text-decoration:none;white-space:nowrap;margin-left:2px}
 .ble-help:hover{text-decoration:underline}
 
+/* =============================================================================
+   PUBLIC LANDING (logged-out home) — the EWR Live entry page.
+   ========================================================================== */
+.ph-wrap{max-width:960px;margin:0 auto;padding:4px 0 14px}
+.ph-hero{display:flex;align-items:center;gap:42px;padding:20px 30px 24px;border-radius:24px;
+  background:radial-gradient(120% 120% at 88% 50%,rgba(55,219,255,0.07),transparent 60%);margin-bottom:6px}
+.ph-hero-text{flex:1;min-width:0}
+.ph-eyebrow{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:700;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ewr-accent);background:var(--ewr-accent-tint);border-radius:var(--ewr-radius-pill);padding:5px 12px;margin-bottom:14px}
+.ph-eyebrow-dot{width:7px;height:7px;border-radius:50%;background:var(--ewr-gradient);flex-shrink:0}
+.ph-hero h1{font-family:'Montserrat',sans-serif;font-weight:600;font-size:38px;line-height:1.08;letter-spacing:-0.5px;color:var(--ewr-text);margin:0 0 14px}
+.ph-lead{color:var(--ewr-text-muted);font-size:16px;line-height:1.55;margin:0 0 22px;max-width:520px}
+.ph-cta-row{display:flex;gap:15px;flex-wrap:wrap;align-items:center}
+.ph-note{color:var(--ewr-text-soft);font-size:13px;margin:14px 0 0}
+.ph-stage{position:relative;width:380px;max-width:44%;height:360px;flex-shrink:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.ph-fallback{display:flex;align-items:center;justify-content:center}
+.ph-fallback .ph-art{width:240px;max-width:100%;height:auto}
+.ph-lottie{display:none;width:244px;height:356px;position:relative;z-index:1}
+.ph-lottie svg{width:100%!important;height:100%!important}
+.ph-stage.loaded .ph-lottie{display:block}
+.ph-stage.loaded .ph-fallback{display:none}
+.ph-energy{display:none;position:absolute;inset:0;align-items:center;justify-content:center;z-index:0}
+.ph-stage.loaded .ph-energy{display:flex}
+.ph-glow{position:absolute;width:260px;height:260px;border-radius:50%;
+  background:radial-gradient(circle,rgba(55,219,255,.32),rgba(82,48,218,.12) 55%,transparent 72%);animation:phGlow 3.4s ease-in-out infinite}
+.ph-ring{position:absolute;width:150px;height:150px;border-radius:50%;border:2px solid rgba(55,219,255,.5);animation:phWave 3.4s ease-out infinite}
+.ph-ring:nth-child(3){animation-delay:1.13s}
+.ph-ring:nth-child(4){animation-delay:2.26s}
+@keyframes phWave{0%{transform:scale(.5);opacity:0}18%{opacity:.55}100%{transform:scale(2.3);opacity:0}}
+@keyframes phGlow{0%,100%{opacity:.55;transform:scale(.96)}50%{opacity:.9;transform:scale(1.05)}}
+@media (prefers-reduced-motion:reduce){.ph-ring,.ph-glow{animation:none}}
+.ph-section-h{font-family:'Montserrat',sans-serif;font-weight:600;font-size:22px;letter-spacing:-0.2px;color:var(--ewr-text);margin:40px 0 16px;text-align:center}
+/* 3-step "How it works" band */
+.ph-steps{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.ph-step{display:inline-flex;align-items:center;gap:11px;background:var(--ewr-surface);border:1px solid var(--ewr-border);border-radius:var(--ewr-radius-pill);padding:9px 18px 9px 9px;box-shadow:var(--ewr-shadow-card)}
+.ph-step-n{width:28px;height:28px;border-radius:50%;background:var(--ewr-gradient);color:#fff;font-family:'Montserrat',sans-serif;font-weight:600;font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ph-step-t{font-weight:600;color:var(--ewr-text);font-size:14px;white-space:nowrap}
+.ph-step-sep{width:26px;height:2px;border-radius:2px;background:linear-gradient(90deg,#37dbff,#5230da);opacity:0.5;flex-shrink:0}
+.ph-features{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.ph-card{background:var(--ewr-surface);border:1px solid var(--ewr-border);border-radius:16px;padding:22px 20px;box-shadow:var(--ewr-shadow-card)}
+.ph-card-tint{background:linear-gradient(180deg,rgba(55,219,255,.07),rgba(82,48,218,.05)),var(--ewr-surface);border-color:rgba(82,48,218,.18)}
+.ph-card-ic{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;background:var(--ewr-gradient);margin-bottom:14px}
+.ph-card-h{font-family:'Montserrat',sans-serif;font-weight:600;font-size:17px;color:var(--ewr-text);margin-bottom:6px}
+.ph-card-d{color:var(--ewr-text-muted);font-size:14px;line-height:1.55}
+.ph-compare{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:stretch}
+.ph-col{display:flex;flex-direction:column;background:var(--ewr-surface);border:1px solid var(--ewr-border);border-radius:18px;padding:26px;box-shadow:var(--ewr-shadow-card)}
+.ph-col-wheel{background:var(--ewr-dark);border:1px solid rgba(55,219,255,0.22);
+  box-shadow:0 0 0 1px rgba(55,219,255,0.08),0 18px 44px -18px rgba(1,22,36,0.55),0 0 32px -10px rgba(55,219,255,0.28)}
+.ph-col-h{font-family:'Montserrat',sans-serif;font-weight:600;font-size:16px;color:var(--ewr-text);margin-bottom:14px}
+.ph-col-wheel .ph-col-h{color:#fff}
+.ph-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:11px}
+.ph-list li{position:relative;padding-left:25px;color:var(--ewr-text-muted);font-size:14.5px;line-height:1.45}
+.ph-list li::before{content:'✓';position:absolute;left:0;top:-1px;color:var(--ewr-green);font-weight:800}
+.ph-list-wheel li{color:#dbe2e6}
+.ph-list-wheel li::before{color:#37dbff}
+.ph-col-foot{margin-top:auto;padding-top:24px}
+.ph-compare-cta{margin-top:0}
+.ph-connect{background:var(--ewr-surface);border:1px solid var(--ewr-border);border-radius:16px;padding:22px;box-shadow:var(--ewr-shadow-card);text-align:center}
+.ph-connect-items{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:18px}
+.ph-connect-item{flex:1;min-width:170px;background:var(--ewr-bg-soft);border:1px solid var(--ewr-border);border-radius:12px;padding:14px 16px}
+.ph-connect-ios{background:linear-gradient(180deg,rgba(55,219,255,.08),rgba(82,48,218,.06)),var(--ewr-surface);border-color:rgba(82,48,218,.2)}
+.ph-connect-logo{display:block;height:38px;width:auto;max-width:120px;margin:0 auto 12px;object-fit:contain}
+.ph-connect-dev{display:block;font-weight:700;color:var(--ewr-text);font-size:14px;margin-bottom:3px}
+.ph-connect-how{display:block;color:var(--ewr-text-muted);font-size:13px}
+.ph-practice{text-align:center;margin-top:40px;background:var(--ewr-accent-tint);border:1px solid rgba(82,48,218,.16);border-radius:16px;padding:26px 22px}
+.ph-practice p{color:var(--ewr-text-muted);font-size:15px;line-height:1.6;margin:0 auto;max-width:560px}
+@media (max-width:760px){
+  .ph-hero{flex-direction:column-reverse;align-items:flex-start;gap:18px}
+  .ph-stage{width:280px;max-width:80%;height:320px;align-self:center}
+  .ph-lottie{width:208px;height:303px}
+  .ph-hero h1{font-size:29px}
+  .ph-lead{font-size:15px}
+  .ph-features{grid-template-columns:1fr}
+  .ph-compare{grid-template-columns:1fr}
+  .ph-cta-row .btn-join,.ph-cta-row .btn-secondary{flex:1;min-width:150px;text-align:center}
+  .ph-connect-item{min-width:0;width:100%;flex:none}
+  .ph-hero{padding:16px 16px 18px}
+  .ph-steps{flex-direction:column;gap:8px}
+  .ph-step{width:100%;max-width:320px;justify-content:flex-start}
+  .ph-step-sep{width:2px;height:16px}
+}
+
 /* Status pills — light variants (ONLINE comes from the view's injected styles). */
 .live-pill.connected{background:rgba(0,51,255,0.10);color:#0033ff}
 .live-pill.measuring{background:var(--ewr-accent);color:#fff}

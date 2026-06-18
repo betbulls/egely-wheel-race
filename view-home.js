@@ -16,6 +16,129 @@ const shortDate = iso => iso ? new Date(iso).toLocaleDateString('en-CA') : '';
 // without flooding the user with NEW pulses for past progress.
 const MIGRATION_FLAG = 'ewr_seen_init';
 
+// ---- Public landing (logged-out home) --------------------------------------
+// Lazy-load the locally vendored Lottie player (shared with the connect guide).
+let lottieLoading = null;
+function loadLottie(){
+  if(window.lottie) return Promise.resolve(window.lottie);
+  if(lottieLoading) return lottieLoading;
+  lottieLoading = new Promise(resolve => {
+    const s = document.createElement('script');
+    s.src = 'assets/lottie.min.js';
+    s.onload = () => resolve(window.lottie || null);
+    s.onerror = () => resolve(null);
+    document.head.appendChild(s);
+  });
+  return lottieLoading;
+}
+
+// Custom, EWR-flavoured functional icons (white stroke on the gradient tile).
+const PH_ICONS = {
+  // vitality pulse / reading line
+  solo: `<svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 13h3.4l2.4-6.2 3.6 11.4 2.4-7 1.7 3.3H22"/></svg>`,
+  // guided daily path → days + completion check
+  exp: `<svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20l5-5 4 2 3.6-5.6"/><circle cx="3" cy="20" r="1.5" fill="currentColor" stroke="none"/><circle cx="8" cy="15" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="17" r="1.5" fill="currentColor" stroke="none"/><path d="M16 6.6l2 2 3.4-3.4"/></svg>`,
+  // group + live broadcast pulse
+  sessions: `<svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.7" fill="currentColor" stroke="none"/><path d="M12 7.4a4.6 4.6 0 0 1 0 9.2" opacity="0.55"/><path d="M12 4.2a7.8 7.8 0 0 1 0 15.6" opacity="0.28"/></svg>`,
+  // a person with a community orbit + follower
+  maker: `<svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9.4" r="3"/><path d="M7 18a5 5 0 0 1 10 0"/><ellipse cx="12" cy="12" rx="10.4" ry="4.6" opacity="0.32" transform="rotate(-18 12 12)"/><circle cx="2.5" cy="10.6" r="1.3" fill="currentColor" stroke="none"/></svg>`,
+};
+
+function phFallbackArt(){
+  return `<svg class="ph-art" viewBox="0 0 240 300" role="img" aria-label="Live energy core">
+    <defs><linearGradient id="phg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#37dbff"/><stop offset="1" stop-color="#5230da"/></linearGradient></defs>
+    <circle cx="120" cy="150" r="70" fill="none" stroke="url(#phg)" stroke-width="2.5" opacity="0.45"/>
+    <circle cx="120" cy="150" r="48" fill="none" stroke="url(#phg)" stroke-width="2.5" stroke-dasharray="5 7" stroke-linecap="round"/>
+    <circle cx="120" cy="150" r="26" fill="url(#phg)" opacity="0.92"/>
+    <path d="M120 62v28M120 210v28M32 150h28M180 150h28" stroke="url(#phg)" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+  </svg>`;
+}
+
+function phCard(icon, h, d, tint){
+  return `<div class="ph-card${tint ? ' ph-card-tint' : ''}">
+    <div class="ph-card-ic">${icon}</div>
+    <div class="ph-card-h">${h}</div>
+    <div class="ph-card-d">${d}</div>
+  </div>`;
+}
+
+function publicLandingHtml(){
+  return `
+  <div class="ph-wrap">
+    <section class="ph-hero">
+      <div class="ph-hero-text">
+        <span class="ph-eyebrow"><span class="ph-eyebrow-dot"></span> A live space for your Egely Wheel</span>
+        <h1>Measure your vitality. Practice live.</h1>
+        <p class="ph-lead">EWR Live turns your Egely Wheel readings into a personal practice — shared sessions, guided experiments, and a visible journey of progress.</p>
+        <div class="ph-cta-row">
+          <a class="btn-join" href="#/login">Log in or sign up</a>
+          <a class="btn-secondary" href="#/how-to-connect">How to connect your wheel</a>
+        </div>
+        <p class="ph-note">Watching is free. Measuring requires an Egely Wheel.</p>
+      </div>
+      <div class="ph-stage" id="phStage">
+        <div class="ph-energy" aria-hidden="true"><span class="ph-glow"></span><span class="ph-ring"></span><span class="ph-ring"></span><span class="ph-ring"></span></div>
+        <div class="ph-lottie" id="phLottie"></div>
+        <div class="ph-fallback">${phFallbackArt()}</div>
+      </div>
+    </section>
+
+    <h2 class="ph-section-h">How EWR Live works</h2>
+    <div class="ph-steps">
+      <div class="ph-step"><span class="ph-step-n">1</span><span class="ph-step-t">Connect your wheel</span></div>
+      <span class="ph-step-sep" aria-hidden="true"></span>
+      <div class="ph-step"><span class="ph-step-n">2</span><span class="ph-step-t">Measure solo or live</span></div>
+      <span class="ph-step-sep" aria-hidden="true"></span>
+      <div class="ph-step"><span class="ph-step-n">3</span><span class="ph-step-t">Watch your progress grow</span></div>
+    </div>
+
+    <h2 class="ph-section-h">What you can do in EWR Live</h2>
+    <div class="ph-features">
+      ${phCard(PH_ICONS.solo, 'Solo measurements', 'Measure on your own, save readings, and follow your personal vitality over time.')}
+      ${phCard(PH_ICONS.exp, 'Guided experiments', 'Complete daily practices and finish each day with a measurement and a short reflection.', true)}
+      ${phCard(PH_ICONS.sessions, 'Live sessions', 'Join group rooms, practice together, and take part in official shared measurements.')}
+      ${phCard(PH_ICONS.maker, 'Spiritual Maker tools', 'Invite followers, host sessions, and support their progress through shared measurements.')}
+    </div>
+
+    <h2 class="ph-section-h">Free to explore. Measure with a wheel.</h2>
+    <div class="ph-compare">
+      <div class="ph-col">
+        <div class="ph-col-h">Free account</div>
+        <ul class="ph-list">
+          <li>Watch the Live community</li>
+          <li>Explore sessions and the ranking</li>
+          <li>Build your profile and join in</li>
+        </ul>
+      </div>
+      <div class="ph-col ph-col-wheel">
+        <div class="ph-col-h">With an Egely Wheel</div>
+        <ul class="ph-list ph-list-wheel">
+          <li>Connect your wheel in the browser</li>
+          <li>Save your solo measurements</li>
+          <li>Complete guided experiments</li>
+          <li>Join and host official sessions</li>
+        </ul>
+        <div class="ph-col-foot"><a class="btn-join ph-compare-cta" href="#/subscribe">Subscribe to measure</a></div>
+      </div>
+    </div>
+
+    <h2 class="ph-section-h">Connect right in the browser</h2>
+    <div class="ph-connect">
+      <div class="ph-connect-items">
+        <div class="ph-connect-item"><img class="ph-connect-logo" src="assets/android.png" alt="Android" loading="lazy"><span class="ph-connect-dev">Android</span><span class="ph-connect-how">Chrome</span></div>
+        <div class="ph-connect-item"><img class="ph-connect-logo" src="assets/chrome.png" alt="Chrome" loading="lazy"><span class="ph-connect-dev">Mac &amp; Windows</span><span class="ph-connect-how">Chrome</span></div>
+        <div class="ph-connect-item ph-connect-ios"><img class="ph-connect-logo" src="assets/apple.png" alt="Apple" loading="lazy"><span class="ph-connect-dev">iPhone &amp; iPad</span><span class="ph-connect-how">Bluefy — Web BLE browser</span></div>
+      </div>
+      <a class="btn-secondary" href="#/how-to-connect">See the connection guide</a>
+    </div>
+
+    <div class="ph-practice">
+      <h2 class="ph-section-h" style="margin:0 0 8px">Built for practice, not just scores</h2>
+      <p>Every reading becomes part of your journey — achievements, levels, experiments, sessions, and progress you can actually see over time.</p>
+    </div>
+  </div>`;
+}
+
 export function mount(el){
   // One delegated handler for the badge "i" buttons, bound for the whole
   // lifetime of the view. It MUST live here (not inside render/async): the
@@ -35,6 +158,7 @@ export function mount(el){
   // restoration is async). Re-render whenever the state changes meaningfully
   // so we don't get stuck on the logged-out screen.
   let sig = null;
+  let publicAnim = null;   // Lottie instance on the public landing (torn down on re-render/unmount)
   const unsubAuth = auth.subscribeAuth(() => {
     const a = auth.getState();
     const newSig = (a.user?.id || '') + '|' + (a.displayName || '') + '|' + (a.isPractitioner ? '1' : '0');
@@ -42,26 +166,27 @@ export function mount(el){
     sig = newSig;
     render();
   });
-  return () => { unsubAuth(); el.removeEventListener('click', onInfoClick); };
+  return () => { unsubAuth(); el.removeEventListener('click', onInfoClick); if(publicAnim){ try { publicAnim.destroy(); } catch {} } };
 
   function render(){
     const a = auth.getState();
     const userId = a.user?.id || null;
 
-    // Logged-out home: an invitation to log in, no leaderboards.
+    // Any prior public-landing Lottie is torn down before we re-render.
+    if(publicAnim){ try { publicAnim.destroy(); } catch {} publicAnim = null; }
+
+    // Logged-out home: the public EWR Live landing page.
     if(!userId){
-      el.innerHTML = `
-        <div class="view-head">
-          <h1 class="page-title">EWR Live</h1>
-          <p class="page-sub">Track your vitality, your way.</p>
-        </div>
-        <div class="panel">
-          <p class="placeholder">New here? Create your free account — just your email, no password — to <b>follow the community, watch live sessions and explore the leaderboard</b>. To take part — measure your own vitality, earn achievements and track your journey — you'll need an <b>Egely Wheel</b>.</p>
-          <div class="form-actions" style="margin-top:14px;flex-wrap:wrap">
-            <a class="btn-join" href="#/login">Log in or sign up</a>
-            <a class="btn-secondary" href="#/subscribe">Subscribe to measure</a>
-          </div>
-        </div>`;
+      el.innerHTML = publicLandingHtml();
+      const stage = el.querySelector('#phStage');
+      const box = el.querySelector('#phLottie');
+      loadLottie().then(lottie => {
+        if(!lottie || !stage || !box) return;
+        try {
+          publicAnim = lottie.loadAnimation({ container: box, renderer: 'svg', loop: true, autoplay: true, path: 'assets/egely-wheel.json' });
+          publicAnim.addEventListener('DOMLoaded', () => stage.classList.add('loaded'));
+        } catch { /* keep the fallback art */ }
+      });
       return;
     }
 
