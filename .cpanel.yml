@@ -1,21 +1,5 @@
 ---
 deployment:
   tasks:
-    - export DEPLOYPATH=/home4/pirituj6/public_html/ewr/
-    - /bin/cp brand.css $DEPLOYPATH
-    - /bin/cp index.html $DEPLOYPATH
-    - /bin/cp app.js $DEPLOYPATH
-    - /bin/cp ble.js $DEPLOYPATH
-    - /bin/cp db.js $DEPLOYPATH
-    - /bin/cp auth.js $DEPLOYPATH
-    - /bin/cp analytics.js $DEPLOYPATH
-    - /bin/cp chart.js $DEPLOYPATH
-    - /bin/cp view-home.js $DEPLOYPATH
-    - /bin/cp view-sessions.js $DEPLOYPATH
-    - /bin/cp view-room.js $DEPLOYPATH
-    - /bin/cp view-solo.js $DEPLOYPATH
-    - /bin/cp view-measurements.js $DEPLOYPATH
-    - /bin/cp view-measurement-detail.js $DEPLOYPATH
-    - /bin/cp view-profile.js $DEPLOYPATH
-    - /bin/cp sessions.html $DEPLOYPATH
-    - /bin/cp room.html $DEPLOYPATH
+    - export DEPLOYPATH=/home4/pirituj6/live.egelywheel.com/
+    - /bin/cp -R * $DEPLOYPATH
