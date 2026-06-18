@@ -1,8 +1,0 @@
-EWR Live — deploy pipeline test
-token: EWR-DEPLOY-OK-7Q2X9K
-date: 2026-06-18
-
-If you can read this at https://live.egelywheel.com/deploy-test.txt,
-the git deploy (push -> Update from Remote -> Deploy HEAD Commit -> live) works.
-
-This file is safe to delete after the test.
