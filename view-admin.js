@@ -48,6 +48,16 @@ function styles(){
   .adm-remove:hover{border-color:#c2415b;color:#c2415b}
   .adm-remove:disabled{opacity:.6;cursor:default}
   .adm-empty{color:#99a2a7;font-size:14px;padding:6px 2px}
+  .adm-note{color:#67737c;font-size:13px;line-height:1.45;margin:0 0 14px}
+  .adm-status{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+    border-radius:999px;padding:2px 8px;vertical-align:middle;margin-left:6px}
+  .adm-status.on{background:rgba(32,178,107,.14);color:#0f8a52}
+  .adm-status.off{background:#f2f3f4;color:#99a2a7}
+  .adm-src{display:inline-block;font-size:10px;color:#99a2a7;margin-left:6px;text-transform:uppercase;letter-spacing:.04em;vertical-align:middle}
+  .adm-grant{font-family:'Inter',sans-serif;font-size:13px;font-weight:700;padding:8px 14px;border-radius:999px;
+    cursor:pointer;background:#401d91;color:#fff;border:1px solid transparent;flex-shrink:0;transition:background .15s}
+  .adm-grant:hover{background:#011624}
+  .adm-grant:disabled{opacity:.6;cursor:default}
   @media (max-width:600px){
     .adm-add input{min-width:0;width:100%;flex:none}
     .adm-add .adm-btn{width:100%}
@@ -100,6 +110,28 @@ export function mount(el){
       <div class="adm-card">
         <h2>Current Spiritual Makers</h2>
         <ul class="adm-list" id="admList"><li class="adm-empty">Loading…</li></ul>
+      </div>
+
+      <div class="adm-head" style="margin-top:34px">
+        <h1>Lifetime access</h1>
+        <p>Grant measuring access to a registered member — same effect as an active subscription. Search by email to review or revoke.</p>
+      </div>
+      <div class="adm-card">
+        <h2>Grant access</h2>
+        <div class="adm-add">
+          <input id="accEmail" type="email" placeholder="member@example.com" autocomplete="off">
+          <button class="adm-btn" id="accGrant" type="button">Grant access</button>
+        </div>
+        <span class="adm-msg" id="accMsg"></span>
+      </div>
+      <div class="adm-card">
+        <h2>Find / revoke access</h2>
+        <p class="adm-note">Search any member by email — including everyone you've granted before — to see their status and revoke or re-grant.</p>
+        <div class="adm-add">
+          <input id="accSearch" type="search" placeholder="Search by email…" autocomplete="off">
+          <button class="adm-btn" id="accSearchBtn" type="button">Search</button>
+        </div>
+        <ul class="adm-list" id="accList"><li class="adm-empty">Type an email above to search.</li></ul>
       </div>
     </div>`;
 
@@ -158,6 +190,73 @@ export function mount(el){
       msg.textContent = res.text;
       if(res.ok) loadList();
       else { btn.disabled = false; btn.textContent = 'Remove'; }
+    });
+
+    // ---- Lifetime access (subscribers.active via admin RPCs) ----
+    const accEmail = $('accEmail'), accGrant = $('accGrant'), accMsg = $('accMsg');
+    const accSearch = $('accSearch'), accSearchBtn = $('accSearchBtn'), accList = $('accList');
+
+    async function setAccess(email, active){
+      const { data, error } = await supabase.rpc('admin_set_access', { p_email: email, p_active: active });
+      if(error) return { ok: false, text: 'Error: ' + error.message };
+      if(data === 'no-email') return { ok: false, text: 'Enter an email.' };
+      if(data === 'ok-no-account') return { ok: true, text: active
+        ? 'Access granted. No account with that email yet — they\'ll have access as soon as they register.'
+        : 'Access removed.' };
+      return { ok: true, text: active ? 'Access granted.' : 'Access removed.' };
+    }
+
+    accGrant.addEventListener('click', async () => {
+      const email = accEmail.value.trim();
+      if(!email){ accMsg.className = 'adm-msg err'; accMsg.textContent = 'Enter an email.'; return; }
+      accGrant.disabled = true; accMsg.className = 'adm-msg'; accMsg.textContent = 'Granting…';
+      const res = await setAccess(email, true);
+      accGrant.disabled = false;
+      accMsg.className = 'adm-msg ' + (res.ok ? 'ok' : 'err');
+      accMsg.textContent = res.text;
+      if(res.ok){ accEmail.value = ''; if(accSearch.value.trim()) runSearch(); }
+    });
+    accEmail.addEventListener('keydown', e => { if(e.key === 'Enter') accGrant.click(); });
+
+    async function runSearch(){
+      const q = accSearch.value.trim();
+      if(!q){ accList.innerHTML = '<li class="adm-empty">Type an email above to search.</li>'; return; }
+      accList.innerHTML = '<li class="adm-empty">Searching…</li>';
+      const { data, error } = await supabase.rpc('admin_search_subscribers', { p_query: q });
+      if(error){ accList.innerHTML = `<li class="adm-empty">Error: ${esc(error.message)}</li>`; return; }
+      const rows = data || [];
+      if(!rows.length){ accList.innerHTML = '<li class="adm-empty">No one found for that email.</li>'; return; }
+      accList.innerHTML = rows.map(r => {
+        const nm = r.display_name || r.email;
+        const status = r.active ? '<span class="adm-status on">Active</span>' : '<span class="adm-status off">Inactive</span>';
+        const src = `<span class="adm-src">${esc(r.source)}</span>`;
+        const btn = r.active
+          ? `<button class="adm-remove" type="button" data-acc-revoke data-email="${esc(r.email)}">Revoke</button>`
+          : `<button class="adm-grant" type="button" data-acc-grant data-email="${esc(r.email)}">Grant</button>`;
+        return `<li class="adm-row">
+          <div class="adm-info">
+            <div class="adm-name">${esc(nm)}${status}${src}</div>
+            <div class="adm-mail">${esc(r.email)}</div>
+          </div>
+          ${btn}</li>`;
+      }).join('');
+    }
+
+    accSearchBtn.addEventListener('click', runSearch);
+    accSearch.addEventListener('keydown', e => { if(e.key === 'Enter') runSearch(); });
+    let accDebounce = null;
+    accSearch.addEventListener('input', () => { clearTimeout(accDebounce); accDebounce = setTimeout(runSearch, 350); });
+
+    accList.addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-acc-revoke], [data-acc-grant]');
+      if(!btn) return;
+      const grant = btn.hasAttribute('data-acc-grant');
+      const email = btn.dataset.email;
+      if(!email) return;
+      btn.disabled = true; const orig = btn.textContent; btn.textContent = grant ? 'Granting…' : 'Revoking…';
+      const res = await setAccess(email, grant);
+      if(res.ok) runSearch();
+      else { btn.disabled = false; btn.textContent = orig; }
     });
 
     loadList();
