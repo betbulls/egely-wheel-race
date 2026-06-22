@@ -916,7 +916,7 @@ export function mount(el, sessionId){
     if(days >= 1)   return `${days} ${days === 1 ? 'day' : 'days'}`;
     if(hours >= 1)  return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
     if(mins  >= 1)  return `${mins} min`;
-    return 'less than a minute';
+    return `${sec}s`;   // final minute: count the seconds down instead of "less than a minute"
   }
 
   // ---- Results screen (finished session) ------------------------------------
