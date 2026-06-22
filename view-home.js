@@ -166,7 +166,25 @@ export function mount(el){
     sig = newSig;
     render();
   });
-  return () => { unsubAuth(); el.removeEventListener('click', onInfoClick); if(publicAnim){ try { publicAnim.destroy(); } catch {} } };
+  // The upcoming-sessions teaser counts down once per second, so the final
+  // minute ticks to zero instead of freezing on a stale "in 40s".
+  const cdTimer = setInterval(() => {
+    const now = Date.now();
+    el.querySelectorAll('.home-sess-card').forEach(card => {
+      const start = Number(card.dataset.start);
+      const cd = card.querySelector('.hs-cd');
+      if(!cd || !start) return;
+      if(now >= start){
+        if(!card.classList.contains('live')){
+          card.classList.add('live');
+          cd.innerHTML = '<span class="hs-live">● Live now</span>';
+        }
+      } else {
+        cd.textContent = 'in ' + formatUntil(start - now);
+      }
+    });
+  }, 1000);
+  return () => { clearInterval(cdTimer); unsubAuth(); el.removeEventListener('click', onInfoClick); if(publicAnim){ try { publicAnim.destroy(); } catch {} } };
 
   function render(){
     const a = auth.getState();
@@ -506,7 +524,7 @@ function formatUntil(ms){
   if(days >= 1)  return `${days} day${days > 1 ? 's' : ''}`;
   if(hours >= 1) return `${hours} hr${hours > 1 ? 's' : ''}`;
   if(mins >= 1)  return `${mins} min`;
-  return 'less than a minute';
+  return `${totalSec}s`;   // final minute: count the seconds down to zero
 }
 
 function hsAvatar(host){
@@ -531,7 +549,7 @@ function renderUpcoming(sessions){
         const verified = s.verified_only ? ' <span class="sess-verified">✓ Verified</span>' : '';
         const partsTxt = s._participants > 0 ? ` · ${s._participants} measuring` : '';
         return `
-          <a class="home-sess-card${isLive ? ' live' : ''}" href="#/room/${s.id}">
+          <a class="home-sess-card${isLive ? ' live' : ''}" href="#/room/${s.id}" data-start="${start}" data-end="${end}">
             <div class="hs-row">
               <div class="hs-name">${esc(s.name || 'Untitled session')}${verified}</div>
               <span class="hs-action">${isLive ? 'Join' : 'View'} →</span>
@@ -540,7 +558,7 @@ function renderUpcoming(sessions){
               <span class="hs-host-av">${hsAvatar(host)}</span>
               <div class="hs-host-info">
                 <span class="hs-host-name">Hosted by <b>${esc(host.name)}</b></span>
-                <span class="hs-host-when">${time}${partsTxt}</span>
+                <span class="hs-host-when"><span class="hs-cd">${time}</span>${partsTxt}</span>
               </div>
             </div>
           </a>`;
