@@ -11,6 +11,7 @@ import { mount as mountConnect } from './view-connect.js';
 import { mount as mountClients } from './view-clients.js';
 import { mount as mountLeaderboard } from './view-leaderboard.js';
 import { mount as mountSessionNew } from './view-session-new.js';
+import { mount as mountMySessions } from './view-my-sessions.js';
 import { mountExperiments, mountExperimentDetail } from './view-experiments.js';
 import { mount as mountLive } from './view-live.js';
 import { mount as mountJourney } from './view-journey.js';
@@ -55,6 +56,7 @@ function router(){
   else if(path === '/solo') setView(mountSolo);
   else if(path === '/m') setView(mountMeasurementDetail, param);
   else if(path === '/me') setView(mountMeasurements);
+  else if(path === '/my-sessions') setView(mountMySessions);
   else if(path === '/profile') setView(mountProfile);
   else if(path === '/admin') setView(mountAdmin);
   else if(path === '/how-to-connect') setView(mountHowToConnect);
@@ -251,6 +253,7 @@ function renderAuthArea(){
       </button>
       <div class="account-menu" id="accountMenu" hidden>
         <a href="#/me" data-route="/me">My measurements</a>
+        <a href="#/my-sessions" data-route="/my-sessions">My sessions</a>
         ${clientsItem}
         <a href="#/profile" data-route="/profile">Profile</a>
         ${adminItem}
