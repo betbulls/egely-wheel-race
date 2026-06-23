@@ -9,6 +9,33 @@ function avatarHtml(url, name){
   return `<span class="avatar-initial">${esc((name || '?').charAt(0).toUpperCase())}</span>`;
 }
 
+// Scoped styles for the Live Wall Spotlight card (.pf-spot-*) — no index.html edits.
+function spotStyles(){
+  if(document.getElementById('pfSpotStyles')) return;
+  const st = document.createElement('style');
+  st.id = 'pfSpotStyles';
+  st.textContent = `
+  .pf-spot{border:1px solid rgba(82,48,218,.2);box-shadow:0 10px 28px rgba(82,48,218,.07)}
+  .pf-spot-head{display:flex;gap:12px;align-items:flex-start;margin-bottom:14px}
+  .pf-spot-icon{font-size:22px;line-height:1;color:#5230da;flex-shrink:0;margin-top:1px}
+  .pf-spot-title{font-family:'Montserrat',sans-serif;font-weight:600;font-size:17px;color:#011624;margin:0 0 4px}
+  .pf-spot-sub{color:#67737c;font-size:13.5px;line-height:1.5;margin:0;max-width:520px}
+  .pf-spot-state{font-size:14px;font-weight:600;border-radius:10px;padding:11px 13px;margin-bottom:14px;display:flex;align-items:center;gap:9px;line-height:1.4}
+  .pf-spot-state.on{background:rgba(14,116,144,.08);border:1px solid rgba(14,116,144,.25);color:#0e7490}
+  .pf-spot-state.off{background:#f2f3f4;border:1px solid #dfe3e6;color:#67737c}
+  .pf-spot-state.off.amber{background:rgba(245,183,0,.1);border-color:rgba(245,183,0,.35);color:#8a6d00}
+  .pf-spot-dot{width:8px;height:8px;border-radius:50%;background:#0e7490;box-shadow:0 0 7px 1px rgba(14,116,144,.5);flex-shrink:0}
+  .pf-spot-actions{display:flex;gap:10px;flex-wrap:wrap}
+  .pf-spot-off{font-family:'Inter',sans-serif;font-size:14px;font-weight:700;padding:11px 18px;border-radius:999px;cursor:pointer;background:#fff;border:1px solid #dfe3e6;color:#67737c;transition:border-color .15s,color .15s}
+  .pf-spot-off:hover{border-color:#c2415b;color:#c2415b}
+  .pf-spot-off:disabled{opacity:.6;cursor:default}
+  .pf-spot-note{color:#99a2a7;font-size:12px;line-height:1.45;margin:12px 0 0}
+  .pf-spot-msg{display:block;margin-top:8px;min-height:16px}
+  @media (max-width:600px){ .pf-spot-actions button{flex:1 1 auto;text-align:center} }
+  `;
+  document.head.appendChild(st);
+}
+
 // Country dropdown options (labels via the browser, sorted by name; value = ISO code).
 function countryOptions(selected){
   const opts = COUNTRY_CODES.map(c => ({ c, n: countryName(c) })).sort((a, b) => a.n.localeCompare(b.n));
@@ -112,7 +139,8 @@ export function mount(el){
       <img class="pf-maker-logo" src="assets/spiritual-maker-logo.png" alt="Spiritual Maker" onerror="this.style.display='none'">
       <div class="pf-maker-eyebrow">✓ You're recognized</div>
       <p class="pf-maker-sub">Egely Wheel has recognized you as a <b>Spiritual Maker</b>. Your badge now appears across EWR Live — on the leaderboard, in your sessions, and on your connect page.</p>
-    </div>` : ''}
+    </div>
+    <section class="panel pf-spot" id="pfSpot"></section>` : ''}
 
     <div class="panel">
       <div class="panel-head">
@@ -202,6 +230,62 @@ export function mount(el){
 
   const $ = id => el.querySelector('#' + id);
   const msg = $('pfMsg');
+
+  // ---- Live Wall Spotlight (approved Spiritual Makers only) -----------------
+  // A maker can choose to stay featured on the Live wall for 7 days. It is an
+  // honest "featured" placement, NOT a fake online status — it lapses on its own
+  // (encouraging a return visit), and never claims presence the maker doesn't have.
+  if(s.approvedMaker){
+    spotStyles();
+    const spotEl = $('pfSpot');
+    let spotUntil = s.featuredUntil || null;
+    const fmtSpot = iso => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+    function renderSpot(){
+      const active = spotUntil && new Date(spotUntil).getTime() > Date.now();
+      const expired = spotUntil && !active;
+      let body, actions;
+      if(active){
+        body = `<div class="pf-spot-state on"><span class="pf-spot-dot"></span>Featured on Live until <b>${esc(fmtSpot(spotUntil))}</b></div>`;
+        actions = `<button type="button" class="btn-secondary" data-spot-extend>Extend 7 days</button>
+          <button type="button" class="pf-spot-off" data-spot-off>Turn off</button>`;
+      } else {
+        body = expired
+          ? `<div class="pf-spot-state off amber">Your Live spotlight expired. Turn it on again to stay discoverable.</div>`
+          : `<div class="pf-spot-state off">Not currently featured on Live.</div>`;
+        actions = `<button type="button" class="btn-join" data-spot-on>Turn on for 7 days</button>`;
+      }
+      spotEl.innerHTML = `
+        <div class="pf-spot-head">
+          <span class="pf-spot-icon" aria-hidden="true">◎</span>
+          <div>
+            <h2 class="pf-spot-title">Live Wall Spotlight</h2>
+            <p class="pf-spot-sub">Stay visible on the Live wall for 7 days. People can discover your connection page, sessions, coupon and offer.</p>
+          </div>
+        </div>
+        ${body}
+        <div class="pf-spot-actions">${actions}</div>
+        <p class="pf-spot-note">Spotlight does not mark you as online. Your real online and measuring status is shown separately.</p>
+        <span class="form-msg pf-spot-msg" id="pfSpotMsg"></span>`;
+    }
+
+    async function setSpot(until){
+      spotEl.querySelectorAll('button').forEach(b => b.disabled = true);
+      const setM = (t, cls) => { const m = $('pfSpotMsg'); if(m){ m.className = 'form-msg pf-spot-msg ' + (cls || ''); m.textContent = t; } };
+      setM('Saving…');
+      const { error } = await auth.saveProfile({ live_featured_until: until });
+      if(error){ setM('Error: ' + error.message, 'err'); spotEl.querySelectorAll('button').forEach(b => b.disabled = false); return; }
+      spotUntil = until;
+      renderSpot();
+      setM(until ? "You're featured on Live." : 'Spotlight turned off.', 'ok');
+    }
+
+    spotEl.addEventListener('click', (e) => {
+      if(e.target.closest('[data-spot-on], [data-spot-extend]')) setSpot(new Date(Date.now() + 7 * 864e5).toISOString());
+      else if(e.target.closest('[data-spot-off]')) setSpot(null);
+    });
+    renderSpot();
+  }
 
   // Custom upload pill — the native input stays (hidden) and keeps its logic.
   $('pfUploadBtn').addEventListener('click', () => $('pfFile').click());

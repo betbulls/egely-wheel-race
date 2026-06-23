@@ -17,6 +17,7 @@ function state(){
     avatarUrl: profile?.avatar_url || null,
     isPractitioner: !!profile?.is_practitioner,
     approvedMaker: !!profile?.approved_maker,
+    featuredUntil: profile?.live_featured_until || null,   // Live-wall spotlight expiry (makers)
     isAdmin: !!profile?.is_admin,
     bio: profile?.bio || '',
     practitionerHandle: profile?.practitioner_handle || null,

@@ -29,6 +29,7 @@ const STATUS = {
   experiment: { label: 'In an experiment',cls: 'experiment', live: true },
   session:    { label: 'In a session',    cls: 'session',    live: true },
   online:     { label: 'Online',          cls: 'online',     live: false },
+  featured:   { label: 'Featured Maker',  cls: 'featured',   live: false },
   offline:    { label: 'Offline',         cls: 'offline',    live: false },
 };
 
@@ -76,6 +77,7 @@ function injectStyles(){
   st.textContent = `
   .live-pill.online{background:rgba(32,178,107,.12);border:1px solid rgba(32,178,107,.4);color:#0f8a52}
   .live-pill.online::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;background:#20b26b;box-shadow:0 0 7px 1px rgba(32,178,107,.7);animation:liveOnlineBlink 1.6s ease-in-out infinite}
+  .live-pill.featured{background:rgba(82,48,218,.1);border:1px solid rgba(82,48,218,.3);color:#5230da}
   @keyframes liveOnlineBlink{0%,100%{opacity:1}50%{opacity:.4}}
   .live-search{width:100%;box-sizing:border-box;background:#f7f8f8;border:1px solid #dfe3e6;border-radius:11px;color:#011624;font-family:'Inter',sans-serif;font-size:15px;padding:12px 14px;margin:4px 0 16px}
   .live-search::placeholder{color:#99a2a7}
@@ -107,17 +109,25 @@ export function mount(el){
   function buildPeople(presenceList){
     const byUid = new Map();
     const rosterByUid = new Map(roster.map(pr => [pr.uid, pr]));   // approved_maker + handle are DB truth (roster), not carried by presence
-    for(const pr of roster) byUid.set(pr.uid, { uid: pr.uid, name: pr.name, avatar: pr.avatar, country: pr.country, maker: pr.maker, handle: pr.handle, status: 'offline' });
-    for(const p of presenceList){ const r = rosterByUid.get(p.uid); byUid.set(p.uid, { uid: p.uid, name: p.name, avatar: p.avatar, country: p.country, maker: !!(r && r.maker), handle: r ? r.handle : null, status: p.status }); } // presence wins (fresher + online)
+    for(const pr of roster) byUid.set(pr.uid, { uid: pr.uid, name: pr.name, avatar: pr.avatar, country: pr.country, maker: pr.maker, handle: pr.handle, featuredUntil: pr.featuredUntil, status: 'offline' });
+    for(const p of presenceList){ const r = rosterByUid.get(p.uid); byUid.set(p.uid, { uid: p.uid, name: p.name, avatar: p.avatar, country: p.country, maker: !!(r && r.maker), handle: r ? r.handle : null, featuredUntil: r ? r.featuredUntil : null, status: p.status }); } // presence wins (fresher + online)
     return [...byUid.values()];
   }
 
   function render(presenceList){
     const myId = auth.getState().user?.id || null;
+    const nowTs = Date.now();
+    const isFeatured = p => !!(p.maker && p.featuredUntil && new Date(p.featuredUntil).getTime() > nowTs);
     const all = buildPeople(presenceList);
+    // Sort: me first, then live (measuring/session/connected), online, FEATURED makers
+    // (offline but spotlighted → sit just below online), then everyone else offline.
+    const rankOf = p => {
+      if(p.uid === myId) return -1;
+      if(p.status !== 'offline') return groupRank(p.status);   // 1 = live wheel, 2 = online
+      return isFeatured(p) ? 2.5 : 3;
+    };
     all.sort((a, b) => {
-      const ra = a.uid === myId ? -1 : groupRank(a.status);
-      const rb = b.uid === myId ? -1 : groupRank(b.status);
+      const ra = rankOf(a), rb = rankOf(b);
       return ra !== rb ? ra - rb : (a.name || '').localeCompare(b.name || '');
     });
 
@@ -133,7 +143,10 @@ export function mount(el){
       return;
     }
     listEl.innerHTML = people.slice(0, shown).map(p => {
-      const st = STATUS[p.status] || STATUS.online;
+      // A featured maker who isn't actually present shows a "Featured" pill (never a
+      // fake "Online") — honest placement, no green presence dot.
+      const effStatus = (p.status === 'offline' && isFeatured(p)) ? 'featured' : p.status;
+      const st = STATUS[effStatus] || STATUS.online;
       const isMe = myId && p.uid === myId;
       const isOpen = expanded.has(p.uid);
       const value = st.live ? `<div class="live-value"><span class="live-led" data-led>·</span><span class="live-led-cap">Vitality</span></div>` : '';
@@ -213,9 +226,9 @@ export function mount(el){
 
   // Load the full roster (everyone who hasn't hidden themselves), then render.
   (async () => {
-    let { data, error } = await supabase.from('profiles').select('id, display_name, avatar_url, country, approved_maker, practitioner_handle').neq('show_on_live', false);
+    let { data, error } = await supabase.from('profiles').select('id, display_name, avatar_url, country, approved_maker, practitioner_handle, live_featured_until').neq('show_on_live', false);
     if(error){ ({ data } = await supabase.from('profiles').select('id, display_name, avatar_url').neq('show_on_live', false)); }   // older columns not present yet → still works
-    roster = (data || []).map(p => ({ uid: p.id, name: p.display_name || 'Explorer', avatar: p.avatar_url, country: p.country || null, maker: !!p.approved_maker, handle: p.practitioner_handle || null }));
+    roster = (data || []).map(p => ({ uid: p.id, name: p.display_name || 'Explorer', avatar: p.avatar_url, country: p.country || null, maker: !!p.approved_maker, handle: p.practitioner_handle || null, featuredUntil: p.live_featured_until || null }));
     render(presence.getList());
   })();
 
