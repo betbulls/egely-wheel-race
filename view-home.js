@@ -226,7 +226,7 @@ export function mount(el){
       supabase.from('practitioner_links').select('practitioner_id').eq('client_id', userId).eq('status', 'active'),
       fetchUserAchievements(userId),
       supabase.from('sessions')
-        .select('id, name, scheduled_start, duration_minutes, created_by_user_id, created_by, verified_only')
+        .select('id, name, scheduled_start, duration_minutes, created_by_user_id, created_by, verified_only, access_mode')
         .gte('scheduled_start', sessionWindow)
         .order('scheduled_start', { ascending: true })
         .limit(10),
@@ -547,11 +547,14 @@ function renderUpcoming(sessions){
                              : `in ${esc(formatUntil(start - now))}`;
         const host  = s._host || { name: s.created_by || 'Host', avatar: null };
         const verified = s.verified_only ? ' <span class="sess-verified">✓ Verified</span>' : '';
+        const accBase = 'display:inline-block;margin-left:6px;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:999px;padding:2px 8px;vertical-align:middle;';
+        const access = s.access_mode === 'invite' ? ` <span style="${accBase}color:#5230da;background:rgba(82,48,218,.1)">Invite link</span>`
+          : s.access_mode === 'followers' ? ` <span style="${accBase}color:#0e7490;background:rgba(14,116,144,.1)">Followers only</span>` : '';
         const partsTxt = s._participants > 0 ? ` · ${s._participants} measuring` : '';
         return `
           <a class="home-sess-card${isLive ? ' live' : ''}" href="#/room/${s.id}" data-start="${start}" data-end="${end}">
             <div class="hs-row">
-              <div class="hs-name">${esc(s.name || 'Untitled session')}${verified}</div>
+              <div class="hs-name">${esc(s.name || 'Untitled session')}${verified}${access}</div>
               <span class="hs-action">${isLive ? 'Join' : 'View'} →</span>
             </div>
             <div class="hs-host">

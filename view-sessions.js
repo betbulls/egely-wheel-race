@@ -12,6 +12,16 @@ function avatarHtml(url, name){
   return `<span class="sess-avatar sess-avatar-initial">${esc((name || '?').charAt(0).toUpperCase())}</span>`;
 }
 
+// Restricted sessions stay visible in the list (entry is gated in the room) —
+// a small badge tells people they'll need a link / a connection to join.
+function accessBadgeHtml(mode){
+  const base = 'display:inline-block;margin-left:6px;font-size:10px;font-weight:700;letter-spacing:.04em;'
+    + 'text-transform:uppercase;border-radius:999px;padding:2px 8px;vertical-align:middle;';
+  if(mode === 'invite') return `<span style="${base}color:#5230da;background:rgba(82,48,218,.1)">Invite link required</span>`;
+  if(mode === 'followers') return `<span style="${base}color:#0e7490;background:rgba(14,116,144,.1)">Followers only</span>`;
+  return '';
+}
+
 function pillHtml(state){
   switch(state){
     case 'live':     return '<span class="badge live"><span class="badge-dot"></span>Live now</span>';
@@ -172,7 +182,7 @@ export function mount(el){
     // Past: compact "Hosted by X" meta. Upcoming/live: the host is a focal trust
     // anchor — you're entering someone's room — so give them a prominent strip.
     const isPract = !!(prof && prof.approved_maker);
-    const nameRow = `<div class="session-name">${esc(s.name || 'Untitled session')}${s.verified_only ? '<span class="sess-verified">✓ Verified</span>' : ''}</div>`;
+    const nameRow = `<div class="session-name">${esc(s.name || 'Untitled session')}${s.verified_only ? '<span class="sess-verified">✓ Verified</span>' : ''}${accessBadgeHtml(s.access_mode)}</div>`;
     const leftHtml = base === 'finished'
       ? `${nameRow}
         <div class="session-meta">Hosted by <span class="session-organizer">${avatarHtml(prof && prof.avatar_url, organizerName)}<span class="organizer-name">${esc(organizerName)}</span></span> · ${esc(formatStart(s.scheduled_start))} · ${s.duration_minutes} min</div>`

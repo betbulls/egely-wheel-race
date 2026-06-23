@@ -118,7 +118,9 @@ function injectRoomStyles(){
 }
 
 // Mounts the Session Room view. Returns a cleanup function.
-export function mount(el, sessionId){
+// inviteToken is set when arriving via an invite link (#/join/<token>): the room
+// is then loaded by that token and invite access is granted.
+export function mount(el, sessionId, inviteToken = null){
   injectRoomStyles();
   let session = null;
   let startMs = 0, endMs = 0, durationMs = 0;
@@ -236,13 +238,15 @@ export function mount(el, sessionId){
 
   // ---- Load session ---------------------------------------------------------
   (async () => {
-    const { data, error } = await supabase.from('sessions').select('*').eq('id', sessionId).single();
+    const baseQ = supabase.from('sessions').select('*');
+    const { data, error } = await (sessionId ? baseQ.eq('id', sessionId) : baseQ.eq('invite_token', inviteToken)).maybeSingle();
     if(error || !data){
-      $('roomTitle').textContent = 'Session not found';
+      $('roomTitle').textContent = (inviteToken && !sessionId) ? 'Invite link not valid' : 'Session not found';
       $('roomSub').innerHTML = '<a href="#/sessions" class="link">Back to sessions</a>';
       return;
     }
     session = data;
+    sessionId = data.id;   // entered via token → normalise so all downstream id uses (saves, channel) work
     startMs = new Date(session.scheduled_start).getTime();
     durationMs = (session.duration_minutes || 0) * 60000;
     endMs = startMs + durationMs;
@@ -269,6 +273,35 @@ export function mount(el, sessionId){
       if(hp){ hostHandle = hp.practitioner_handle || null; hostIsMaker = !!hp.approved_maker; }
     }
 
+    // ---- Access gate (MVP: visible-but-locked; gates ENTRY only, not RLS-level
+    // privacy — the row/results are still API-readable). public = anyone; invite =
+    // host or a matching link token; followers = host or a connected member.
+    const accessMode = session.access_mode || 'public';
+    const meId = auth.getState().user?.id || null;
+    const isHostUser = !!(meId && session.created_by_user_id && meId === session.created_by_user_id);
+    let accessOk = accessMode === 'public' || isHostUser;
+    if(!accessOk && accessMode === 'invite'){
+      accessOk = !!(inviteToken && session.invite_token && inviteToken === session.invite_token);
+    }
+    if(!accessOk && accessMode === 'followers'){
+      accessOk = !!(meId && await auth.isConnectedTo(session.created_by_user_id));
+    }
+    if(!accessOk){ renderLocked(accessMode); return; }
+
+    // Restricted room → small "entry restricted" badge + (host) a copy-invite-link control.
+    if(accessMode !== 'public'){
+      const isInvite = accessMode === 'invite';
+      const badge = document.createElement('span');
+      badge.textContent = isInvite ? 'Invite link required' : 'Followers only';
+      badge.style.cssText = 'display:inline-block;margin-top:8px;font-size:11px;font-weight:700;letter-spacing:.04em;'
+        + 'text-transform:uppercase;border-radius:999px;padding:3px 10px;'
+        + (isInvite ? 'color:#5230da;background:rgba(82,48,218,.1)' : 'color:#0e7490;background:rgba(14,116,144,.1)');
+      const sub = $('roomSub'); if(sub && sub.parentNode) sub.parentNode.insertBefore(badge, sub.nextSibling);
+      if(isInvite && isHostUser && session.invite_token && actionsEl){
+        actionsEl.appendChild(makeCopyButton('Copy invite link', location.origin + location.pathname + '#/join/' + session.invite_token));
+      }
+    }
+
     if(Date.now() > endMs){ renderResults(); resultsShown = true; }   // build once; a later resize must not wipe an expanded chart
     else start();
   })();
@@ -292,6 +325,56 @@ export function mount(el, sessionId){
         showBody();
       });
     }
+  }
+
+  // Copy-to-clipboard button (invite link). Mirrors the room share helper's fallbacks.
+  function makeCopyButton(label, text){
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'btn-secondary'; b.textContent = label;
+    b.addEventListener('click', async () => {
+      const orig = b.textContent;
+      try {
+        if(navigator.clipboard && window.isSecureContext){ await navigator.clipboard.writeText(text); }
+        else { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+        b.textContent = 'Copied ✓';
+      } catch { b.textContent = 'Copy failed'; }
+      setTimeout(() => { b.textContent = orig; }, 1600);
+    });
+    return b;
+  }
+
+  // Entry blocked (invite without link / followers-only without a connection).
+  // The room is visible to all in the lists; this only gates JOINING.
+  function renderLocked(mode){
+    const esc2 = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+    const rb = $('roomBody'); if(rb) rb.hidden = true;
+    const ng = $('nameGate'); if(ng) ng.hidden = true;
+    const note = $('roomPracticeNote'); if(note) note.hidden = true;
+    const host = session.created_by || 'the host';
+    const loggedIn = !!auth.getState().user;
+    let title, body, cta = '';
+    if(mode === 'invite'){
+      title = 'Invite link required';
+      body = `This room is visible, but you need ${esc2(host)}'s invite link to enter.`;
+    } else {
+      title = 'Followers only';
+      if(!loggedIn){
+        body = `This session is for ${esc2(host)}'s connected members. Log in to join.`;
+        cta = `<a class="btn-join" href="#/login">Log in</a>`;
+        try { localStorage.setItem('ewr_pending_room', location.hash); } catch {}
+      } else {
+        body = `This session is for ${esc2(host)}'s connected members.`;
+        cta = hostHandle ? `<a class="btn-join" href="#/connect/${esc2(hostHandle)}">Connect with ${esc2(host)}</a>` : '';
+      }
+    }
+    const panel = document.createElement('div');
+    panel.className = 'panel room-locked';
+    panel.style.cssText = 'margin-top:14px';
+    panel.innerHTML = `<h2 style="margin-top:0">${title}</h2>
+      <p class="room-hint" style="text-align:left;margin:6px 0 16px">${body}</p>
+      <div class="form-actions" style="gap:12px;flex-wrap:wrap">${cta}<a class="link" href="#/sessions">Back to sessions</a></div>`;
+    const head = el.querySelector('.room-head');
+    if(head) head.after(panel); else el.appendChild(panel);
   }
 
   function showBody(){

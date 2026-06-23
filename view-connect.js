@@ -60,7 +60,7 @@ export function mount(el, handle){
     const [memberCountR, sessionsR, resultsR, stored] = await Promise.all([
       supabase.rpc('practitioner_member_count', { pid: pr.id }),
       supabase.from('sessions')
-        .select('id, name, scheduled_start, duration_minutes, verified_only')
+        .select('id, name, scheduled_start, duration_minutes, verified_only, access_mode')
         .eq('created_by_user_id', pr.id),
       supabase.from('results').select('verified').eq('user_id', pr.id),
       fetchUserAchievements(pr.id),
@@ -263,7 +263,7 @@ function renderUpcoming(upcoming, now, name){
           return `
             <a class="cn-session" href="#/room/${esc(String(s.id))}">
               <div class="cn-session-main">
-                <div class="cn-session-name">${esc(s.name || 'Untitled session')}${s.verified_only ? ' <span class="sess-verified">✓ Verified</span>' : ''}</div>
+                <div class="cn-session-name">${esc(s.name || 'Untitled session')}${s.verified_only ? ' <span class="sess-verified">✓ Verified</span>' : ''}${s.access_mode === 'invite' ? ` <span style="display:inline-block;margin-left:4px;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#5230da;background:rgba(82,48,218,.1);border-radius:999px;padding:2px 7px;vertical-align:middle">Invite link</span>` : s.access_mode === 'followers' ? ` <span style="display:inline-block;margin-left:4px;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#0e7490;background:rgba(14,116,144,.1);border-radius:999px;padding:2px 7px;vertical-align:middle">Followers only</span>` : ''}</div>
                 <div class="cn-session-meta">${live ? '<span class="hs-live">● Live now</span>' : esc(fmtWhen(s.scheduled_start))}${parts}</div>
               </div>
               <span class="cn-session-pill ${live ? 'live' : 'up'}">${live ? 'Join' : 'View'} →</span>

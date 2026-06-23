@@ -50,6 +50,9 @@ function styles(){
     display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .mys-verified{font-size:11px;font-weight:700;color:#0f8a52;background:rgba(32,178,107,.12);
     border-radius:999px;padding:2px 8px;letter-spacing:.02em}
+  .mys-access{font-size:11px;font-weight:700;letter-spacing:.02em;border-radius:999px;padding:2px 8px}
+  .mys-access.invite{color:#5230da;background:rgba(82,48,218,.1)}
+  .mys-access.followers{color:#0e7490;background:rgba(14,116,144,.1)}
   .mys-meta{color:#67737c;font-size:13.5px;margin-top:4px}
   .mys-room-count{color:#0e7490;font-size:12.5px;font-weight:600;margin-top:3px;min-height:0}
   .mys-side{display:flex;flex-direction:column;align-items:flex-end;gap:10px}
@@ -95,6 +98,14 @@ function styles(){
   /* reset the global brand.css label{} uppercase/letter-spacing that bleeds in (.mys-check is a <label>) */
   .mys-check-title{font-weight:700;color:#011624;font-size:14px;text-transform:none;letter-spacing:normal}
   .mys-check-sub{color:#67737c;font-size:12.5px;line-height:1.4;margin-top:2px;text-transform:none;letter-spacing:normal}
+  .mys-acc-group{display:flex;flex-direction:column;gap:8px}
+  /* .mys-acc is a <label> inside .mys-field → bump specificity over .mys-field label{display:block} */
+  .mys-acc-group .mys-acc{display:flex;align-items:flex-start;gap:10px;margin:0;background:#f7f8f8;border:1px solid #dfe3e6;border-radius:12px;padding:11px 13px;cursor:pointer;transition:border-color .15s,background .15s}
+  .mys-acc input{margin-top:3px;flex-shrink:0;width:auto}
+  .mys-acc:has(input:checked){border-color:#5230da;background:#fff;box-shadow:0 0 0 3px rgba(82,48,218,.08)}
+  .mys-acc-main{display:flex;flex-direction:column;flex:1;min-width:0}
+  .mys-acc-title{font-weight:700;color:#011624;font-size:14px;text-transform:none;letter-spacing:normal}
+  .mys-acc-sub{color:#67737c;font-size:12.5px;line-height:1.4;margin-top:2px;text-transform:none;letter-spacing:normal}
   .mys-modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:22px;flex-wrap:wrap}
   .mys-warn{background:rgba(245,183,0,.1);border:1px solid rgba(245,183,0,.35);border-radius:10px;
     padding:10px 12px;font-size:13px;color:#8a6d00;margin:0 0 16px;line-height:1.45}
@@ -223,6 +234,14 @@ export function mount(el){
     const st = stateOf(s, now);
     const id = s.id;
     const verified = s.verified_only ? '<span class="mys-verified">✓ Verified</span>' : '';
+    const mode = s.access_mode || 'public';
+    const access = mode === 'invite' ? '<span class="mys-access invite">Invite link</span>'
+      : mode === 'followers' ? '<span class="mys-access followers">Followers only</span>' : '';
+    const copyBtn = mode === 'invite'
+      ? `<button type="button" class="mys-btn ghost" data-copy="invite" data-token="${esc(s.invite_token || '')}">Copy invite link</button>`
+      : mode === 'followers'
+      ? `<button type="button" class="mys-btn ghost" data-copy="connect">Copy connect link</button>`
+      : '';
     let pill, actions = '';
     if(st === 'live'){
       pill = `<span class="mys-pill live"><span class="dot"></span>Live</span>`;
@@ -240,13 +259,14 @@ export function mount(el){
         <button type="button" class="mys-btn ghost" data-edit="${id}">Edit</button>`;
       if(canDelete(s, now)) actions += `<button type="button" class="mys-btn danger" data-delete="${id}">Delete</button>`;
     }
+    if(copyBtn) actions += copyBtn;
 
     const roomCount = st === 'upcoming' ? `<div class="mys-room-count">${(roomCounts.get(id) || 0) > 0 ? `${roomCounts.get(id)} in the room now` : ''}</div>` : '';
 
     return `
     <div class="mys-card ${st}" data-id="${id}" data-state="${st}">
       <div class="mys-main">
-        <div class="mys-title">${esc(s.name || 'Untitled session')}${verified}</div>
+        <div class="mys-title">${esc(s.name || 'Untitled session')}${verified}${access}</div>
         <div class="mys-meta">${esc(fmtWhen(s.scheduled_start))} · ${s.duration_minutes} min</div>
         ${roomCount}
       </div>
@@ -325,6 +345,29 @@ export function mount(el){
     if(editBtn){ openEdit(Number(editBtn.dataset.edit)); return; }
     const delBtn = e.target.closest('[data-delete]');
     if(delBtn){ openDelete(Number(delBtn.dataset.delete)); return; }
+    const copyEl = e.target.closest('[data-copy]');
+    if(copyEl){ doCopy(copyEl); return; }
+  }
+
+  // Copy an invite link (#/join/<token>) or the host's own connect link (#/connect/<handle>).
+  async function doCopy(btn){
+    let text;
+    if(btn.dataset.copy === 'invite'){
+      const token = btn.dataset.token;
+      if(!token) return;
+      text = location.origin + location.pathname + '#/join/' + token;
+    } else {
+      const handle = auth.getState().practitionerHandle;
+      if(!handle){ btn.textContent = 'No connect link yet'; return; }
+      text = location.origin + location.pathname + '#/connect/' + handle;
+    }
+    const orig = btn.textContent;
+    try {
+      if(navigator.clipboard && window.isSecureContext){ await navigator.clipboard.writeText(text); }
+      else { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+      btn.textContent = 'Copied ✓';
+    } catch { btn.textContent = 'Copy failed'; }
+    setTimeout(() => { btn.textContent = orig; }, 1600);
   }
 
   function closeModal(){ const r = modalRoot(); if(r) r.innerHTML = ''; }
@@ -342,6 +385,7 @@ export function mount(el){
       return;
     }
     const p = localParts(s.scheduled_start);
+    const mode = s.access_mode || 'public';
     const r = modalRoot();
     r.innerHTML = `
     <div class="mys-backdrop" data-backdrop>
@@ -375,6 +419,17 @@ export function mount(el){
               <span class="mys-check-sub">Only legitimate measurements count toward the group results.</span>
             </span>
           </label>
+          <div class="mys-field">
+            <label>Who can join?</label>
+            <div class="mys-acc-group">
+              <label class="mys-acc"><input type="radio" name="mysAccess" value="public" ${mode === 'public' ? 'checked' : ''}>
+                <span class="mys-acc-main"><span class="mys-acc-title">Anyone</span><span class="mys-acc-sub">Anyone can enter from the Sessions list.</span></span></label>
+              <label class="mys-acc"><input type="radio" name="mysAccess" value="invite" ${mode === 'invite' ? 'checked' : ''}>
+                <span class="mys-acc-main"><span class="mys-acc-title">Invite link</span><span class="mys-acc-sub">Visible to all, but only people with the invite link can enter.</span></span></label>
+              <label class="mys-acc"><input type="radio" name="mysAccess" value="followers" ${mode === 'followers' ? 'checked' : ''}>
+                <span class="mys-acc-main"><span class="mys-acc-title">Followers only</span><span class="mys-acc-sub">Only people connected to you can enter.</span></span></label>
+            </div>
+          </div>
         </div>
         <div class="mys-msg" id="mysEditMsg"></div>
         <div class="mys-modal-actions">
@@ -410,15 +465,26 @@ export function mount(el){
     if(isNaN(start.getTime())){ setMsg('Invalid date or time.', 'err'); return; }
     if(start.getTime() <= Date.now()){ setMsg('Start time must be in the future.', 'err'); return; }
 
+    const accessMode = (q('input[name="mysAccess"]:checked') || {}).value || 'public';
+    const payload = {
+      name,
+      scheduled_start: start.toISOString(),
+      duration_minutes: duration,
+      verified_only: verified,
+      access_mode: accessMode,
+    };
+    // Switching to invite without an existing token → mint one now (kept if you later
+    // switch away, so flipping back reuses the same link).
+    if(accessMode === 'invite' && !s.invite_token){
+      payload.invite_token = (self.crypto && crypto.randomUUID)
+        ? crypto.randomUUID().replace(/-/g, '')
+        : (Date.now().toString(36) + Math.random().toString(36).slice(2, 12));
+    }
+
     const saveBtn = q('#mysSave');
     saveBtn.disabled = true; setMsg('Saving…', '');
     const { data, error } = await supabase.from('sessions')
-      .update({
-        name,
-        scheduled_start: start.toISOString(),
-        duration_minutes: duration,
-        verified_only: verified,
-      })
+      .update(payload)
       .eq('id', id)
       .eq('created_by_user_id', uid)   // belt-and-suspenders alongside RLS
       .select('id');

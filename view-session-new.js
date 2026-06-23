@@ -8,7 +8,27 @@ function avatarHtml(url, name){
   return `<span class="sess-avatar sess-avatar-initial">${esc((name || '?').charAt(0).toUpperCase())}</span>`;
 }
 
+function snStyles(){
+  if(document.getElementById('snAccessStyles')) return;
+  const s = document.createElement('style');
+  s.id = 'snAccessStyles';
+  s.textContent = `
+  .sn-access-label{display:block;margin-bottom:8px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#67737c}
+  .sn-access{display:flex;flex-direction:column;gap:8px}
+  .sn-acc{display:flex;align-items:flex-start;gap:10px;background:#f7f8f8;border:1px solid #dfe3e6;border-radius:12px;
+    padding:11px 13px;cursor:pointer;transition:border-color .15s,background .15s}
+  .sn-acc:hover{border-color:#c9cfd4}
+  .sn-acc input{margin-top:3px;flex-shrink:0;width:auto}
+  .sn-acc:has(input:checked){border-color:#5230da;background:#fff;box-shadow:0 0 0 3px rgba(82,48,218,.08)}
+  .sn-acc-main{display:flex;flex-direction:column;flex:1;min-width:0}
+  .sn-acc-title{font-weight:700;color:#011624;font-size:14px;text-transform:none;letter-spacing:normal}
+  .sn-acc-sub{color:#67737c;font-size:12.5px;line-height:1.4;margin-top:2px;text-transform:none;letter-spacing:normal}
+  `;
+  document.head.appendChild(s);
+}
+
 export function mount(el){
+  snStyles();
   el.innerHTML = `
     <div class="view-head">
       <p class="room-hint" style="text-align:left;margin:0 0 6px"><a href="#/sessions" class="link">← Sessions</a></p>
@@ -46,6 +66,26 @@ export function mount(el){
                 <span class="sn-option-sub">Only legitimate measurements count toward the group results — irregular spinning is excluded from the leaderboard.</span>
               </span>
             </label>
+          </div>
+          <div class="field full">
+            <label class="sn-access-label">Who can join?</label>
+            <div class="sn-access">
+              <label class="sn-acc">
+                <input type="radio" name="snAccess" value="public" checked>
+                <span class="sn-acc-main"><span class="sn-acc-title">Anyone</span>
+                <span class="sn-acc-sub">Anyone can enter from the Sessions list.</span></span>
+              </label>
+              <label class="sn-acc">
+                <input type="radio" name="snAccess" value="invite">
+                <span class="sn-acc-main"><span class="sn-acc-title">Invite link</span>
+                <span class="sn-acc-sub">Anyone can see this session, but only people with the invite link can enter.</span></span>
+              </label>
+              <label class="sn-acc">
+                <input type="radio" name="snAccess" value="followers">
+                <span class="sn-acc-main"><span class="sn-acc-title">Followers only</span>
+                <span class="sn-acc-sub">Only people connected to you can enter. Others will be asked to connect first.</span></span>
+              </label>
+            </div>
           </div>
         </div>
         <div class="sn-howto">
@@ -103,9 +143,8 @@ export function mount(el){
       return;
     }
 
-    $('btnCreate').disabled = true;
-    setFormMsg('Creating…', '');
-    const { data, error } = await supabase.from('sessions').insert({
+    const accessMode = (el.querySelector('input[name="snAccess"]:checked') || {}).value || 'public';
+    const row = {
       name,
       scheduled_start: start.toISOString(),
       duration_minutes: duration,
@@ -113,7 +152,18 @@ export function mount(el){
       created_by: a.displayName,
       created_by_user_id: a.user.id,
       verified_only: $('fVerified').checked,
-    }).select('id').single();
+      access_mode: accessMode,
+    };
+    // Invite sessions get an unguessable token; the shareable link is /#/join/<token>.
+    if(accessMode === 'invite'){
+      row.invite_token = (self.crypto && crypto.randomUUID)
+        ? crypto.randomUUID().replace(/-/g, '')
+        : (Date.now().toString(36) + Math.random().toString(36).slice(2, 12));
+    }
+
+    $('btnCreate').disabled = true;
+    setFormMsg('Creating…', '');
+    const { data, error } = await supabase.from('sessions').insert(row).select('id').single();
 
     if(error){
       $('btnCreate').disabled = false;

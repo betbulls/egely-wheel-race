@@ -47,6 +47,7 @@ function router(){
     a.classList.toggle('active', a.dataset.route === path);
   });
   if(path === '/room') setView(mountRoom, param);
+  else if(path === '/join') setView(mountRoom, null, param);   // invite link: load the room by token
   else if(path === '/live') setView(mountLive);
   else if(path === '/journey') setView(mountJourney);
   else if(path === '/subscribe') setView(mountSubscribe);
@@ -299,9 +300,11 @@ let prevUid = null;   // tracks login/logout transitions so the view refreshes o
 auth.subscribeAuth(a => {
   const uid = a.user?.id || null;
   if(a.user && location.hash === '#/login'){
-    let pending = null;
+    let pending = null, pendingRoom = null;
     try { pending = localStorage.getItem('ewr_pending_connect'); } catch {}
-    if(pending) location.hash = '#/connect/' + pending;
+    try { pendingRoom = localStorage.getItem('ewr_pending_room'); } catch {}
+    if(pendingRoom){ try { localStorage.removeItem('ewr_pending_room'); } catch {} location.hash = pendingRoom.replace(/^#/, ''); }
+    else if(pending) location.hash = '#/connect/' + pending;
     else if(a.profile) location.hash = needsWelcome(a) ? '#/welcome' : '#/home';
     // profile not loaded yet → wait for the next auth emit (fires once it loads)
   } else if(prevUid && !uid){
