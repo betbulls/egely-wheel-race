@@ -252,10 +252,10 @@ function openMiniProfile(u, profile){
   const stats = [
     { val: u.badgesAll.length, label: 'Achievements' },
     { val: u.xpAll,            label: 'Total XP' },
-    { val: u.sessionCount,     label: 'Sessions' },
-    { val: u.hostedCount,      label: 'Hosted' },
-    { val: u.raceCount || 0,   label: 'Races' },
-    { val: verifiedRatio != null ? verifiedRatio + '%' : '—', label: 'Verified' },
+    { val: u.sessionCount,     label: 'Sessions joined' },
+    { val: u.hostedCount,      label: 'Sessions hosted' },
+    { val: u.raceCount || 0,   label: 'Races completed' },
+    { val: verifiedRatio != null ? verifiedRatio + '%' : '—', label: 'Verified results' },
   ];
 
   const backdrop = document.createElement('div');

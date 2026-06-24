@@ -62,14 +62,56 @@ function phCard(icon, h, d, tint){
   </div>`;
 }
 
+function injectLandingRaceStyles(){
+  if(document.getElementById('phRaceStyles')) return;
+  const st = document.createElement('style'); st.id = 'phRaceStyles';
+  st.textContent = `
+  .ph-race{background:#011624;border-radius:20px;padding:28px;margin:6px 0 30px;display:grid;grid-template-columns:1fr 1fr;gap:30px;
+    align-items:center;position:relative;overflow:hidden;box-shadow:0 18px 44px -20px rgba(1,22,36,.6)}
+  .ph-race::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,#37dbff,#5230da)}
+  .ph-race-eyebrow{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
+    color:#37dbff;background:rgba(55,219,255,.12);border-radius:999px;padding:4px 12px}
+  .ph-race h2{font-family:'Montserrat',sans-serif;font-weight:600;font-size:26px;color:#fff;margin:13px 0 9px;letter-spacing:-0.3px;line-height:1.15}
+  .ph-race-text>p{color:#aeb9c2;font-size:14.5px;line-height:1.55;margin:0 0 15px}
+  .ph-race-benefits{list-style:none;padding:0;margin:0 0 20px;display:flex;flex-direction:column;gap:8px}
+  .ph-race-benefits li{color:#dbe2e6;font-size:13.5px;padding-left:20px;position:relative;line-height:1.4}
+  .ph-race-benefits li::before{content:"";position:absolute;left:0;top:5px;width:8px;height:8px;border-radius:2px;
+    background:repeating-conic-gradient(#37dbff 0 25%,transparent 0 50%) 0 / 4px 4px;opacity:.85}
+  .ph-race-cta{display:flex;gap:10px;flex-wrap:wrap}
+  .ph-race-prev{background:#0a1f2e;border:1px solid #1f323e;border-radius:14px;padding:14px}
+  .phr-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:13px}
+  .phr-live{display:inline-flex;align-items:center;gap:7px;color:#fff;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+  .phr-live i{width:7px;height:7px;border-radius:50%;background:#37dbff;box-shadow:0 0 6px #37dbff;animation:phrPulse 1.5s ease-in-out infinite}
+  .phr-clock{color:#ffd66b;font-family:'Montserrat',sans-serif;font-weight:700;font-size:15px}
+  .phr-lanes{display:flex;flex-direction:column;gap:11px}
+  .phr-lane{display:grid;grid-template-columns:16px 1fr auto;align-items:center;gap:10px}
+  .phr-rk{color:#8e9aa4;font-weight:700;font-size:12px;text-align:center}
+  .phr-lane.leader .phr-rk{color:#ffd66b}
+  .phr-track{position:relative;height:18px;border-radius:999px;background:#14293a}
+  .phr-fin{position:absolute;right:3px;top:3px;bottom:3px;width:3px;border-radius:2px;background:repeating-linear-gradient(45deg,#fff 0 2px,#ffd66b 2px 4px)}
+  .phr-puck{position:absolute;top:50%;transform:translate(-50%,-50%);min-width:20px;height:20px;padding:0 5px;border-radius:999px;
+    display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;background:#5230da;box-shadow:0 0 0 2px #0a1f2e;animation:phrDrift 6s ease-in-out infinite}
+  .phr-puck i{position:absolute;right:100%;top:50%;transform:translateY(-50%);margin-right:1px;width:22px;height:6px;border-radius:999px;background:linear-gradient(90deg,rgba(55,219,255,0),rgba(55,219,255,.7))}
+  .phr-lane.leader .phr-puck{background:#caa23c;box-shadow:0 0 0 2px #ffd66b,0 0 0 3px rgba(202,162,60,.4)}
+  .phr-lane.me .phr-puck{box-shadow:0 0 0 2px #7a5cf0,0 0 0 3px rgba(82,48,218,.4)}
+  .phr-v{font-family:'Montserrat',sans-serif;font-weight:700;font-size:14px;color:#fff;min-width:18px;text-align:right}
+  @keyframes phrPulse{0%,100%{opacity:1}50%{opacity:.4}}
+  @keyframes phrDrift{0%,100%{margin-left:0}50%{margin-left:7px}}
+  @media (max-width:760px){ .ph-race{grid-template-columns:1fr;gap:22px;padding:22px} .ph-race h2{font-size:22px} }
+  @media (prefers-reduced-motion: reduce){ .phr-live i,.phr-puck{animation:none} }
+  `;
+  document.head.appendChild(st);
+}
+
 function publicLandingHtml(){
+  injectLandingRaceStyles();
   return `
   <div class="ph-wrap">
     <section class="ph-hero">
       <div class="ph-hero-text">
         <span class="ph-eyebrow"><span class="ph-eyebrow-dot"></span> A live space for your Egely Wheel</span>
-        <h1>Measure your vitality. Practice live.</h1>
-        <p class="ph-lead">EWR Live turns your Egely Wheel readings into a personal practice — shared sessions, guided experiments, and a visible journey of progress.</p>
+        <h1>Measure your vitality. Practice together. Race live.</h1>
+        <p class="ph-lead">Turn every Egely Wheel reading into visible progress — measure solo, follow guided experiments, join live sessions, or race friends in real time.</p>
         <div class="ph-cta-row">
           <a class="btn-join" href="#/login">Log in or sign up</a>
           <a class="btn-secondary" href="#/how-to-connect">How to connect your wheel</a>
@@ -87,7 +129,7 @@ function publicLandingHtml(){
     <div class="ph-steps">
       <div class="ph-step"><span class="ph-step-n">1</span><span class="ph-step-t">Connect your wheel</span></div>
       <span class="ph-step-sep" aria-hidden="true"></span>
-      <div class="ph-step"><span class="ph-step-n">2</span><span class="ph-step-t">Measure solo or live</span></div>
+      <div class="ph-step"><span class="ph-step-n">2</span><span class="ph-step-t">Measure, practice or race live</span></div>
       <span class="ph-step-sep" aria-hidden="true"></span>
       <div class="ph-step"><span class="ph-step-n">3</span><span class="ph-step-t">Watch your progress grow</span></div>
     </div>
@@ -100,13 +142,39 @@ function publicLandingHtml(){
       ${phCard(PH_ICONS.maker, 'Spiritual Maker tools', 'Invite followers, host sessions, and support their progress through shared measurements.')}
     </div>
 
+    <section class="ph-race">
+      <div class="ph-race-text">
+        <span class="ph-race-eyebrow">Race</span>
+        <h2>Turn a measurement into a race</h2>
+        <p>Invite friends, enter the lobby, and race together in real time. Your live vitality drives your racer forward — while the measured score decides the official result.</p>
+        <ul class="ph-race-benefits">
+          <li>Race together from different phones or computers</li>
+          <li>Public, invite-only and follower races</li>
+          <li>Live positions, verified readings and saved results</li>
+        </ul>
+        <div class="ph-race-cta">
+          <a class="btn-join" href="#/races">Explore races</a>
+          <a class="btn-secondary" href="#/login">Create a race</a>
+        </div>
+      </div>
+      <div class="ph-race-prev" aria-hidden="true">
+        <div class="phr-bar"><span class="phr-live"><i></i>Race preview</span><span class="phr-clock">18s left</span></div>
+        <div class="phr-lanes">
+          <div class="phr-lane leader"><span class="phr-rk">1</span><div class="phr-track"><span class="phr-fin"></span><span class="phr-puck" style="left:76%"><i></i>A</span></div><span class="phr-v">18</span></div>
+          <div class="phr-lane me"><span class="phr-rk">2</span><div class="phr-track"><span class="phr-fin"></span><span class="phr-puck" style="left:61%"><i></i>You</span></div><span class="phr-v">15</span></div>
+          <div class="phr-lane"><span class="phr-rk">3</span><div class="phr-track"><span class="phr-fin"></span><span class="phr-puck" style="left:43%"><i></i>M</span></div><span class="phr-v">11</span></div>
+        </div>
+      </div>
+    </section>
+
     <h2 class="ph-section-h">Free to explore. Measure with a wheel.</h2>
     <div class="ph-compare">
       <div class="ph-col">
         <div class="ph-col-h">Free account</div>
         <ul class="ph-list">
           <li>Watch the Live community</li>
-          <li>Explore sessions and the ranking</li>
+          <li>Explore sessions, races and the ranking</li>
+          <li>Watch live races and explore results</li>
           <li>Build your profile and join in</li>
         </ul>
       </div>
@@ -117,6 +185,7 @@ function publicLandingHtml(){
           <li>Save your solo measurements</li>
           <li>Complete guided experiments</li>
           <li>Join and host official sessions</li>
+          <li>Join and host live races</li>
         </ul>
         <div class="ph-col-foot"><a class="btn-join ph-compare-cta" href="#/subscribe">Subscribe to measure</a></div>
       </div>
@@ -133,8 +202,8 @@ function publicLandingHtml(){
     </div>
 
     <div class="ph-practice">
-      <h2 class="ph-section-h" style="margin:0 0 8px">Built for practice, not just scores</h2>
-      <p>Every reading becomes part of your journey — achievements, levels, experiments, sessions, and progress you can actually see over time.</p>
+      <h2 class="ph-section-h" style="margin:0 0 8px">Friendly competition. Meaningful progress.</h2>
+      <p>Race for the moment, then keep the result as part of your longer journey — every run feeds your measurements, achievements and progress over time.</p>
     </div>
   </div>`;
 }
