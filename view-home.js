@@ -220,9 +220,9 @@ export function mount(el){
     // Sessions that started in the past 4 hours (still possibly live) or in the
     // future — capped to ~10 for the small teaser block on the dashboard.
     const sessionWindow = new Date(Date.now() - 4 * 3600 * 1000).toISOString();
-    const [resR, hostedR, prRecvR, stored, upcomingR, progByExp] = await Promise.all([
+    const [resR, hostedR, prRecvR, stored, upcomingR, progByExp, upcomingRacesR] = await Promise.all([
       supabase.from('results').select('*').eq('user_id', userId),
-      supabase.from('sessions').select('id').eq('created_by_user_id', userId).eq('event_type', 'session'),
+      supabase.from('sessions').select('id, event_type').eq('created_by_user_id', userId),
       supabase.from('practitioner_links').select('practitioner_id').eq('client_id', userId).eq('status', 'active'),
       fetchUserAchievements(userId),
       supabase.from('sessions')
@@ -232,11 +232,18 @@ export function mount(el){
         .order('scheduled_start', { ascending: true })
         .limit(10),
       fetchProgress(userId),
+      supabase.from('sessions')
+        .select('id, name, scheduled_start, duration_minutes, created_by_user_id, created_by, verified_only, access_mode')
+        .eq('event_type', 'race')
+        .gte('scheduled_start', sessionWindow)
+        .order('scheduled_start', { ascending: true })
+        .limit(10),
     ]);
     const results = resR.data || [];
     const experimentsCompleted = completedExperimentCount(progByExp);
     const continueExp = pickContinue(progByExp);
-    const hostedRows = hostedR.data || [];
+    const hostedRows = (hostedR.data || []).filter(s => s.event_type !== 'race');   // sessions only
+    const hostedRacesCount = (hostedR.data || []).filter(s => s.event_type === 'race').length;
     const hostedIds = hostedRows.map(s => s.id);
 
     // Participants in my hosted sessions — needed for Community Host / Crowd
@@ -276,8 +283,29 @@ export function mount(el){
       }
     }
 
+    // Race competitive flags — First Race Win / Podium require ≥2 officially-ranked
+    // racers (a solo race never grants them).
+    const raceResults = results.filter(r => r.kind === 'race');
+    const raceCount = raceResults.length;
+    let raceWin = false, racePodium = false;
+    const myRankedRaces = raceResults.filter(r => r.final_rank != null && r.session_id != null);
+    if(myRankedRaces.length){
+      const rids = [...new Set(myRankedRaces.map(r => r.session_id))];
+      const { data: fieldRows } = await supabase.from('results')
+        .select('session_id').eq('kind', 'race').in('session_id', rids).not('final_rank', 'is', null);
+      const fieldSize = new Map();
+      for(const fr of (fieldRows || [])) fieldSize.set(fr.session_id, (fieldSize.get(fr.session_id) || 0) + 1);
+      for(const r of myRankedRaces){
+        if((fieldSize.get(r.session_id) || 1) >= 2){
+          if(r.final_rank === 1) raceWin = true;
+          if(r.final_rank <= 3) racePodium = true;
+        }
+      }
+    }
+
     const data = {
       results,
+      raceCount, hostedRacesCount, raceWin, racePodium,
       hostedSessionsCount: hostedRows.length,
       connectedPractitionersCount: (prRecvR.data || []).length,
       isPractitioner: !!a.isPractitioner,
@@ -322,6 +350,12 @@ export function mount(el){
       }
     }
 
+    // ---- Upcoming Races (its own block + query — never mixed with sessions) -
+    const upcomingRaces = (upcomingRacesR.data || [])
+      .filter(s => tNow <= new Date(s.scheduled_start).getTime() + (s.duration_minutes || 0) * 60000)
+      .slice(0, 3);
+    await enrichUpcoming(upcomingRaces);
+
     // ---- "Once earned, always shown" ----------------------------------------
     // Stored unlocks are canonical. If the DB has a row but compute currently
     // says false (e.g. test data was deleted), keep the badge unlocked.
@@ -360,8 +394,8 @@ export function mount(el){
       setTimeout(() => markSeen(userId, [...newIds]), 0);
     }
 
-    const sessionCount = results.filter(r => r.session_id != null).length;
-    const soloCount = results.filter(r => r.session_id == null && r.experiment_id == null).length;
+    const sessionCount = results.filter(r => r.kind ? r.kind === 'session' : (r.session_id != null && r.experiment_id == null)).length;
+    const soloCount = results.filter(r => r.kind ? r.kind === 'solo' : (r.session_id == null && r.experiment_id == null)).length;
     const verifiedRatio = results.length
       ? Math.round(results.filter(r => r.verified).length / results.length * 100)
       : 0;
@@ -396,12 +430,13 @@ export function mount(el){
       ${levelUpFromTitle != null ? renderLevelUp(levelUpFromTitle, levelState.level.title) : ''}
       ${renderLevel(levelState)}
       ${renderStats({
-        sessionCount, soloCount, experimentsCompleted,
+        sessionCount, soloCount, raceCount, experimentsCompleted,
         clientsCount: a.isPractitioner ? clientsCount : null,
         bestAvg, verifiedRatio, total: results.length,
       })}
       ${renderContinueExperiment(continueExp, progByExp)}
       ${renderUpcoming(upcoming)}
+      ${renderUpcoming(upcomingRaces, 'Upcoming Races', '#/race/', 'Enter')}
       ${renderRecent(achievements, newIds, stored)}
       ${renderNext(achievements)}
       ${renderCollection(achievements, newIds, stored)}
@@ -485,6 +520,7 @@ function renderStats(s){
     { label: 'Sessions', val: s.sessionCount, color: '#5230da' },
     { label: 'Solo',     val: s.soloCount,    color: '#401d91' },
     { label: 'Experiments', val: s.experimentsCompleted || 0, color: '#6b3fd4' },
+    { label: 'Races', val: s.raceCount || 0, color: '#5230da' },
     s.clientsCount != null ? { label: 'Members', val: s.clientsCount, color: '#0f8a52' } : null,
     { label: 'Best Avg', val: s.total ? s.bestAvg.toFixed(1) : '–', color: s.total ? vColor(s.bestAvg) : '#99a2a7' },
     { label: 'Verified', val: s.total ? s.verifiedRatio + '%' : '–', color: '#b8860b' },
@@ -534,11 +570,27 @@ function hsAvatar(host){
   return `<span class="sess-avatar sess-avatar-initial">${esc(name.charAt(0).toUpperCase())}</span>`;
 }
 
-function renderUpcoming(sessions){
+// Shared enrichment for an upcoming list (participant counts + host face).
+async function enrichUpcoming(list){
+  if(!list.length) return;
+  const ids = list.map(s => s.id);
+  const { data: parts } = await supabase.from('results').select('session_id, user_id').in('session_id', ids);
+  const counts = new Map();
+  for(const r of (parts || [])){ if(!counts.has(r.session_id)) counts.set(r.session_id, new Set()); counts.get(r.session_id).add(r.user_id); }
+  for(const s of list) s._participants = (counts.get(s.id) || new Set()).size;
+  const hostIds = [...new Set(list.map(s => s.created_by_user_id).filter(Boolean))];
+  if(hostIds.length){
+    const { data: hp } = await supabase.from('profiles').select('id, display_name, avatar_url').in('id', hostIds);
+    const hostById = new Map((hp || []).map(p => [p.id, p]));
+    for(const s of list){ const p = s.created_by_user_id ? hostById.get(s.created_by_user_id) : null; s._host = { name: (p && p.display_name) || s.created_by || 'Host', avatar: p && p.avatar_url }; }
+  }
+}
+
+function renderUpcoming(sessions, heading = 'Upcoming Sessions', base = '#/room/', enterCta = 'View'){
   if(!sessions.length) return '';
   const now = Date.now();
   return `
-    <h2 class="dash-h">Upcoming Sessions</h2>
+    <h2 class="dash-h">${heading}</h2>
     <div class="home-sess">
       ${sessions.map(s => {
         const start = new Date(s.scheduled_start).getTime();
@@ -553,10 +605,10 @@ function renderUpcoming(sessions){
           : s.access_mode === 'followers' ? ` <span style="${accBase}color:#0e7490;background:rgba(14,116,144,.1)">Followers only</span>` : '';
         const partsTxt = s._participants > 0 ? ` · ${s._participants} measuring` : '';
         return `
-          <a class="home-sess-card${isLive ? ' live' : ''}" href="#/room/${s.id}" data-start="${start}" data-end="${end}">
+          <a class="home-sess-card${isLive ? ' live' : ''}" href="${base}${s.id}" data-start="${start}" data-end="${end}">
             <div class="hs-row">
-              <div class="hs-name">${esc(s.name || 'Untitled session')}${verified}${access}</div>
-              <span class="hs-action">${isLive ? 'Join' : 'View'} →</span>
+              <div class="hs-name">${esc(s.name || 'Untitled')}${verified}${access}</div>
+              <span class="hs-action">${isLive ? 'Join' : enterCta} →</span>
             </div>
             <div class="hs-host">
               <span class="hs-host-av">${hsAvatar(host)}</span>

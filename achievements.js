@@ -16,6 +16,7 @@ export const CATEGORIES = [
   { id: 'endurance',       title: 'Endurance' },
   { id: 'personal-growth', title: 'Personal Growth' },
   { id: 'social',          title: 'Social & Community' },
+  { id: 'race',            title: 'Races' },
   { id: 'experiments',     title: 'Experiments' },
   { id: 'practitioner',    title: 'Spiritual Maker Path', practitionerOnly: true },
   { id: 'special',         title: 'Rare & Special' },
@@ -66,6 +67,9 @@ const distinctDays = results => {
   }
   return s.size;
 };
+// A result's kind — explicit column wins; derivation fallback for older rows.
+// Group-session achievements use this so a RACE never counts as a session.
+const rkind = r => r.kind || (r.experiment_id != null ? 'experiment' : r.session_id != null ? 'session' : 'solo');
 
 // ---- definitions -----------------------------------------------------------
 export const ACHIEVEMENTS = [
@@ -80,9 +84,9 @@ export const ACHIEVEMENTS = [
   { id: 'first-group', category: 'getting-started', tier: T.bronze, icon: '🤝',
     title: 'First Group Session', description: 'Take part in your first group session.',
     progress: d => {
-      const c = d.results.filter(r => r.session_id != null).length;
+      const c = d.results.filter(r => rkind(r) === 'session').length;
       return { current: Math.min(c, 1), target: 1,
-        unlockedAt: c ? firstAt(d.resultsAsc, r => r.session_id != null) : null };
+        unlockedAt: c ? firstAt(d.resultsAsc, r => rkind(r) === 'session') : null };
     }},
   { id: 'first-saved', category: 'getting-started', tier: T.bronze, icon: '💾',
     title: 'First Saved Result', description: 'Save any measurement.',
@@ -188,10 +192,10 @@ export const ACHIEVEMENTS = [
   // Social & Community
   { id: 'joined-5', category: 'social', tier: T.bronze, icon: '🎈',
     title: 'Joined 5 Sessions', description: 'Take part in 5 group sessions.',
-    progress: d => ({ current: d.results.filter(r => r.session_id != null).length, target: 5 })},
+    progress: d => ({ current: d.results.filter(r => rkind(r) === 'session').length, target: 5 })},
   { id: 'joined-10', category: 'social', tier: T.silver, icon: '🎪',
     title: 'Joined 10 Sessions', description: 'Take part in 10 group sessions.',
-    progress: d => ({ current: d.results.filter(r => r.session_id != null).length, target: 10 })},
+    progress: d => ({ current: d.results.filter(r => rkind(r) === 'session').length, target: 10 })},
   { id: 'hosted-1', category: 'social', tier: T.bronze, icon: '🎙️',
     title: 'Hosted First Session', description: 'Create your first group session.',
     progress: d => ({ current: Math.min(d.hostedSessionsCount, 1), target: 1 })},
@@ -317,13 +321,34 @@ export const ACHIEVEMENTS = [
   // Social additions
   { id: 'joined-25', category: 'social', tier: T.silver, icon: '🏕️',
     title: 'Community Member', description: 'Take part in 25 group sessions.',
-    progress: d => ({ current: d.results.filter(r => r.session_id != null).length, target: 25 })},
+    progress: d => ({ current: d.results.filter(r => rkind(r) === 'session').length, target: 25 })},
   { id: 'community-host', category: 'social', tier: T.silver, icon: '🎤',
     title: 'Community Host', description: 'Host a session with 5+ participants.',
     progress: d => ({ current: d.hostedParticipantsMax || 0, target: 5 })},
   { id: 'crowd-leader', category: 'social', tier: T.gold, icon: '🏟️',
     title: 'Crowd Leader', description: 'Host a session with 20+ participants.',
     progress: d => ({ current: d.hostedParticipantsMax || 0, target: 20 })},
+
+  // Races (competitive). Win/Podium need ≥2 officially-ranked racers — a solo race
+  // never grants them (raceWin / racePodium are computed with that rule upstream).
+  { id: 'first-race', category: 'race', tier: T.bronze, icon: '🏁',
+    title: 'First Race', description: 'Take part in your first race.',
+    progress: d => ({ current: Math.min(d.raceCount || 0, 1), target: 1 })},
+  { id: 'first-race-hosted', category: 'race', tier: T.bronze, icon: '🎬',
+    title: 'First Race Hosted', description: 'Create your first race.',
+    progress: d => ({ current: Math.min(d.hostedRacesCount || 0, 1), target: 1 })},
+  { id: 'joined-5-races', category: 'race', tier: T.silver, icon: '🏎️',
+    title: 'Joined 5 Races', description: 'Take part in five races.',
+    progress: d => ({ current: d.raceCount || 0, target: 5 })},
+  { id: 'hosted-5-races', category: 'race', tier: T.silver, icon: '📣',
+    title: 'Hosted 5 Races', description: 'Create five races.',
+    progress: d => ({ current: d.hostedRacesCount || 0, target: 5 })},
+  { id: 'first-podium', category: 'race', tier: T.silver, icon: '🥉',
+    title: 'First Podium', description: 'Finish top 3 in a race (with at least two ranked racers).',
+    progress: d => ({ current: d.racePodium ? 1 : 0, target: 1 })},
+  { id: 'first-race-win', category: 'race', tier: T.gold, icon: '🏆',
+    title: 'First Race Win', description: 'Win a race — 1st place, with at least two ranked racers.',
+    progress: d => ({ current: d.raceWin ? 1 : 0, target: 1 })},
 
   // Practitioner additions
   { id: 'practitioner-mentor-3', category: 'practitioner', tier: T.silver, icon: '🌱',
