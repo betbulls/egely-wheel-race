@@ -304,7 +304,8 @@ export function mount(el, raceId, inviteToken = null){
   const FINALIZE_GRACE_MS = 1500;
 
   let engineTimer = null, netTimer = null, presenceTimer = null, paintTimer = null, phaseTimer = null;
-  let unsubFrames = null, unsubStatus = null;
+  let unsubFrames = null, unsubStatus = null, unsubAuth = null;
+  let begun = false;
 
   // roster: identity -> { id, name, uid, clientId, avatar, country, host, wheel,
   //                       live:{led,ts}, slot, cum, verified, firstSlot, lastSeen }
@@ -433,17 +434,33 @@ export function mount(el, raceId, inviteToken = null){
   }
 
   // ---- Entry: name gate, then start everything -------------------------------
+  // Logged-in users must NOT see the name gate. Auth restores async on a hard
+  // refresh, so the displayName can be empty at mount — wait for it, and show the
+  // gate ONLY once we know the visitor is genuinely not logged in.
+  function tryBegin(){
+    if(begun) return true;
+    const n = (auth.getState().displayName || localStorage.getItem('ewr_name') || '').trim();
+    if(!n) return false;
+    myName = n; begun = true; begin(); return true;
+  }
   function enter(){
-    if(myName){ begin(); return; }
+    if(tryBegin()) return;
+    $('rlBody').innerHTML = '<div class="rl-gate"><p class="rl-empty" style="margin:0">Loading…</p></div>';
+    unsubAuth = auth.subscribeAuth(() => tryBegin());   // logged-in name arrives → begin (no gate)
+    setTimeout(() => { if(!begun && !auth.getState().user) showNameGate(); }, 1200);   // anonymous → name gate
+  }
+  function showNameGate(){
+    if(begun) return;
     $('rlBody').innerHTML = `<div class="rl-gate">
       <label for="rlName" style="font-weight:700;color:#011624">Your name</label>
       <input type="text" id="rlName" maxlength="60" placeholder="Your name">
       <button type="button" class="rl-join" id="rlJoin">Join</button></div>`;
-    const input = $('rlName'); input.focus();
-    $('rlJoin').addEventListener('click', () => {
-      const v = input.value.trim();
+    const input = $('rlName'); if(input) input.focus();
+    const join = $('rlJoin');
+    if(join) join.addEventListener('click', () => {
+      const v = ($('rlName').value || '').trim();
       if(!v) return;
-      myName = v; try { localStorage.setItem('ewr_name', v); } catch {}
+      myName = v; begun = true; try { localStorage.setItem('ewr_name', v); } catch {}
       begin();
     });
   }
@@ -970,6 +987,7 @@ export function mount(el, raceId, inviteToken = null){
     if(resultsTimer) clearTimeout(resultsTimer);
     if(unsubFrames) unsubFrames();
     if(unsubStatus) unsubStatus();
+    if(unsubAuth) unsubAuth();
     if(channel) supabase.removeChannel(channel);
   };
 }
