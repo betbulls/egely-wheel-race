@@ -12,6 +12,7 @@ import { mount as mountClients } from './view-clients.js';
 import { mount as mountLeaderboard } from './view-leaderboard.js';
 import { mount as mountSessionNew } from './view-session-new.js';
 import { mount as mountMySessions } from './view-my-sessions.js';
+import { mount as mountRace } from './view-race.js';
 import { mountExperiments, mountExperimentDetail } from './view-experiments.js';
 import { mount as mountLive } from './view-live.js';
 import { mount as mountJourney } from './view-journey.js';
@@ -20,6 +21,7 @@ import { mount as mountWelcome } from './view-welcome.js';
 import { mount as mountAdmin } from './view-admin.js';
 import { mount as mountHowToConnect } from './view-how-to-connect.js';
 import * as presence from './presence.js';
+import { supabase } from './db.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
@@ -47,7 +49,22 @@ function router(){
     a.classList.toggle('active', a.dataset.route === path);
   });
   if(path === '/room') setView(mountRoom, param);
-  else if(path === '/join') setView(mountRoom, null, param);   // invite link: load the room by token
+  else if(path === '/race') setView(mountRace, param);
+  else if(path === '/join'){
+    // An invite link can point to a session OR a race — peek at the type, then
+    // mount the matching room (passing the token through for the access gate).
+    setView((host) => {
+      host.innerHTML = '<div class="empty">Loading…</div>';
+      const holder = { fn: null };
+      (async () => {
+        const { data } = await supabase.from('sessions').select('event_type').eq('invite_token', param).maybeSingle();
+        host.innerHTML = '';
+        const c = (data && data.event_type === 'race') ? mountRace(host, null, param) : mountRoom(host, null, param);
+        holder.fn = (typeof c === 'function') ? c : null;
+      })();
+      return () => { if(holder.fn) holder.fn(); };
+    });
+  }
   else if(path === '/live') setView(mountLive);
   else if(path === '/journey') setView(mountJourney);
   else if(path === '/subscribe') setView(mountSubscribe);

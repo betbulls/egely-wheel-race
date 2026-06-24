@@ -256,17 +256,17 @@ export function mount(el, eventType = 'session'){
     let pill, actions = '';
     if(st === 'live'){
       pill = `<span class="mys-pill live"><span class="dot"></span>Live</span>`;
-      actions = `<a class="mys-btn primary" href="#/room/${id}">Enter room</a>`;
+      actions = `<a class="mys-btn primary" href="${isRace ? '#/race/' : '#/room/'}${id}">${isRace ? 'Enter race' : 'Enter room'}</a>`;
     } else if(st === 'finished'){
       pill = `<span class="mys-pill finished">Finished</span>`;
-      actions = `<a class="mys-btn ghost" href="#/room/${id}">View results</a>`;
+      actions = `<a class="mys-btn ghost" href="${isRace ? '#/race/' : '#/room/'}${id}">View results</a>`;
     } else {
       // upcoming — pill may flip to "Practice room open" once someone is in the room
       const count = roomCounts.get(id) || 0;
       pill = count > 0
         ? `<span class="mys-pill practice">Practice room open</span>`
         : `<span class="mys-pill scheduled">Scheduled</span>`;
-      actions = `<a class="mys-btn ghost" href="#/room/${id}">Enter room</a>
+      actions = `<a class="mys-btn ghost" href="${isRace ? '#/race/' : '#/room/'}${id}">${isRace ? 'Enter race' : 'Enter room'}</a>
         <button type="button" class="mys-btn ghost" data-edit="${id}">Edit</button>`;
       if(canDelete(s, now)) actions += `<button type="button" class="mys-btn danger" data-delete="${id}">Delete</button>`;
     }
