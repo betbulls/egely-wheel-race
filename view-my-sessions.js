@@ -280,7 +280,8 @@ export function mount(el, eventType = 'session'){
     if(!rd || !rd.count) return `<div class="mys-rres"><span class="mys-rown muted">No official finishers</span></div>`;
     const w = rd.winner;
     const wav = w ? (w.avatar ? `<img class="mys-rav" src="${esc(w.avatar)}" alt="">` : `<span class="mys-rav mys-rav-i">${esc((w.name || '?').charAt(0).toUpperCase())}</span>`) : '';
-    const winner = w ? `<span class="mys-rwin">🥇 ${wav}<b>${esc(w.name)}</b></span>` : '';
+    const medal = '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="flex-shrink:0"><circle cx="12" cy="12" r="9" fill="#e6b422" stroke="#c8961a" stroke-width="1"/><path d="M12 7l1.6 3.2 3.5.5-2.5 2.5.6 3.5L12 18.5 8.8 16.2l.6-3.5L6.9 10.7l3.5-.5z" fill="#fff8e1"/></svg>';
+    const winner = w ? `<span class="mys-rwin">${medal} ${wav}<b>${esc(w.name)}</b></span>` : '';
     let own;
     if(!rd.participated) own = `Hosted · ${rd.count} racer${rd.count > 1 ? 's' : ''}`;
     else if(rd.myRank == null) own = 'Your result · Unranked';

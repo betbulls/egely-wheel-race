@@ -37,7 +37,7 @@ export function mount(el, eventType = 'session'){
   const isRace = eventType === 'race';
   const roomBase = isRace ? '#/race/' : '#/room/';
   const cfg = isRace ? {
-    title: 'Race', sub: 'Live and upcoming races — join the lobby to warm up, then race together when the clock starts.',
+    title: 'Races', sub: 'Live and upcoming races — join the lobby to warm up, then race together when the clock starts.',
     liveSub: 'races you can enter now',
     empty: 'No live or upcoming races right now — start one from the + button below.',
     newCta: '<a class="btn-join" href="#/races/new" style="display:inline-block;margin-top:12px">+ New race</a>',
@@ -70,24 +70,32 @@ export function mount(el, eventType = 'session'){
   const $ = id => el.querySelector('#' + id);
   let sessions = [];
   let resultsBySession = new Map();
+  let winnerBySession = new Map();       // race id -> winner racer_name (final_rank=1)
   let organizersById = new Map();        // user_id -> { display_name, avatar_url }
+  if(isRace && !document.getElementById('sessRaceWinStyle')){
+    const st = document.createElement('style'); st.id = 'sessRaceWinStyle';
+    st.textContent = `.sess-racewin{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:#011624;margin-top:5px}.sess-racewin b{font-weight:700}.sess-racewin svg{flex-shrink:0}.sess-racewin.muted{color:#99a2a7;font-weight:400}`;
+    document.head.appendChild(st);
+  }
   const roomCounts = new Map();          // sessionId -> people currently in the room (presence)
   const roomChannels = new Map();        // sessionId -> presence channel (observer, never tracks)
 
   async function loadSessions(){
     const [{ data, error }, resRes] = await Promise.all([
       supabase.from('sessions').select('*').eq('event_type', eventType).order('scheduled_start', { ascending: true }),
-      supabase.from('results').select('session_id, avg, verified'),
+      supabase.from('results').select('session_id, avg, verified' + (eventType === 'race' ? ', final_rank, racer_name' : '')),
     ]);
     if(error){
       $('upcomingList').innerHTML = '<div class="empty">Could not load sessions: ' + esc(error.message) + '</div>';
       return;
     }
     resultsBySession = new Map();
+    winnerBySession = new Map();
     for(const r of (resRes.data || [])){
       if(r.session_id == null) continue;
       if(!resultsBySession.has(r.session_id)) resultsBySession.set(r.session_id, []);
       resultsBySession.get(r.session_id).push({ avg: r.avg || 0, verified: r.verified });
+      if(isRace && r.final_rank === 1) winnerBySession.set(r.session_id, r.racer_name);
     }
     sessions = data || [];
 
@@ -180,11 +188,20 @@ export function mount(el, eventType = 'session'){
       }
     }
     // Finished activity = racer count; live/upcoming = presence count.
+    const finishedCount = (resultsBySession.get(s.id) || []).length;
     const activity = base === 'finished'
-      ? ((resultsBySession.get(s.id) || []).length
-          ? `${(resultsBySession.get(s.id) || []).length} ${(resultsBySession.get(s.id) || []).length === 1 ? 'racer' : 'racers'}`
-          : '')
+      ? (isRace ? '' : (finishedCount ? `${finishedCount} ${finishedCount === 1 ? 'racer' : 'racers'}` : ''))
       : activityText(base, count);
+    // Finished race → a compact winner line (single-racer races aren't a "win").
+    let raceWin = '';
+    if(isRace && base === 'finished'){
+      const wname = winnerBySession.get(s.id);
+      const medal = '<svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="#e6b422" stroke="#c8961a" stroke-width="1"/><path d="M12 7l1.6 3.2 3.5.5-2.5 2.5.6 3.5L12 18.5 8.8 16.2l.6-3.5L6.9 10.7l3.5-.5z" fill="#fff8e1"/></svg>';
+      raceWin = !finishedCount ? '<div class="sess-racewin muted">No official finishers</div>'
+        : finishedCount === 1 ? '<div class="sess-racewin muted">Completed · 1 racer</div>'
+        : wname ? `<div class="sess-racewin">${medal} <b>${esc(wname)}</b> won · ${finishedCount} racers</div>`
+        : `<div class="sess-racewin muted">${finishedCount} racers</div>`;
+    }
 
     const card = document.createElement('div');
     card.className = 'session-card ' + shown;
@@ -199,7 +216,7 @@ export function mount(el, eventType = 'session'){
     const nameRow = `<div class="session-name">${esc(s.name || 'Untitled session')}${s.verified_only ? '<span class="sess-verified">✓ Verified</span>' : ''}${accessBadgeHtml(s.access_mode)}</div>`;
     const leftHtml = base === 'finished'
       ? `${nameRow}
-        <div class="session-meta">Hosted by <span class="session-organizer">${avatarHtml(prof && prof.avatar_url, organizerName)}<span class="organizer-name">${esc(organizerName)}</span></span> · ${esc(formatStart(s.scheduled_start))} · ${s.duration_minutes} min</div>`
+        <div class="session-meta">Hosted by <span class="session-organizer">${avatarHtml(prof && prof.avatar_url, organizerName)}<span class="organizer-name">${esc(organizerName)}</span></span> · ${esc(formatStart(s.scheduled_start))} · ${s.duration_minutes} min</div>${raceWin}`
       : `${nameRow}
         <div class="sess-host">
           <span class="sess-host-av">${avatarHtml(prof && prof.avatar_url, organizerName)}</span>

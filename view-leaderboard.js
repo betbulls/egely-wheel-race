@@ -241,17 +241,20 @@ function openMiniProfile(u, profile){
   const isP = !!(profile && profile.approved_maker);
   const name = (profile && profile.display_name) || 'Player';
   const lvl = levelFromXP(u.xpAll);
-  const verifiedRatio = u.sessionCount > 0
-    ? Math.round((u.verifiedCount / u.sessionCount) * 100)
+  const vTotal = u.sessionCount + (u.raceCount || 0);
+  const verifiedRatio = vTotal > 0
+    ? Math.round((u.verifiedCount / vTotal) * 100)
     : null;
 
+  // Six stats → a clean 2×3 grid. Participation / activity / trust read better on a
+  // profile than a single measurement's avg/peak. (Races = kind='race' results the
+  // user took part in — not hosted, not counted as sessions.)
   const stats = [
     { val: u.badgesAll.length, label: 'Achievements' },
-    { val: u.xpAll,             label: 'Total XP' },
-    { val: u.sessionCount,      label: 'Sessions' },
-    { val: u.hostedCount,       label: 'Hosted' },
-    { val: u.bestSessAvg > 0 ? u.bestSessAvg.toFixed(1) : '—', label: 'Best Session Avg' },
-    { val: u.bestSessPeak > 0 ? u.bestSessPeak           : '—', label: 'Best Session Peak' },
+    { val: u.xpAll,            label: 'Total XP' },
+    { val: u.sessionCount,     label: 'Sessions' },
+    { val: u.hostedCount,      label: 'Hosted' },
+    { val: u.raceCount || 0,   label: 'Races' },
     { val: verifiedRatio != null ? verifiedRatio + '%' : '—', label: 'Verified' },
   ];
 
@@ -350,7 +353,7 @@ export function mount(el){
     body.innerHTML = '<div class="empty">Loading…</div>';
     const [achR, sessResR, sessionsR] = await Promise.all([
       supabase.from('user_achievements').select('user_id, achievement_id, unlocked_at'),
-      supabase.from('results').select('user_id, session_id, avg, peak, verified').not('session_id', 'is', null),
+      supabase.from('results').select('user_id, session_id, avg, peak, verified, kind').not('session_id', 'is', null),
       supabase.from('sessions').select('id, created_by_user_id').eq('event_type', 'session'),
     ]);
     if(achR.error){ body.innerHTML = `<div class="empty">Could not load: ${esc(achR.error.message)}</div>`; return; }
@@ -367,7 +370,7 @@ export function mount(el){
       let u = userMap.get(id);
       if(!u){
         u = { user_id: id, xpAll: 0, xpPeriod: 0, badgesAll: [],
-              sessionCount: 0, hostedCount: 0,
+              sessionCount: 0, raceCount: 0, hostedCount: 0,
               bestSessAvg: 0, bestSessPeak: 0, verifiedCount: 0,
               isApprovedMaker: false, activeThisWeek: false };
         userMap.set(id, u);
@@ -388,10 +391,9 @@ export function mount(el){
     }
     for(const r of allRows.sessRes){
       const u = ensure(r.user_id);
-      u.sessionCount++;
-      if((r.avg  || 0) > u.bestSessAvg)  u.bestSessAvg  = r.avg  || 0;
-      if((r.peak || 0) > u.bestSessPeak) u.bestSessPeak = r.peak || 0;
-      if(r.verified) u.verifiedCount++;
+      if(r.kind === 'race') u.raceCount++;       // a race never counts as a session
+      else u.sessionCount++;
+      if(r.verified) u.verifiedCount++;          // verified share over session + race measurements
     }
     for(const s of allRows.sessions){
       if(s.created_by_user_id){
