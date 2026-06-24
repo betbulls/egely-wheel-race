@@ -133,6 +133,7 @@ export function mount(el, sessionId, inviteToken = null){
   let channel = null;
   let broadcastTimer = null, renderTimer = null, flushTimer = null;
   let unsubFrames = null, unsubStatus = null;
+  let started = false, unsubAuthGate = null;
 
   let bleConnected = false;
 
@@ -310,21 +311,31 @@ export function mount(el, sessionId, inviteToken = null){
     return session && name && name.trim().toLowerCase() === (session.created_by || '').trim().toLowerCase();
   }
 
+  function tryStart(){
+    if(started) return true;
+    const n = (auth.getState().displayName || localStorage.getItem('ewr_name') || '').trim();
+    if(!n) return false;
+    myName = n; started = true; showBody(); return true;
+  }
+  // Logged-in users must NOT see the name gate. Auth restores async on a hard
+  // refresh, so wait for the displayName and only gate a genuinely logged-out visitor.
   function start(){
-    if(myName){
+    if(tryStart()) return;
+    unsubAuthGate = auth.subscribeAuth(() => tryStart());
+    setTimeout(() => { if(!started && !auth.getState().user) showNameGate(); }, 1200);
+  }
+  function showNameGate(){
+    if(started) return;
+    $('nameGate').hidden = false;
+    $('rName').focus();
+    $('rJoin').addEventListener('click', () => {
+      const v = $('rName').value.trim();
+      if(!v) return;
+      myName = v; started = true;
+      localStorage.setItem('ewr_name', v);
+      $('nameGate').hidden = true;
       showBody();
-    } else {
-      $('nameGate').hidden = false;
-      $('rName').focus();
-      $('rJoin').addEventListener('click', () => {
-        const v = $('rName').value.trim();
-        if(!v) return;
-        myName = v;
-        localStorage.setItem('ewr_name', v);
-        $('nameGate').hidden = true;
-        showBody();
-      });
-    }
+    });
   }
 
   // Copy-to-clipboard button (invite link). Mirrors the room share helper's fallbacks.
@@ -1256,6 +1267,7 @@ export function mount(el, sessionId, inviteToken = null){
     flushSamples();
     if(unsubFrames) unsubFrames();
     if(unsubStatus) unsubStatus();
+    if(unsubAuthGate) unsubAuthGate();
     presence.setSession(false);
     if(channel) supabase.removeChannel(channel);
     window.removeEventListener('resize', render);
