@@ -27,6 +27,7 @@ import * as ble from './ble.js';
 import * as auth from './auth.js';
 import { flagUrl } from './countries.js';
 import { createAddToCalendar } from './calendar.js';
+import { computeStats, downsample } from './analytics.js';
 
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
@@ -218,8 +219,50 @@ function injectRaceStyles(){
   .rr-conn .d{width:5px;height:5px;border-radius:50%;background:currentColor}
   .rr-conn.reconnecting .d{animation:rlSoon 1.2s ease-in-out infinite}
   .rr-note{font-size:11.5px;color:#99a2a7;margin:0 0 12px;display:flex;align-items:center;gap:6px;line-height:1.4}
+  .rr-vrf{font-size:10px;font-weight:700;letter-spacing:.04em;border-radius:999px;padding:2px 7px;display:inline-flex;align-items:center;line-height:1;transition:background .2s,color .2s}
+  .rr-vrf[hidden]{display:none}
+  .rr-vrf.ok{color:#0f8a52;background:rgba(32,178,107,.14)}
+  .rr-vrf.bad{color:#b3415a;background:rgba(240,68,56,.12)}
+  .rr-vrf.flash{animation:rrFlash .9s ease-out}
+  @keyframes rrFlash{0%{box-shadow:0 0 0 0 rgba(240,68,56,.45)}45%{box-shadow:0 0 0 6px rgba(240,68,56,0)}100%{box-shadow:0 0 0 0 rgba(240,68,56,0)}}
+  /* ── RESULTS (Phase 6) ─────────────────────────────────────────────────── */
+  .rr-av{border-radius:50%;object-fit:cover;display:inline-block;background:#cfd6db}
+  .rr-av-init{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:#eef0f2;color:#5a6571;font-weight:700;font-size:12px}
+  .rr-podium{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;align-items:end;margin-bottom:14px}
+  .rr-pod{background:#fff;border:1px solid #dfe3e6;border-top:3px solid var(--medal);border-radius:14px;padding:14px 10px;text-align:center;box-shadow:0 10px 26px rgba(1,22,36,.07)}
+  .rr-pod.p1{padding-top:20px}
+  .rr-pod.me{box-shadow:0 0 0 2px rgba(82,48,218,.3),0 10px 26px rgba(1,22,36,.07)}
+  .rr-pod .rr-av{width:46px!important;height:46px!important;margin:6px auto 0;box-shadow:0 0 0 2px var(--medal)}
+  .rr-pod-rank{font-size:26px;line-height:1}
+  .rr-pod-name{font-weight:700;color:#011624;font-size:13.5px;margin-top:7px;display:flex;align-items:center;justify-content:center;gap:5px}
+  .rr-pod-score{font-family:'Montserrat',sans-serif;font-weight:700;font-size:16px;color:#011624;margin-top:3px}
+  .rr-summary{text-align:center;color:#67737c;font-size:13px;margin-bottom:16px}
+  .rr-your{background:#011624;border-radius:16px;padding:16px 18px;margin-bottom:16px;box-shadow:0 0 0 2px rgba(82,48,218,.4)}
+  .rr-your-h{color:#aeb9c2;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px}
+  .rr-your-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+  .rr-your-v{font-family:'Montserrat',sans-serif;font-weight:700;font-size:20px;color:#fff}
+  .rr-your-l{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#8e9aa4;margin-top:2px}
+  .rr-your-note{color:#ffd66b;font-size:12px;margin-top:10px;line-height:1.4}
+  .rr-awards{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px}
+  .rr-award{flex:1 1 160px;background:#f7f8f8;border:1px solid #dfe3e6;border-radius:12px;padding:11px 13px}
+  .rr-award-l{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#5230da}
+  .rr-award-w{font-weight:700;color:#011624;font-size:14px;margin-top:3px}
+  .rr-award-v{color:#67737c;font-size:12.5px;margin-top:1px}
+  .rr-sec{font-family:'Montserrat',sans-serif;font-weight:600;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:#67737c;margin:18px 0 10px}
+  .rr-sec-sub{font-weight:600;letter-spacing:0;text-transform:none;color:#99a2a7;font-size:12px}
+  .rr-standings{display:flex;flex-direction:column;gap:8px}
+  .rr-srow{display:grid;grid-template-columns:28px auto 1fr auto;align-items:center;gap:11px;background:#fff;border:1px solid #dfe3e6;border-radius:12px;padding:10px 13px}
+  .rr-srow.me{border-color:rgba(82,48,218,.5);box-shadow:0 0 0 2px rgba(82,48,218,.1)}
+  .rr-srow.unr{opacity:.85}
+  .rr-srank{font-family:'Montserrat',sans-serif;font-weight:700;font-size:15px;color:#011624;text-align:center}
+  .rr-srank.dash{color:#b9c0c6;font-size:13px}
+  .rr-srow .rr-av{width:32px!important;height:32px!important}
+  .rr-sname{display:flex;align-items:center;gap:6px;font-weight:700;color:#011624;font-size:14px;min-width:0;white-space:nowrap;overflow:hidden}
+  .rr-sscore{text-align:right;white-space:nowrap}
+  .rr-sscore b{font-family:'Montserrat',sans-serif;font-size:15px;color:#011624}
+  .rr-sscore span{display:block;font-size:11px;color:#99a2a7}
   @media (prefers-reduced-motion: reduce){
-    .rr-puck{transition:none}.rr-lane.moving .rr-tail{opacity:0}.rr-rank.bump{animation:none}
+    .rr-puck{transition:none}.rr-lane.moving .rr-tail{opacity:0}.rr-rank.bump{animation:none}.rr-vrf.flash{animation:none}
     .rl-pill.practicing .d,.rl-pill.reconnecting .d,.rr-bar .rr-live-pill .d{animation:none}
   }
   @media (max-width:600px){
@@ -231,6 +274,9 @@ function injectRaceStyles(){
     .rr-nums{grid-column:1 / -1;display:flex;align-items:center;gap:14px;justify-content:flex-start;text-align:left;min-width:0}
     .rr-live-wrap{align-items:flex-start}
     .rr-score{margin-top:0}
+    .rr-podium{grid-template-columns:1fr;gap:8px}
+    .rr-pod.p1{padding-top:14px}
+    .rr-your-grid{grid-template-columns:repeat(3,1fr);row-gap:12px}
   }`;
   document.head.appendChild(st);
 }
@@ -251,6 +297,11 @@ export function mount(el, raceId, inviteToken = null){
   // My canonical race state (Phase 5; Phase 6 reads these to finalize + save).
   let mySlots = null, myCumulative = 0, myFirstSlot = null, myVerified = true;
   let swingWin = [], swings = 0, wasSwing = false, cheatDetected = false;
+  // Phase 6: own-result save + held-tail drain (mirrors Solo/Room) + finalize.
+  let myResultSaved = false, raceEnded = false;
+  let frameFresh = false, holdRun = 0, lastCounter = null, tailCounterAtEnd = null, tailDrainDone = false;
+  let finalizeTimer = null, resultsTimer = null;
+  const FINALIZE_GRACE_MS = 1500;
 
   let engineTimer = null, netTimer = null, presenceTimer = null, paintTimer = null, phaseTimer = null;
   let unsubFrames = null, unsubStatus = null;
@@ -401,7 +452,7 @@ export function mount(el, raceId, inviteToken = null){
     joinChannel();
     unsubStatus = ble.subscribeStatus(s => { bleConnected = s.connected; if(!s.connected){ myLed = 0; } trackPresence(); });
     unsubFrames = ble.subscribeFrames(f => {
-      myLed = f.led;
+      myLed = f.led; lastCounter = f.counter; frameFresh = true;
       if(phase() === 'active'){
         const now = Date.now();
         swingWin.push({ t: now, led: f.led });
@@ -410,6 +461,9 @@ export function mount(el, raceId, inviteToken = null){
         const swingNow = (Math.max(...leds) - Math.min(...leds)) >= SWING_LIMIT;
         if(swingNow && !wasSwing && !cheatDetected && ++swings >= MAX_SWINGS){ cheatDetected = true; myVerified = false; }
         wasSwing = swingNow;
+      } else if(raceEnded && !tailDrainDone && tailCounterAtEnd != null && f.counter !== tailCounterAtEnd){
+        // The wheel's delayed final report — patch the held tail slot(s), then save.
+        tailDrainDone = true; patchTail(f.led); saveMyResult();
       }
     });
 
@@ -509,6 +563,9 @@ export function mount(el, raceId, inviteToken = null){
     if(mySlots[slot] === undefined){                      // first-write-wins → no double count, monotonic
       mySlots[slot] = raw;
       myCumulative += raw;
+      // Trailing held-run (slot fills with no fresh frame between) — the finalize
+      // tail-drain may correct exactly those last slots.
+      if(frameFresh){ frameFresh = false; holdRun = 0; } else holdRun++;
     }
     // Keep my own roster entry live without waiting for the (self:false) echo.
     const me = ensureEntry({ id: myId, name: myName, uid: myUid, avatar: auth.getState().avatarUrl, country: auth.getState().country, wheel: bleConnected });
@@ -541,7 +598,7 @@ export function mount(el, raceId, inviteToken = null){
       if(view !== 'race'){ onRaceStart(); buildRace(); view = 'race'; }
       updateRaceStage();
     } else {
-      if(view !== 'final'){ buildFinalizing(); view = 'final'; }
+      if(view !== 'final'){ buildFinalizing(); view = 'final'; onRaceEnd(); }
     }
   }
 
@@ -660,15 +717,14 @@ export function mount(el, raceId, inviteToken = null){
     const mine = p.id === myId, ranked = isRanked(p);
     const tags = (p.host ? '<span class="rr-tag host">Host</span>' : '')
       + (mine ? '<span class="rr-tag you">You</span>' : '')
-      + (!ranked ? '<span class="rr-tag unranked">Late · Unranked</span>' : '')
-      + (p.verified === false ? '<span class="rr-tag unverified">Unverified</span>' : '');
+      + (!ranked ? '<span class="rr-tag unranked">Late · Unranked</span>' : '');
     const puck = p.avatar
       ? `<img class="rr-puck-av" src="${esc(p.avatar)}" alt="">`
       : `<span class="rr-puck-init">${esc((p.name || '?').charAt(0).toUpperCase())}</span>`;
     return `<div class="rr-lane ${mine ? 'me' : ''} ${ranked ? '' : 'unranked'}" data-id="${esc(p.id)}" data-rank="">
       <div class="rr-rank dash">–</div>
       <div class="rr-info">
-        <div class="rr-name-row"><span class="rr-name">${esc(p.name)}</span>${flagImg(p.country)}${tags}<span class="rr-conn" hidden></span></div>
+        <div class="rr-name-row"><span class="rr-name">${esc(p.name)}</span>${flagImg(p.country)}${tags}<span class="rr-vrf" hidden></span><span class="rr-conn" hidden></span></div>
         <div class="rr-track"><span class="rr-finish"></span><span class="rr-puck"><span class="rr-tail"></span>${puck}</span></div>
       </div>
       <div class="rr-nums"><div class="rr-live-wrap"><div class="rr-livev">0</div><div class="rr-live-lbl">Live</div></div><div class="rr-score">SCORE 0</div></div>
@@ -727,6 +783,19 @@ export function mount(el, raceId, inviteToken = null){
         else if(reconnecting && racerLike){ conn.hidden = false; conn.className = 'rr-conn reconnecting'; conn.innerHTML = '<span class="d"></span>Reconnecting'; }
         else conn.hidden = true;
       }
+      // Live verified state per racer — flips to "Unverified" in realtime if irregular
+      // spinning is detected (a brief flash marks the moment). Only the DOM changes on
+      // an actual transition, so the flash animation isn't reset every paint.
+      const vrf = row.querySelector('.rr-vrf');
+      if(vrf){
+        const next = p.verified === false ? 'bad' : 'ok';
+        const prev = vrf.dataset.v;
+        if(prev !== next){
+          vrf.dataset.v = next; vrf.hidden = false;
+          vrf.className = 'rr-vrf ' + next; vrf.textContent = next === 'bad' ? 'Unverified' : '✓';
+          if(next === 'bad' && prev === 'ok' && !reduce){ void vrf.offsetWidth; vrf.classList.add('flash'); }
+        }
+      }
 
       const puck = row.querySelector('.rr-puck');
       if(puck){ puck.style.transition = reduce ? 'none' : ''; puck.style.left = visualPos(score, leaderScore, leaderPos).toFixed(1) + '%'; }
@@ -761,11 +830,144 @@ export function mount(el, raceId, inviteToken = null){
       ${lead ? `<p class="rr-watch" style="margin-top:12px;text-align:center">${all.length} racer${all.length > 1 ? 's' : ''} finished · final standings are being verified</p>` : ''}`;
   }
 
+  // ---- Phase 6: tail-drain → own result save → finalize → results page -------
+  function patchTail(led){
+    if(!mySlots) return;
+    let patched = 0, cap = Math.min(holdRun, 2);   // only the recently-held tail slots
+    for(let i = TOTAL_SLOTS - 1; i >= 0 && patched < cap; i--){
+      if(mySlots[i] !== undefined){ myCumulative += (led - mySlots[i]); mySlots[i] = led; patched++; }
+    }
+    if(myCumulative < 0) myCumulative = 0;
+  }
+
+  function onRaceEnd(){
+    if(raceEnded) return; raceEnded = true;
+    // Tail-drain: a short grace for the wheel's delayed final frame, then save. The
+    // frame listener finishes it early; this timeout is the floor so saving can't hang.
+    tailCounterAtEnd = lastCounter;
+    setTimeout(() => { if(!tailDrainDone){ tailDrainDone = true; saveMyResult(); } }, FINALIZE_GRACE_MS);
+    scheduleFinalize();
+  }
+
+  // Each client saves ONLY its own result, once. The partial unique index turns a
+  // duplicate (refresh / reconnect / double finalize) into a harmless 23505 no-op.
+  function saveMyResult(){
+    if(myResultSaved) return;
+    myResultSaved = true;
+    if(!mySlots || myFirstSlot == null || !myUid) return;   // spectator / no wheel data → nothing official to save
+    // mySlots is a SPARSE array (undefined = unmeasured slot). Densify with
+    // Array.from (it visits every index) so unmeasured slots become 0 — otherwise
+    // .map() keeps the holes and Math.max(...holes) → NaN (peak saved as null).
+    const slots = Array.from({ length: TOTAL_SLOTS }, (_, i) => { const v = mySlots[i]; return (v === undefined || v === null) ? 0 : v; });
+    const s = computeStats(slots);
+    if(!s) return;
+    supabase.from('results').insert({
+      session_id: Number(raceId), user_id: myUid,
+      racer_id: racerId(myName), racer_name: myName, kind: 'race',
+      avg: Number(s.avg.toFixed(2)), peak: s.peak, steadiness: s.steadiness,
+      zone_green: Number(s.zone.green.toFixed(1)), zone_yellow: Number(s.zone.yellow.toFixed(1)), zone_red: Number(s.zone.red.toFixed(1)),
+      trend: Number(s.trendTotal.toFixed(2)), green_streak: s.greenStreak,
+      samples: slots.filter(v => v > 0).length, is_host: isHostName(myName),
+      verified: myVerified, curve: downsample(slots, 80),
+      duration_seconds: (session.duration_minutes || 0) * 60,
+      race_score: myCumulative,
+      race_normalized_score: Number((myCumulative / (24 * TOTAL_SLOTS)).toFixed(4)),
+      first_slot: myFirstSlot,
+    }).then(({ error }) => { if(error && error.code !== '23505') console.warn('race result save:', error.message); });
+  }
+
+  // The authoritative ranking is the finalize_race RPC (fixed deadline = race end + 8s),
+  // never a single browser. Then we swap to the results page in place.
+  function scheduleFinalize(){
+    const run = async () => {
+      try { await supabase.rpc('finalize_race', { p_race_id: Number(raceId) }); } catch(e) {}
+      renderResults(0);
+    };
+    const wait = (endMs + 8000) - Date.now();
+    if(wait <= 0) run(); else finalizeTimer = setTimeout(run, wait + 300);
+  }
+
+  async function renderResults(retries){
+    const body = $('rlBody'); if(!body) return;
+    const { data: rows, error } = await supabase.from('results')
+      .select('user_id, racer_name, avg, peak, steadiness, verified, race_score, final_rank, first_slot, is_host')
+      .eq('session_id', Number(raceId)).eq('kind', 'race');
+    if(error){ body.innerHTML = `<div class="rl-finished"><b>Could not load results</b><span>${esc(error.message)}</span></div>`; return; }
+    const all = rows || [];
+    const ranked = all.filter(r => r.final_rank != null).sort((a, b) => a.final_rank - b.final_rank);
+    const unranked = all.filter(r => r.final_rank == null);
+    // Results exist but none ranked yet → the RPC may not have run; retry briefly.
+    if(!ranked.length && all.length && (retries || 0) < 3){
+      body.innerHTML = `<div class="rl-prep"><b><span class="rl-prep-dot"></span>Finalizing race…</b><span>Locking in the standings.</span></div>`;
+      resultsTimer = setTimeout(async () => { try { await supabase.rpc('finalize_race', { p_race_id: Number(raceId) }); } catch(e) {} renderResults((retries || 0) + 1); }, 2500);
+      return;
+    }
+    const uids = [...new Set(all.map(r => r.user_id).filter(Boolean))];
+    let prof = new Map();
+    if(uids.length){ const { data: ps } = await supabase.from('profiles').select('id, avatar_url, country').in('id', uids); prof = new Map((ps || []).map(p => [p.id, p])); }
+    const av = r => { const p = prof.get(r.user_id); return avatarHtml(p && p.avatar_url, r.racer_name, 'rr-av'); };
+    const cc = r => { const p = prof.get(r.user_id); return p && p.country ? flagImg(p.country) : ''; };
+    const mine = r => !!(myUid && r.user_id === myUid);
+    const medal = ['#d9a520', '#9fb0bd', '#c08457'];
+    const medalEmoji = ['🥇', '🥈', '🥉'];   // same medals as the Global Ranking podium
+
+    const podium = ranked.slice(0, 3).map((r, i) => `
+      <div class="rr-pod p${i + 1}${mine(r) ? ' me' : ''}" style="--medal:${medal[i]}">
+        <div class="rr-pod-rank">${medalEmoji[i]}</div>${av(r)}
+        <div class="rr-pod-name">${esc(r.racer_name)}${cc(r)}</div>
+        <div class="rr-pod-score">${r.race_score} pts</div>
+      </div>`).join('');
+
+    const myRow = all.find(mine);
+    const yourResult = myRow ? `
+      <div class="rr-your">
+        <div class="rr-your-h">Your result</div>
+        <div class="rr-your-grid">
+          <div><div class="rr-your-v">${myRow.final_rank != null ? '#' + myRow.final_rank : '—'}</div><div class="rr-your-l">Place</div></div>
+          <div><div class="rr-your-v">${myRow.race_score}</div><div class="rr-your-l">Score</div></div>
+          <div><div class="rr-your-v">${(myRow.avg || 0).toFixed(1)}</div><div class="rr-your-l">Avg</div></div>
+          <div><div class="rr-your-v">${myRow.peak || 0}</div><div class="rr-your-l">Peak</div></div>
+          <div><div class="rr-your-v">${myRow.steadiness || 0}</div><div class="rr-your-l">Steady</div></div>
+        </div>
+        ${myRow.final_rank == null ? `<div class="rr-your-note">Recorded${session.verified_only && myRow.verified === false ? ', but marked unverified — not in the official standings.' : ' as a late entry — not in the official standings.'}</div>` : ''}
+      </div>` : '';
+
+    const standRow = r => `
+      <div class="rr-srow${mine(r) ? ' me' : ''}">
+        <div class="rr-srank">${r.final_rank}</div>${av(r)}
+        <div class="rr-sname">${esc(r.racer_name)}${cc(r)}${r.is_host ? '<span class="rr-tag host">Host</span>' : ''}${r.verified === false ? '<span class="rr-vrf bad">Unverified</span>' : ''}</div>
+        <div class="rr-sscore"><b>${r.race_score}</b><span>avg ${(r.avg || 0).toFixed(1)} · peak ${r.peak || 0}</span></div>
+      </div>`;
+
+    let awards = '';
+    if(ranked.length){
+      const peakW = ranked.reduce((a, r) => (r.peak || 0) > (a.peak || 0) ? r : a);
+      const steadyW = ranked.reduce((a, r) => (r.steadiness || 0) > (a.steadiness || 0) ? r : a);
+      const card = (l, w, v) => `<div class="rr-award"><div class="rr-award-l">${l}</div><div class="rr-award-w">${esc(w)}</div><div class="rr-award-v">${v}</div></div>`;
+      awards = `<div class="rr-awards">${card('Highest Peak', peakW.racer_name, peakW.peak || 0)}${card('Most Steady', steadyW.racer_name, (steadyW.steadiness || 0) + ' / 100')}</div>`;
+    }
+
+    const dur = session.duration_minutes || 0;
+    body.innerHTML = `
+      <div class="rr-results">
+        ${ranked.length ? `<div class="rr-podium">${podium}</div>` : '<div class="rl-finished"><b>No official finishers</b><span>No ranked measurements were recorded for this race.</span></div>'}
+        <div class="rr-summary">${ranked.length} finisher${ranked.length === 1 ? '' : 's'} · ${dur} min${session.verified_only ? ' · verified only' : ''}</div>
+        ${yourResult}
+        ${awards}
+        ${ranked.length ? `<h3 class="rr-sec">Full standings</h3><div class="rr-standings">${ranked.map(standRow).join('')}</div>` : ''}
+        ${unranked.length ? `<h3 class="rr-sec">Unranked <span class="rr-sec-sub">late entry / not verified</span></h3>
+          <div class="rr-standings">${unranked.map(r => `<div class="rr-srow unr${mine(r) ? ' me' : ''}"><div class="rr-srank dash">–</div>${av(r)}<div class="rr-sname">${esc(r.racer_name)}${cc(r)}${r.verified === false ? '<span class="rr-vrf bad">Unverified</span>' : ''}</div><div class="rr-sscore"><b>${r.race_score || 0}</b><span>avg ${(r.avg || 0).toFixed(1)}</span></div></div>`).join('')}</div>` : ''}
+        <p class="rl-meta" style="margin-top:18px"><a href="#/my-races" class="link">← Back to races</a></p>
+      </div>`;
+  }
+
   function paint(){ if(view === 'lobby') paintLobby(); else if(view === 'race') paintRace(); }
 
   // ---- Cleanup ---------------------------------------------------------------
   return () => {
     for(const t of [engineTimer, netTimer, presenceTimer, paintTimer, phaseTimer]) if(t) clearInterval(t);
+    if(finalizeTimer) clearTimeout(finalizeTimer);
+    if(resultsTimer) clearTimeout(resultsTimer);
     if(unsubFrames) unsubFrames();
     if(unsubStatus) unsubStatus();
     if(channel) supabase.removeChannel(channel);

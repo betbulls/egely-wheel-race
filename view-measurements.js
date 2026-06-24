@@ -21,6 +21,7 @@ function hostChipHtml(host){
 
 // A measurement's kind, from which columns are set.
 function kindOf(r){
+  if(r.kind) return r.kind;                 // explicit kind (race/session/solo/experiment) wins
   if(r.experiment_id != null) return 'experiment';
   if(r.session_id != null) return 'session';
   return 'solo';
@@ -47,12 +48,13 @@ function sparkSvg(curve){
 
 function cardHtml(r, sessMap, hostFor){
   const kind = kindOf(r);
-  const kindLabel = kind === 'experiment' ? 'Experiment' : kind === 'session' ? 'Session' : 'Solo';
+  const kindLabel = kind === 'race' ? 'Race' : kind === 'experiment' ? 'Experiment' : kind === 'session' ? 'Session' : 'Solo';
   const lvl = vitalityLevel(r.avg || 0);
   const when = new Date(r.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  const sess = kind === 'session' ? sessMap.get(r.session_id) : null;
-  const title = kind === 'session' ? ((sess && sess.name) || 'Session') : (r.label || (kind === 'experiment' ? 'Experiment' : 'Solo measurement'));
-  const host = kind === 'session' ? hostFor(sess) : null;
+  const usesSession = kind === 'session' || kind === 'race';
+  const sess = usesSession ? sessMap.get(r.session_id) : null;
+  const title = usesSession ? ((sess && sess.name) || (kind === 'race' ? 'Race' : 'Session')) : (r.label || (kind === 'experiment' ? 'Experiment' : 'Solo measurement'));
+  const host = usesSession ? hostFor(sess) : null;
   return `
       <a class="me-card" href="#/m/${r.id}">
         <div class="me-main">
@@ -76,6 +78,7 @@ const FILTERS = [
   { id: 'all',        label: 'All' },
   { id: 'solo',       label: 'Solo' },
   { id: 'session',    label: 'Session' },
+  { id: 'race',       label: 'Race' },
   { id: 'experiment', label: 'Experiment' },
   { id: 'verified',   label: 'Verified' },
 ];
@@ -109,6 +112,11 @@ function renderFilters(){
 
 export function mount(el){
   const userId = auth.getState().user?.id || null;
+  if(!document.getElementById('meRaceKindStyle')){
+    const st = document.createElement('style'); st.id = 'meRaceKindStyle';
+    st.textContent = `.me-kind.race{color:#5230da;background:rgba(82,48,218,.1)}`;
+    document.head.appendChild(st);
+  }
 
   el.innerHTML = `
     <div class="view-head">
