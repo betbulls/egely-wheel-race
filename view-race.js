@@ -164,58 +164,73 @@ function injectRaceStyles(){
   .rr-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#011624;border-radius:14px;
     padding:12px 16px;margin-bottom:14px;box-shadow:0 14px 36px -18px rgba(1,22,36,.6)}
   .rr-bar .rr-live-pill{display:inline-flex;align-items:center;gap:7px;color:#fff;font-weight:700;font-size:13px;letter-spacing:.04em}
-  .rr-bar .rr-live-pill .d{width:8px;height:8px;border-radius:50%;background:#ff5a5f;animation:rlSoon 1.1s ease-in-out infinite}
+  .rr-bar .rr-live-pill .d{width:8px;height:8px;border-radius:50%;background:#37dbff;box-shadow:0 0 6px rgba(55,219,255,.7);animation:rlSoon 1.1s ease-in-out infinite}
   .rr-clock{font-family:'Montserrat',sans-serif;font-weight:700;font-size:22px;color:#fff}
   .rr-clock.final10{color:#ffd66b}
   .rr-watch{font-size:12.5px;color:#99a2a7;margin:0 0 10px}
   .rr-list{display:flex;flex-direction:column;gap:10px}
-  .rr-lane{display:grid;grid-template-columns:30px auto 1fr auto;align-items:center;gap:12px;
+  .rr-lane{display:grid;grid-template-columns:30px 1fr auto;align-items:center;gap:12px;
     background:#fff;border:1px solid #dfe3e6;border-radius:14px;padding:12px 14px;box-shadow:0 8px 22px rgba(1,22,36,.06);
     transition:box-shadow .25s,border-color .25s}
   .rr-lane.me{border-color:rgba(82,48,218,.5);box-shadow:0 0 0 3px rgba(82,48,218,.1)}
   .rr-lane.leader{border-color:rgba(217,165,32,.65);box-shadow:0 0 0 2px rgba(217,165,32,.35),0 10px 26px rgba(1,22,36,.08)}
   .rr-lane.unranked{opacity:.86}
-  .rr-rank{font-family:'Montserrat',sans-serif;font-weight:700;font-size:17px;color:#011624;text-align:center}
+  .rr-rank{font-family:'Montserrat',sans-serif;font-weight:700;font-size:17px;color:#011624;text-align:center;transition:transform .2s}
+  .rr-rank.bump{animation:rrBump .5s ease-out}
+  @keyframes rrBump{0%{transform:scale(1)}42%{transform:scale(1.4)}100%{transform:scale(1)}}
   .rr-lane.leader .rr-rank{color:#b8860b}
   .rr-rank.dash{color:#b9c0c6;font-size:13px}
-  .rr-av{width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;display:inline-block}
-  .rr-av-init{display:inline-flex;align-items:center;justify-content:center;background:#eef0f2;color:#5a6571;font-weight:700;font-size:13px}
   .rr-info{min-width:0}
-  .rr-name-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+  .rr-name-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:7px}
   .rr-name{font-weight:700;color:#011624;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
   .rr-tag{font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border-radius:999px;padding:2px 6px}
   .rr-tag.host{color:#9a7400;background:rgba(245,183,0,.16)}
   .rr-tag.you{color:#5230da;background:rgba(82,48,218,.1)}
   .rr-tag.unranked{color:#67737c;background:#eef0f2}
   .rr-tag.unverified{color:#b3415a;background:rgba(240,68,56,.1)}
-  /* defined track (stronger contrast than the lobby) + 25/50/75 marks + finish */
-  .rr-track{position:relative;height:14px;border-radius:999px;background:#e3e7ea;box-shadow:inset 0 1px 2px rgba(1,22,36,.12);
-    background-image:linear-gradient(90deg,transparent calc(25% - 1px),#c4ccd2 25%,transparent calc(25% + 1px)),
-      linear-gradient(90deg,transparent calc(50% - 1px),#c4ccd2 50%,transparent calc(50% + 1px)),
-      linear-gradient(90deg,transparent calc(75% - 1px),#c4ccd2 75%,transparent calc(75% + 1px))}
-  .rr-finish{position:absolute;right:0;top:-3px;bottom:-3px;width:4px;border-radius:2px;
-    background:repeating-linear-gradient(45deg,#011624 0 3px,#ffd66b 3px 6px)}
-  .rr-marker{position:absolute;top:50%;left:0;transform:translate(-50%,-50%);transition:left .42s linear}
-  .rr-marker .rr-dot{display:block;width:16px;height:16px;border-radius:50%;background:#5230da;
-    box-shadow:0 0 0 3px rgba(82,48,218,.18),0 2px 6px rgba(1,22,36,.3)}
-  .rr-lane.leader .rr-marker .rr-dot{background:#b8860b;box-shadow:0 0 0 3px rgba(217,165,32,.25),0 2px 6px rgba(1,22,36,.3)}
-  .rr-comet{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:26px;height:8px;border-radius:999px;
-    background:linear-gradient(90deg,rgba(55,219,255,0),rgba(55,219,255,.8));opacity:0;transition:opacity .2s}
-  .rr-lane.moving .rr-comet{opacity:1}
-  .rr-nums{text-align:right;min-width:54px}
+  /* RELATIVE race track — neutral & UNMARKED (no %); avatar puck races a checkered finish */
+  .rr-track{position:relative;height:34px;border-radius:999px;background:#e8ecef;border:1px solid #dbe1e6;box-shadow:inset 0 1px 3px rgba(1,22,36,.1)}
+  .rr-track::before{content:"";position:absolute;left:12px;right:16px;top:50%;height:2px;transform:translateY(-50%);
+    background:repeating-linear-gradient(90deg,rgba(1,22,36,.06) 0 2px,transparent 2px 28px)}
+  .rr-finish{position:absolute;right:4px;top:4px;bottom:4px;width:6px;border-radius:2px;
+    background:repeating-linear-gradient(45deg,#011624 0 3px,#ffd66b 3px 6px);box-shadow:0 0 0 1px rgba(255,255,255,.6)}
+  .rr-puck{position:absolute;top:50%;left:0;transform:translate(-50%,-50%);width:28px;height:28px;z-index:2;
+    transition:left .6s cubic-bezier(.34,.8,.4,1)}
+  .rr-puck-av{width:28px;height:28px;border-radius:50%;object-fit:cover;display:block;background:#cfd6db;
+    box-shadow:0 0 0 2px #fff,0 2px 6px rgba(1,22,36,.32)}
+  .rr-puck-init{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;
+    background:#5230da;color:#fff;font-weight:700;font-size:12px;box-shadow:0 0 0 2px #fff,0 2px 6px rgba(1,22,36,.32)}
+  .rr-lane.leader .rr-puck-av,.rr-lane.leader .rr-puck-init{box-shadow:0 0 0 2px #ffd66b,0 0 0 4px rgba(217,165,32,.38),0 2px 6px rgba(1,22,36,.32)}
+  .rr-lane.me .rr-puck-av,.rr-lane.me .rr-puck-init{box-shadow:0 0 0 2px #7a5cf0,0 0 0 4px rgba(82,48,218,.32),0 2px 6px rgba(1,22,36,.32)}
+  .rr-lane.stale .rr-puck-av,.rr-lane.stale .rr-puck-init{box-shadow:0 0 0 2px #f5b700,0 0 0 4px rgba(245,183,0,.32),0 2px 6px rgba(1,22,36,.32)}
+  .rr-tail{position:absolute;top:50%;right:16px;transform:translateY(-50%);width:36px;height:10px;border-radius:999px;
+    background:linear-gradient(90deg,rgba(55,219,255,0),rgba(55,219,255,.85));opacity:0;transition:opacity .25s;pointer-events:none}
+  .rr-lane.moving .rr-tail{opacity:1}
+  .rr-nums{text-align:right;min-width:66px}
   .rr-livev{font-family:'Montserrat',sans-serif;font-weight:700;font-size:21px;line-height:1}
-  .rr-pct{font-size:11.5px;color:#67737c;font-weight:600;margin-top:2px}
+  .rr-score{font-size:11px;color:#67737c;font-weight:600;margin-top:3px;white-space:nowrap}
+  .rr-live-wrap{display:flex;flex-direction:column;align-items:flex-end}
+  .rr-live-lbl{font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#99a2a7;margin-top:1px}
+  .rr-conn{font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border-radius:999px;padding:2px 7px;display:inline-flex;align-items:center;gap:4px}
+  .rr-conn[hidden]{display:none}
+  .rr-conn.reconnecting{color:#8a6d00;background:rgba(245,183,0,.16)}
+  .rr-conn.disconnected{color:#67737c;background:#eef0f2}
+  .rr-conn .d{width:5px;height:5px;border-radius:50%;background:currentColor}
+  .rr-conn.reconnecting .d{animation:rlSoon 1.2s ease-in-out infinite}
+  .rr-note{font-size:11.5px;color:#99a2a7;margin:0 0 12px;display:flex;align-items:center;gap:6px;line-height:1.4}
   @media (prefers-reduced-motion: reduce){
-    .rr-marker{transition:none}.rr-lane.moving .rr-comet{opacity:0}
+    .rr-puck{transition:none}.rr-lane.moving .rr-tail{opacity:0}.rr-rank.bump{animation:none}
     .rl-pill.practicing .d,.rl-pill.reconnecting .d,.rr-bar .rr-live-pill .d{animation:none}
   }
   @media (max-width:600px){
     .rl-title{font-size:23px}
     .rl-row{grid-template-columns:auto 1fr;gap:10px 12px}
     .rl-right{grid-column:1 / -1;flex-direction:row;align-items:center;justify-content:space-between;width:100%}
-    .rr-lane{grid-template-columns:26px auto 1fr;gap:9px 10px}
-    .rr-nums{grid-column:2 / -1;display:flex;align-items:baseline;gap:10px;justify-content:flex-start;text-align:left}
-    .rr-pct{margin-top:0}
+    .rr-lane{grid-template-columns:26px 1fr;gap:8px 10px}
+    .rr-track{height:40px}
+    .rr-nums{grid-column:1 / -1;display:flex;align-items:center;gap:14px;justify-content:flex-start;text-align:left;min-width:0}
+    .rr-live-wrap{align-items:flex-start}
+    .rr-score{margin-top:0}
   }`;
   document.head.appendChild(st);
 }
@@ -245,6 +260,7 @@ export function mount(el, raceId, inviteToken = null){
   const roster = new Map();
 
   const SLOT_MS = 500, SAMPLE_MS = 250, BROADCAST_MS = 500, PRESENCE_MS = 2500;
+  const RACE_VISUAL_SPREAD = 1.5;   // tune 1.3–1.8 on the live test — spreads the field on the RELATIVE track
   const RANKED_GRACE_SLOTS = 10;             // first valid tick within 5s → ranked
   const LIVE_STALE_MS = 4000, RECONNECT_MS = 12000;
   const CHEAT_WINDOW_MS = 2000, SWING_LIMIT = 7, MAX_SWINGS = 2;
@@ -612,6 +628,7 @@ export function mount(el, raceId, inviteToken = null){
         <span class="rr-clock" id="rrClock">--:--</span>
       </div>
       <p class="rr-watch" id="rrWatch"></p>
+      <p class="rr-note"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11.5v4.5M12 8h.01"/></svg>Track position shows the live race order. Official results use the measured score.</p>
       <div class="rr-list" id="rrList"></div>
       <div class="rl-stage" id="rlStage" style="margin-top:16px"></div>`;
     raceOrder = null;
@@ -645,38 +662,82 @@ export function mount(el, raceId, inviteToken = null){
       + (mine ? '<span class="rr-tag you">You</span>' : '')
       + (!ranked ? '<span class="rr-tag unranked">Late · Unranked</span>' : '')
       + (p.verified === false ? '<span class="rr-tag unverified">Unverified</span>' : '');
-    return `<div class="rr-lane ${mine ? 'me' : ''} ${ranked ? '' : 'unranked'}" data-id="${esc(p.id)}">
-      <div class="rr-rank">–</div>
-      ${avatarHtml(p.avatar, p.name, 'rr-av')}
+    const puck = p.avatar
+      ? `<img class="rr-puck-av" src="${esc(p.avatar)}" alt="">`
+      : `<span class="rr-puck-init">${esc((p.name || '?').charAt(0).toUpperCase())}</span>`;
+    return `<div class="rr-lane ${mine ? 'me' : ''} ${ranked ? '' : 'unranked'}" data-id="${esc(p.id)}" data-rank="">
+      <div class="rr-rank dash">–</div>
       <div class="rr-info">
-        <div class="rr-name-row"><span class="rr-name">${esc(p.name)}</span>${flagImg(p.country)}${tags}</div>
-        <div class="rr-track"><span class="rr-finish"></span><span class="rr-marker"><span class="rr-dot"></span><span class="rr-comet"></span></span></div>
+        <div class="rr-name-row"><span class="rr-name">${esc(p.name)}</span>${flagImg(p.country)}${tags}<span class="rr-conn" hidden></span></div>
+        <div class="rr-track"><span class="rr-finish"></span><span class="rr-puck"><span class="rr-tail"></span>${puck}</span></div>
       </div>
-      <div class="rr-nums"><div class="rr-livev">0</div><div class="rr-pct">0%</div></div>
+      <div class="rr-nums"><div class="rr-live-wrap"><div class="rr-livev">0</div><div class="rr-live-lbl">Live</div></div><div class="rr-score">SCORE 0</div></div>
     </div>`;
+  }
+  // RELATIVE race presentation. The OFFICIAL score is untouched — this only maps
+  // each racer to a visual track position so realistic 3–7 averages still spread
+  // out and read as a real race. Leader advances with TIME toward the finish;
+  // everyone else trails by their score ratio to the leader. NOT saved, NOT a
+  // result input — the winner is still the highest real race_score.
+  function visualPos(score, leaderScore, leaderPos){
+    if(!(score > 0)) return 0;                              // zero score → start gate
+    const ratio = leaderScore > 0 ? score / leaderScore : 0;
+    return Math.max(0, Math.min(96, leaderPos * Math.pow(ratio, RACE_VISUAL_SPREAD)));
   }
   function paintRace(){
     const list = $('rrList'); if(!list) return;
     const all = racers();
     if(raceOrder && all.length !== raceOrder.length){ renderRaceList(); return; }
-    // Live rank among ranked racers by cumulative.
     const rankedSorted = all.filter(isRanked).sort((a, b) => (b.cum || 0) - (a.cum || 0));
     const rankById = new Map(rankedSorted.map((p, i) => [p.id, i + 1]));
     const leaderId = rankedSorted.length ? rankedSorted[0].id : null;
+    const leaderScore = leaderId ? (rankedSorted[0].cum || 0) : 0;
+    const elapsedRatio = Math.max(0, Math.min(1, durationMs ? (Date.now() - startMs) / durationMs : 0));
+    const leaderPos = 8 + elapsedRatio * 88;                // leader: 8% → 96% over the race
+    const reduce = prefersReducedMotion();
     const now = Date.now();
     for(const p of all){
       const row = list.querySelector(`.rr-lane[data-id="${CSS.escape(p.id)}"]`); if(!row) continue;
       const ranked = isRanked(p);
-      const stale = !p.lastSeen || (now - p.lastSeen > LIVE_STALE_MS);
-      const lv = (p.live && !stale) ? p.live.led : 0;          // disconnect/stale → speed 0, marker stays
+      const racerLike = p.firstSlot != null || (p.cum || 0) > 0;
+      const sinceSeen = p.lastSeen ? now - p.lastSeen : Infinity;
+      const gone = sinceSeen > RECONNECT_MS;                 // off the wire (presence/network lost)
+      const reconnecting = !gone && (p.wheel === false || sinceSeen > LIVE_STALE_MS);
+      const disrupted = gone || reconnecting;
+      const lv = disrupted ? 0 : (p.live ? p.live.led : 0);  // disrupted → speed 0; puck stays; score unchanged
+      const score = p.cum || 0;
+      const isLeader = ranked && p.id === leaderId && score > 0;
+
+      // Rank badge + a brief impulse when the position changes (overtake).
       const rankEl = row.querySelector('.rr-rank');
-      if(ranked){ rankEl.textContent = rankById.get(p.id) || '–'; rankEl.classList.remove('dash'); }
+      const newRank = ranked ? (rankById.get(p.id) || '–') : '–';
+      if(ranked){ rankEl.textContent = newRank; rankEl.classList.remove('dash'); }
       else { rankEl.textContent = '–'; rankEl.classList.add('dash'); }
-      row.classList.toggle('leader', ranked && p.id === leaderId && (p.cum || 0) > 0);
-      row.classList.toggle('moving', lv > 0 && !stale);
-      const marker = row.querySelector('.rr-marker'); if(marker) marker.style.left = (progressOf(p.cum) * 100).toFixed(1) + '%';
+      if(!reduce && ranked && row.dataset.rank && String(row.dataset.rank) !== String(newRank)){
+        rankEl.classList.remove('bump'); void rankEl.offsetWidth; rankEl.classList.add('bump');
+      }
+      row.dataset.rank = String(newRank);
+
+      row.classList.toggle('leader', isLeader);
+      row.classList.toggle('moving', lv > 0 && !disrupted);
+      row.classList.toggle('stale', disrupted && racerLike);
+      const conn = row.querySelector('.rr-conn');
+      if(conn){
+        if(gone && racerLike){ conn.hidden = false; conn.className = 'rr-conn disconnected'; conn.innerHTML = '<span class="d"></span>Disconnected'; }
+        else if(reconnecting && racerLike){ conn.hidden = false; conn.className = 'rr-conn reconnecting'; conn.innerHTML = '<span class="d"></span>Reconnecting'; }
+        else conn.hidden = true;
+      }
+
+      const puck = row.querySelector('.rr-puck');
+      if(puck){ puck.style.transition = reduce ? 'none' : ''; puck.style.left = visualPos(score, leaderScore, leaderPos).toFixed(1) + '%'; }
+
       const liveEl = row.querySelector('.rr-livev'); if(liveEl){ liveEl.textContent = lv; liveEl.style.color = lv > 0 ? zText(lv) : '#99a2a7'; }
-      const pctEl = row.querySelector('.rr-pct'); if(pctEl) pctEl.textContent = Math.round(progressOf(p.cum) * 100) + '%';
+      const scoreEl = row.querySelector('.rr-score');
+      if(scoreEl){
+        if(isLeader) scoreEl.innerHTML = `SCORE ${score} · <span style="color:#b8860b">LEADER</span>`;
+        else if(ranked && leaderScore > 0){ const gap = leaderScore - score; scoreEl.textContent = `SCORE ${score}${gap > 0 ? ` · ${gap} behind` : ''}`; }
+        else scoreEl.textContent = `SCORE ${score}`;
+      }
     }
     const watch = $('rrWatch');
     if(watch){ const n = roster.size - all.length; watch.textContent = n > 0 ? `${all.length} racing · ${n} watching` : `${all.length} racing`; }
