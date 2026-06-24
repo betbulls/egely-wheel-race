@@ -66,7 +66,7 @@ function injectLandingRaceStyles(){
   if(document.getElementById('phRaceStyles')) return;
   const st = document.createElement('style'); st.id = 'phRaceStyles';
   st.textContent = `
-  .ph-race{background:#011624;border-radius:20px;padding:28px;margin:6px 0 30px;display:grid;grid-template-columns:1fr 1fr;gap:30px;
+  .ph-race{background:#011624;border-radius:20px;padding:28px;margin:40px 0 34px;display:grid;grid-template-columns:1fr 1fr;gap:30px;
     align-items:center;position:relative;overflow:hidden;box-shadow:0 18px 44px -20px rgba(1,22,36,.6)}
   .ph-race::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,#37dbff,#5230da)}
   .ph-race-eyebrow{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
