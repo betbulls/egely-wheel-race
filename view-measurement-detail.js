@@ -16,6 +16,11 @@ function avatarHtml(url, name){
 
 // Read-only detail of a single stored measurement.
 export function mount(el, id){
+  if(!document.getElementById('meRaceKindStyle')){
+    const st = document.createElement('style'); st.id = 'meRaceKindStyle';
+    st.textContent = `.me-kind.race{color:#5230da;background:rgba(82,48,218,.1)}`;
+    document.head.appendChild(st);
+  }
   el.innerHTML = `
     <div class="view-head">
       <p class="room-hint" style="text-align:left;margin:0 0 6px" id="dBack"></p>
@@ -53,17 +58,34 @@ export function mount(el, id){
       el.querySelector('#dBack').innerHTML = `<a href="#/me" class="link">← My measurements</a>`;
     }
 
-    const solo = r.session_id == null;
+    const isRace = r.kind === 'race';
+    const solo = r.session_id == null && !isRace;
     let title = 'Solo measurement';
     if(solo){ title = r.label || 'Solo measurement'; }
     else {
       const { data: sess } = await supabase.from('sessions').select('name').eq('id', r.session_id).single();
-      title = (sess && sess.name) || 'Session';
+      title = (sess && sess.name) || (isRace ? 'Race' : 'Session');
     }
     el.querySelector('#dTitle').textContent = title;
 
+    // Race result → a compact race-context strip + a link back to the full results
+    // (the podium/standings live on the race page). No "Session pulse" — a race is
+    // not a session.
+    if(isRace){
+      el.querySelector('#dPulse').innerHTML = `
+        <div class="panel" style="display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:14px">
+          <div style="display:flex;align-items:center;gap:24px">
+            <div><div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:22px;color:#011624">${r.final_rank != null ? '#' + r.final_rank : '—'}</div>
+              <div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#99a2a7">${r.final_rank != null ? 'Final place' : 'Unranked'}</div></div>
+            <div><div style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:22px;color:#011624">${r.race_score != null ? r.race_score : '—'}</div>
+              <div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#99a2a7">Race score</div></div>
+          </div>
+          <a class="link" href="#/race/${r.session_id}">View race results →</a>
+        </div>`;
+    }
+
     // ---- Session Pulse: Host + Group + You for a finished session row ------
-    if(!solo){
+    if(!solo && !isRace){
       const { data: sessRows } = await supabase.from('results')
         .select('id, curve, racer_name, is_host, duration_seconds, avg, peak, steadiness')
         .eq('session_id', r.session_id);
@@ -165,7 +187,7 @@ export function mount(el, id){
     el.querySelector('#dBody').innerHTML = `
       <div class="panel">
         <div class="me-title-row" style="margin-bottom:10px">
-          <span class="me-kind ${solo ? 'solo' : 'session'}">${solo ? 'Solo' : 'Session'}</span>
+          <span class="me-kind ${isRace ? 'race' : (solo ? 'solo' : 'session')}">${isRace ? 'Race' : (solo ? 'Solo' : 'Session')}</span>
           ${r.verified ? '<span class="v-badge verified">✓ Verified</span>' : '<span class="v-badge unverified">unverified</span>'}
         </div>
         <div class="d-meta">${esc(when)} · ${esc(dur)}</div>
