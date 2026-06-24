@@ -222,11 +222,12 @@ export function mount(el){
     const sessionWindow = new Date(Date.now() - 4 * 3600 * 1000).toISOString();
     const [resR, hostedR, prRecvR, stored, upcomingR, progByExp] = await Promise.all([
       supabase.from('results').select('*').eq('user_id', userId),
-      supabase.from('sessions').select('id').eq('created_by_user_id', userId),
+      supabase.from('sessions').select('id').eq('created_by_user_id', userId).eq('event_type', 'session'),
       supabase.from('practitioner_links').select('practitioner_id').eq('client_id', userId).eq('status', 'active'),
       fetchUserAchievements(userId),
       supabase.from('sessions')
         .select('id, name, scheduled_start, duration_minutes, created_by_user_id, created_by, verified_only, access_mode')
+        .eq('event_type', 'session')
         .gte('scheduled_start', sessionWindow)
         .order('scheduled_start', { ascending: true })
         .limit(10),

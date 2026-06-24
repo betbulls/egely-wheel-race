@@ -62,7 +62,7 @@ export function mount(el){
 
   async function loadSessions(){
     const [{ data, error }, resRes] = await Promise.all([
-      supabase.from('sessions').select('*').order('scheduled_start', { ascending: true }),
+      supabase.from('sessions').select('*').eq('event_type', 'session').order('scheduled_start', { ascending: true }),
       supabase.from('results').select('session_id, avg, verified'),
     ]);
     if(error){

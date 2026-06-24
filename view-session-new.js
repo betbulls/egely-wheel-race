@@ -27,20 +27,44 @@ function snStyles(){
   document.head.appendChild(s);
 }
 
-export function mount(el){
+// mode = 'session' (default) | 'race'. A race is a `sessions` row with
+// event_type='race' — it reuses this whole create form; only the copy, the
+// stored event_type and the post-create destination differ.
+export function mount(el, mode = 'session'){
+  const isRace = mode === 'race';
+  const cfg = isRace ? {
+    back: '#/my-races', backLabel: '← Races',
+    title: 'Create a race', sub: 'Schedule a live race — everyone measures at the same time and races to the finish.',
+    namePh: 'e.g. Friday Night Race',
+    verTitle: 'Verified race', verSub: 'Only legitimate measurements count toward the race — irregular spinning is excluded from the standings.',
+    anyoneSub: 'Anyone can find and enter this race.',
+    howto: '<b>How a race works:</b> before the start time the room is open as a warm-up lobby — people can join, connect their wheel and spin to practise. The official race and the standings begin at the scheduled time.',
+    submit: 'Create race', creating: 'Creating…', created: 'Race created.',
+    loginMsg: 'Log in to create a race.', noun: 'race', dest: '#/my-races',
+  } : {
+    back: '#/sessions', backLabel: '← Sessions',
+    title: 'Create a group session', sub: 'Schedule a moment to measure together.',
+    namePh: 'e.g. Sunday Morning Meditation',
+    verTitle: 'Verified session', verSub: 'Only legitimate measurements count toward the group results — irregular spinning is excluded from the leaderboard.',
+    anyoneSub: 'Anyone can enter from the Sessions list.',
+    howto: '<b>How the room works:</b> before the scheduled time the room is already open as a practice space — people can join, connect their wheel and spin together. Official results are recorded only during the session window.',
+    submit: 'Create session', creating: 'Creating…', created: 'Session created.',
+    loginMsg: 'Log in to create a session.', noun: 'session', dest: '#/sessions',
+  };
+
   snStyles();
   el.innerHTML = `
     <div class="view-head">
-      <p class="room-hint" style="text-align:left;margin:0 0 6px"><a href="#/sessions" class="link">← Sessions</a></p>
-      <h1 class="page-title">Create a group session</h1>
-      <p class="page-sub">Schedule a moment to measure together.</p>
+      <p class="room-hint" style="text-align:left;margin:0 0 6px"><a href="${cfg.back}" class="link">${cfg.backLabel}</a></p>
+      <h1 class="page-title">${cfg.title}</h1>
+      <p class="page-sub">${cfg.sub}</p>
     </div>
     <div class="panel">
       <form id="createForm">
         <div class="form-grid">
           <div class="field full">
-            <label for="fName">Session name</label>
-            <input type="text" id="fName" placeholder="e.g. Sunday Morning Meditation" required maxlength="80">
+            <label for="fName">${isRace ? 'Race' : 'Session'} name</label>
+            <input type="text" id="fName" placeholder="${cfg.namePh}" required maxlength="80">
           </div>
           <div class="field full">
             <div class="sn-when">
@@ -62,8 +86,8 @@ export function mount(el){
             <label class="sn-option">
               <input type="checkbox" id="fVerified">
               <span class="sn-option-main">
-                <span class="sn-option-title">Verified session</span>
-                <span class="sn-option-sub">Only legitimate measurements count toward the group results — irregular spinning is excluded from the leaderboard.</span>
+                <span class="sn-option-title">${cfg.verTitle}</span>
+                <span class="sn-option-sub">${cfg.verSub}</span>
               </span>
             </label>
           </div>
@@ -73,12 +97,12 @@ export function mount(el){
               <label class="sn-acc">
                 <input type="radio" name="snAccess" value="public" checked>
                 <span class="sn-acc-main"><span class="sn-acc-title">Anyone</span>
-                <span class="sn-acc-sub">Anyone can enter from the Sessions list.</span></span>
+                <span class="sn-acc-sub">${cfg.anyoneSub}</span></span>
               </label>
               <label class="sn-acc">
                 <input type="radio" name="snAccess" value="invite">
                 <span class="sn-acc-main"><span class="sn-acc-title">Invite link</span>
-                <span class="sn-acc-sub">Anyone can see this session, but only people with the invite link can enter.</span></span>
+                <span class="sn-acc-sub">Anyone can see this ${cfg.noun}, but only people with the invite link can enter.</span></span>
               </label>
               <label class="sn-acc">
                 <input type="radio" name="snAccess" value="followers">
@@ -88,14 +112,10 @@ export function mount(el){
             </div>
           </div>
         </div>
-        <div class="sn-howto">
-          <b>How the room works:</b> before the scheduled time the room is already open as a
-          practice space — people can join, connect their wheel and spin together.
-          Official results are recorded only during the session window.
-        </div>
+        <div class="sn-howto">${cfg.howto}</div>
         <div class="organizer-note" id="organizerNote"></div>
         <div class="form-actions">
-          <button type="submit" id="btnCreate">Create session</button>
+          <button type="submit" id="btnCreate">${cfg.submit}</button>
           <span class="form-msg" id="formMsg"></span>
         </div>
       </form>
@@ -113,7 +133,7 @@ export function mount(el){
       note.innerHTML = `<span class="organizer-label">Organized by</span> ${avatarHtml(a.avatarUrl, a.displayName)} <b>${esc(a.displayName)}</b>`;
       btn.disabled = false;
     } else {
-      note.innerHTML = `<a class="link" href="#/login">Log in</a> to create a session.`;
+      note.innerHTML = `<a class="link" href="#/login">Log in</a> to create a ${cfg.noun}.`;
       btn.disabled = true;
     }
   });
@@ -127,7 +147,7 @@ export function mount(el){
   $('createForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const a = auth.getState();
-    if(!a.user){ setFormMsg('Log in to create a session.', 'err'); return; }
+    if(!a.user){ setFormMsg(cfg.loginMsg, 'err'); return; }
     const name = $('fName').value.trim();
     const date = $('fDate').value;
     const time = $('fTime').value;
@@ -153,8 +173,9 @@ export function mount(el){
       created_by_user_id: a.user.id,
       verified_only: $('fVerified').checked,
       access_mode: accessMode,
+      event_type: isRace ? 'race' : 'session',
     };
-    // Invite sessions get an unguessable token; the shareable link is /#/join/<token>.
+    // Invite sessions/races get an unguessable token; the shareable link is /#/join/<token>.
     if(accessMode === 'invite'){
       row.invite_token = (self.crypto && crypto.randomUUID)
         ? crypto.randomUUID().replace(/-/g, '')
@@ -162,7 +183,7 @@ export function mount(el){
     }
 
     $('btnCreate').disabled = true;
-    setFormMsg('Creating…', '');
+    setFormMsg(cfg.creating, '');
     const { data, error } = await supabase.from('sessions').insert(row).select('id').single();
 
     if(error){
@@ -170,9 +191,9 @@ export function mount(el){
       setFormMsg('Error: ' + error.message, 'err');
       return;
     }
-    setFormMsg('Session created.', 'ok');
-    // Send the user back to the discovery page so they immediately see their session in context.
-    setTimeout(() => { location.hash = '#/sessions'; }, 400);
+    setFormMsg(cfg.created, 'ok');
+    // Send the user to the management page so they immediately see what they created.
+    setTimeout(() => { location.hash = cfg.dest; }, 400);
   });
 
   return () => { unsubAuth(); };

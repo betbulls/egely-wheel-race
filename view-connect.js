@@ -61,7 +61,7 @@ export function mount(el, handle){
       supabase.rpc('practitioner_member_count', { pid: pr.id }),
       supabase.from('sessions')
         .select('id, name, scheduled_start, duration_minutes, verified_only, access_mode')
-        .eq('created_by_user_id', pr.id),
+        .eq('created_by_user_id', pr.id).eq('event_type', 'session'),
       supabase.from('results').select('verified').eq('user_id', pr.id),
       fetchUserAchievements(pr.id),
     ]);

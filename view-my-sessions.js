@@ -151,7 +151,17 @@ function localParts(iso){
   };
 }
 
-export function mount(el){
+export function mount(el, eventType = 'session'){
+  const isRace = eventType === 'race';
+  const noun = isRace ? 'race' : 'session';
+  const cfg = {
+    h1: isRace ? 'My races' : 'My sessions',
+    intro: isRace
+      ? 'Races you created. Edit or cancel an upcoming race before it starts — once it is live or finished it stays locked, because results and standings depend on it.'
+      : 'Sessions you created. Edit or cancel an upcoming room before it starts — once a session is live or finished it stays locked, because results and rankings depend on it.',
+    newHref: isRace ? '#/races/new' : '#/sessions/new',
+    newLabel: isRace ? '+ New race' : '+ New session',
+  };
   styles();
   let built = false;
   let uid = null;
@@ -164,12 +174,12 @@ export function mount(el){
   function render(a){
     if(!a.user){
       built = false; cleanupChannels();
-      el.innerHTML = `<div class="mys-wrap"><div class="mys-head"><h1>My sessions</h1></div>
-        <p class="mys-empty">Please <a href="#/login">log in</a> to manage your sessions.</p></div>`;
+      el.innerHTML = `<div class="mys-wrap"><div class="mys-head"><h1>${cfg.h1}</h1></div>
+        <p class="mys-empty">Please <a href="#/login">log in</a> to manage your ${noun}s.</p></div>`;
       return;
     }
     if(!a.profile){
-      if(!built) el.innerHTML = `<div class="mys-wrap"><div class="mys-head"><h1>My sessions</h1></div><p class="mys-empty">Loading…</p></div>`;
+      if(!built) el.innerHTML = `<div class="mys-wrap"><div class="mys-head"><h1>${cfg.h1}</h1></div><p class="mys-empty">Loading…</p></div>`;
       return;
     }
     if(built) return;     // panel already up — don't rebuild (would drop an open modal)
@@ -183,9 +193,9 @@ export function mount(el){
     el.innerHTML = `
     <div class="mys-wrap">
       <div class="mys-head">
-        <h1>My sessions</h1>
-        <p>Sessions you created. Edit or cancel an upcoming room before it starts — once a session is live or finished it stays locked, because results and rankings depend on it.</p>
-        <a class="mys-new" href="#/sessions/new">+ New session</a>
+        <h1>${cfg.h1}</h1>
+        <p>${cfg.intro}</p>
+        <a class="mys-new" href="${cfg.newHref}">${cfg.newLabel}</a>
       </div>
       <section class="mys-sec" id="mysLiveSec" hidden>
         <h2>Live now</h2>
@@ -208,6 +218,7 @@ export function mount(el){
     const { data, error } = await supabase
       .from('sessions').select('*')
       .eq('created_by_user_id', uid)
+      .eq('event_type', eventType)
       .order('scheduled_start', { ascending: false });
     if(error){
       const up = el.querySelector('#mysUpcoming');
@@ -266,7 +277,7 @@ export function mount(el){
     return `
     <div class="mys-card ${st}" data-id="${id}" data-state="${st}">
       <div class="mys-main">
-        <div class="mys-title">${esc(s.name || 'Untitled session')}${verified}${access}</div>
+        <div class="mys-title">${esc(s.name || ('Untitled ' + noun))}${verified}${access}</div>
         <div class="mys-meta">${esc(fmtWhen(s.scheduled_start))} · ${s.duration_minutes} min</div>
         ${roomCount}
       </div>
@@ -300,10 +311,10 @@ export function mount(el){
     if(liveEl) liveEl.innerHTML = live.map(s => card(s, now)).join('');
     upEl.innerHTML = upcoming.length
       ? upcoming.map(s => card(s, now)).join('')
-      : `<div class="mys-empty">No upcoming sessions. <a href="#/sessions/new">Schedule one →</a></div>`;
+      : `<div class="mys-empty">No upcoming ${noun}s. <a href="${cfg.newHref}">Schedule one →</a></div>`;
     pastEl.innerHTML = past.length
       ? past.map(s => card(s, now)).join('')
-      : `<div class="mys-empty">No past sessions yet.</div>`;
+      : `<div class="mys-empty">No past ${noun}s yet.</div>`;
 
     // Watch practice-room presence for live + upcoming sessions (graceful: 0 = quiet).
     for(const s of [...live, ...upcoming]) watchRoom(s.id);
@@ -389,13 +400,13 @@ export function mount(el){
     const r = modalRoot();
     r.innerHTML = `
     <div class="mys-backdrop" data-backdrop>
-      <div class="mys-modal" role="dialog" aria-modal="true" aria-label="Edit session">
+      <div class="mys-modal" role="dialog" aria-modal="true" aria-label="Edit ${noun}">
         <button type="button" class="mys-close" data-close aria-label="Close">×</button>
-        <h3>Edit session</h3>
-        <p class="mys-modal-sub">Update the details below. Changes apply everywhere the session appears.</p>
+        <h3>Edit ${noun}</h3>
+        <p class="mys-modal-sub">Update the details below. Changes apply everywhere the ${noun} appears.</p>
         <div class="mys-form">
           <div class="mys-field">
-            <label for="mysName">Session name</label>
+            <label for="mysName">${isRace ? 'Race' : 'Session'} name</label>
             <input type="text" id="mysName" maxlength="80" value="${esc(s.name || '')}">
           </div>
           <div class="mys-row2">
@@ -451,7 +462,7 @@ export function mount(el){
 
     const s = freshSession(id);
     if(!s) return;
-    if(stateOf(s, Date.now()) !== 'upcoming'){ setMsg('This session has already started and can no longer be changed.', 'err'); return; }
+    if(stateOf(s, Date.now()) !== 'upcoming'){ setMsg(`This ${noun} has already started and can no longer be changed.`, 'err'); return; }
 
     const name = q('#mysName').value.trim();
     const date = q('#mysDate').value;
@@ -473,9 +484,11 @@ export function mount(el){
       verified_only: verified,
       access_mode: accessMode,
     };
-    // Switching to invite without an existing token → mint one now (kept if you later
-    // switch away, so flipping back reuses the same link).
-    if(accessMode === 'invite' && !s.invite_token){
+    // Mint a FRESH token whenever switching INTO invite from another mode — so an
+    // old invite link from a previous invite stint can't silently grant access again
+    // (revokes the prior invitees). An invite→invite edit (e.g. just a rename) keeps
+    // the token, so links you already shared keep working.
+    if(accessMode === 'invite' && s.access_mode !== 'invite'){
       payload.invite_token = (self.crypto && crypto.randomUUID)
         ? crypto.randomUUID().replace(/-/g, '')
         : (Date.now().toString(36) + Math.random().toString(36).slice(2, 12));
@@ -490,7 +503,7 @@ export function mount(el){
       .select('id');
 
     if(error){ saveBtn.disabled = false; setMsg('Could not save: ' + error.message, 'err'); return; }
-    if(!data || !data.length){ saveBtn.disabled = false; setMsg('Could not save — you may not have permission to edit this session.', 'err'); return; }
+    if(!data || !data.length){ saveBtn.disabled = false; setMsg(`Could not save — you may not have permission to edit this ${noun}.`, 'err'); return; }
 
     closeModal();
     await loadSessions();
@@ -509,10 +522,10 @@ export function mount(el){
     const r = modalRoot();
     r.innerHTML = `
     <div class="mys-backdrop" data-backdrop>
-      <div class="mys-modal" role="dialog" aria-modal="true" aria-label="Delete session">
+      <div class="mys-modal" role="dialog" aria-modal="true" aria-label="Delete ${noun}">
         <button type="button" class="mys-close" data-close aria-label="Close">×</button>
-        <h3>Delete this session?</h3>
-        <p class="mys-modal-sub">“${esc(s.name || 'Untitled session')}” — this removes the scheduled room. This cannot be undone.</p>
+        <h3>Delete this ${noun}?</h3>
+        <p class="mys-modal-sub">“${esc(s.name || ('Untitled ' + noun))}” — this removes the scheduled room. This cannot be undone.</p>
         ${warn}
         <div class="mys-msg" id="mysDelMsg"></div>
         <div class="mys-modal-actions">
@@ -545,7 +558,7 @@ export function mount(el){
     if(!data || !data.length){
       // RLS blocked it silently (started / has results / not owner) → 0 rows, no error.
       btn.disabled = false;
-      setMsg('Could not delete — the session may have started or already has results.', 'err');
+      setMsg(`Could not delete — the ${noun} may have started or already has results.`, 'err');
       return;
     }
     closeModal();

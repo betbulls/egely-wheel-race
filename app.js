@@ -58,6 +58,11 @@ function router(){
   else if(path === '/m') setView(mountMeasurementDetail, param);
   else if(path === '/me') setView(mountMeasurements);
   else if(path === '/my-sessions') setView(mountMySessions);
+  else if(path === '/my-races') setView(mountMySessions, 'race');
+  else if(path === '/races'){
+    if(param === 'new') setView(mountSessionNew, 'race');
+    else setView(mountMySessions, 'race');
+  }
   else if(path === '/profile') setView(mountProfile);
   else if(path === '/admin') setView(mountAdmin);
   else if(path === '/how-to-connect') setView(mountHowToConnect);
@@ -255,6 +260,7 @@ function renderAuthArea(){
       <div class="account-menu" id="accountMenu" hidden>
         <a href="#/me" data-route="/me">My measurements</a>
         <a href="#/my-sessions" data-route="/my-sessions">My sessions</a>
+        <a href="#/my-races" data-route="/my-races">My races</a>
         ${clientsItem}
         <a href="#/profile" data-route="/profile">Profile</a>
         ${adminItem}

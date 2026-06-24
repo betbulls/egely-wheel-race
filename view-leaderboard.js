@@ -351,7 +351,7 @@ export function mount(el){
     const [achR, sessResR, sessionsR] = await Promise.all([
       supabase.from('user_achievements').select('user_id, achievement_id, unlocked_at'),
       supabase.from('results').select('user_id, session_id, avg, peak, verified').not('session_id', 'is', null),
-      supabase.from('sessions').select('id, created_by_user_id'),
+      supabase.from('sessions').select('id, created_by_user_id').eq('event_type', 'session'),
     ]);
     if(achR.error){ body.innerHTML = `<div class="empty">Could not load: ${esc(achR.error.message)}</div>`; return; }
     allRows = { ach: achR.data || [], sessRes: sessResR.data || [], sessions: sessionsR.data || [] };
