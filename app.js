@@ -78,7 +78,7 @@ function router(){
   else if(path === '/my-races') setView(mountMySessions, 'race');
   else if(path === '/races'){
     if(param === 'new') setView(mountSessionNew, 'race');
-    else setView(mountMySessions, 'race');
+    else setView(mountSessions, 'race');   // public race discovery (My Races lives at #/my-races)
   }
   else if(path === '/profile') setView(mountProfile);
   else if(path === '/admin') setView(mountAdmin);

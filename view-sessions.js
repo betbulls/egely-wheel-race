@@ -33,17 +33,31 @@ function pillHtml(state){
 }
 
 // Mounts the Group Sessions view into `el`. Returns a cleanup function.
-export function mount(el){
+export function mount(el, eventType = 'session'){
+  const isRace = eventType === 'race';
+  const roomBase = isRace ? '#/race/' : '#/room/';
+  const cfg = isRace ? {
+    title: 'Race', sub: 'Live and upcoming races — join the lobby to warm up, then race together when the clock starts.',
+    liveSub: 'races you can enter now',
+    empty: 'No live or upcoming races right now — start one from the + button below.',
+    newCta: '<a class="btn-join" href="#/races/new" style="display:inline-block;margin-top:12px">+ New race</a>',
+  } : {
+    title: 'Sessions', sub: 'Live and upcoming group measurements — drop into a room to practise together before the official measurement begins.',
+    liveSub: 'rooms you can enter now',
+    empty: 'No live or upcoming rooms right now — start one from the + button.',
+    newCta: '',
+  };
   el.innerHTML = `
     <div class="view-head">
-      <h1 class="page-title">Sessions</h1>
-      <p class="page-sub">Live and upcoming group measurements — drop into a room to practise together before the official measurement begins.</p>
+      <h1 class="page-title">${cfg.title}</h1>
+      <p class="page-sub">${cfg.sub}</p>
+      ${cfg.newCta}
     </div>
 
     <div class="sess-summary" id="sessSummary"></div>
 
     <section class="sess-section">
-      <h2 class="sess-section-title">Live &amp; upcoming <span class="sess-section-sub">rooms you can enter now</span></h2>
+      <h2 class="sess-section-title">Live &amp; upcoming <span class="sess-section-sub">${cfg.liveSub}</span></h2>
       <div class="session-list" id="upcomingList"><div class="empty">Loading…</div></div>
     </section>
 
@@ -62,7 +76,7 @@ export function mount(el){
 
   async function loadSessions(){
     const [{ data, error }, resRes] = await Promise.all([
-      supabase.from('sessions').select('*').eq('event_type', 'session').order('scheduled_start', { ascending: true }),
+      supabase.from('sessions').select('*').eq('event_type', eventType).order('scheduled_start', { ascending: true }),
       supabase.from('results').select('session_id, avg, verified'),
     ]);
     if(error){
@@ -150,10 +164,10 @@ export function mount(el){
 
     // Right-hand action — names what the user actually does right now.
     const actionMain = base === 'finished'
-      ? `<a class="btn-join sess-view" href="#/room/${s.id}">View results</a>`
+      ? `<a class="btn-join sess-view" href="${roomBase}${s.id}">View results</a>`
       : base === 'live'
-        ? `<a class="btn-join" href="#/room/${s.id}">Join live</a>`
-        : `<a class="btn-join" href="#/room/${s.id}">Enter room</a>`;
+        ? `<a class="btn-join" href="${roomBase}${s.id}">Join live</a>`
+        : `<a class="btn-join" href="${roomBase}${s.id}">${isRace ? 'Enter race' : 'Enter room'}</a>`;
 
     // Finished sessions show the group average (verified-only if the session was).
     let avgHtml = '';
@@ -264,7 +278,7 @@ export function mount(el){
 
     upcomingEl.innerHTML = '';
     if(!upcoming.length){
-      upcomingEl.innerHTML = '<div class="empty">No live or upcoming rooms right now — start one from the + button.</div>';
+      upcomingEl.innerHTML = '<div class="empty">' + cfg.empty + '</div>';
     } else {
       for(const { s, st } of upcoming) upcomingEl.appendChild(buildSessionCard(s, st, now));
     }

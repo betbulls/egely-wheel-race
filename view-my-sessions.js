@@ -112,6 +112,13 @@ function styles(){
   .mys-msg{font-size:13px;min-height:16px;margin-top:10px;color:#67737c}
   .mys-msg.err{color:#c2415b}
   .mys-msg.ok{color:#0f8a52}
+  .mys-rres{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:9px}
+  .mys-rwin{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#011624;background:rgba(245,183,0,.13);border-radius:999px;padding:3px 11px 3px 9px}
+  .mys-rwin b{font-weight:700}
+  .mys-rav{width:18px;height:18px;border-radius:50%;object-fit:cover;flex-shrink:0}
+  .mys-rav-i{display:inline-flex;align-items:center;justify-content:center;background:#eef0f2;color:#5a6571;font-weight:700;font-size:9px}
+  .mys-rown{font-size:13px;font-weight:700;color:#5230da}
+  .mys-rown.muted{color:#99a2a7;font-weight:600}
   @media (max-width:600px){
     .mys-head h1{font-size:24px}
     .mys-card{grid-template-columns:1fr;gap:12px}
@@ -167,6 +174,7 @@ export function mount(el, eventType = 'session'){
   let uid = null;
   let sessions = [];
   const haveResults = new Set();         // session ids that already have a saved result
+  const raceData = new Map();            // race id → { count, winner, participated, myRank } (race mode)
   const roomCounts = new Map();          // sessionId -> people currently in the practice room
   const roomChannels = new Map();        // sessionId -> presence channel (observer, never tracks)
   const modalRoot = () => el.querySelector('#mysModalRoot');
@@ -229,16 +237,57 @@ export function mount(el, eventType = 'session'){
 
     // Which sessions already have a saved official result — those can never be deleted.
     haveResults.clear();
+    raceData.clear();
     const ids = sessions.map(s => s.id);
     if(ids.length){
-      const { data: res } = await supabase.from('results').select('session_id').in('session_id', ids);
+      // ONE bulk query (no per-card N+1). Race mode also pulls ranking fields to
+      // build winner / own-result / racer-count maps.
+      const sel = isRace ? 'session_id, user_id, racer_name, final_rank' : 'session_id';
+      const { data: res } = await supabase.from('results').select(sel).in('session_id', ids);
       for(const r of (res || [])){ if(r.session_id != null) haveResults.add(r.session_id); }
+      if(isRace){
+        const byRace = new Map();
+        for(const r of (res || [])){ if(r.session_id == null) continue; if(!byRace.has(r.session_id)) byRace.set(r.session_id, []); byRace.get(r.session_id).push(r); }
+        const winnerUids = [];
+        for(const [rid, rows] of byRace){
+          const ranked = rows.filter(r => r.final_rank != null);
+          const winner = ranked.find(r => r.final_rank === 1) || null;
+          const mine = rows.find(r => r.user_id === uid);
+          raceData.set(rid, {
+            count: ranked.length,
+            winner: winner ? { name: winner.racer_name, uid: winner.user_id, avatar: null } : null,
+            participated: !!mine, myRank: mine ? (mine.final_rank == null ? null : mine.final_rank) : null,
+          });
+          if(winner && winner.user_id) winnerUids.push(winner.user_id);
+        }
+        if(winnerUids.length){
+          const { data: profs } = await supabase.from('profiles').select('id, avatar_url').in('id', [...new Set(winnerUids)]);
+          const avById = new Map((profs || []).map(p => [p.id, p.avatar_url]));
+          for(const d of raceData.values()){ if(d.winner) d.winner.avatar = avById.get(d.winner.uid) || null; }
+        }
+      }
     }
     renderLists();
   }
 
   function canDelete(s, now){
     return stateOf(s, now) === 'upcoming' && !haveResults.has(s.id);
+  }
+
+  // Past race card: winner chip (gold) + your own result + racer count. Solo race
+  // reads "Completed · #1 of 1" (no win wording); host who didn't race → "Hosted".
+  function raceResultStrip(rd){
+    if(!rd || !rd.count) return `<div class="mys-rres"><span class="mys-rown muted">No official finishers</span></div>`;
+    const w = rd.winner;
+    const wav = w ? (w.avatar ? `<img class="mys-rav" src="${esc(w.avatar)}" alt="">` : `<span class="mys-rav mys-rav-i">${esc((w.name || '?').charAt(0).toUpperCase())}</span>`) : '';
+    const winner = w ? `<span class="mys-rwin">🥇 ${wav}<b>${esc(w.name)}</b></span>` : '';
+    let own;
+    if(!rd.participated) own = `Hosted · ${rd.count} racer${rd.count > 1 ? 's' : ''}`;
+    else if(rd.myRank == null) own = 'Your result · Unranked';
+    else if(rd.count === 1) own = 'Completed · #1 of 1';
+    else if(rd.myRank === 1) own = `You won · #1 of ${rd.count}`;
+    else own = `You placed #${rd.myRank} of ${rd.count}`;
+    return `<div class="mys-rres">${winner}<span class="mys-rown">${esc(own)}</span></div>`;
   }
 
   function card(s, now){
@@ -280,6 +329,7 @@ export function mount(el, eventType = 'session'){
         <div class="mys-title">${esc(s.name || ('Untitled ' + noun))}${verified}${access}</div>
         <div class="mys-meta">${esc(fmtWhen(s.scheduled_start))} · ${s.duration_minutes} min</div>
         ${roomCount}
+        ${(isRace && st === 'finished') ? raceResultStrip(raceData.get(id)) : ''}
       </div>
       <div class="mys-side">
         ${pill}

@@ -515,23 +515,43 @@ function renderLevel(s){
 }
 
 // ---- Stats -----------------------------------------------------------------
+function injectStatGridStyles(){
+  if(document.getElementById('sgStyles')) return;
+  const st = document.createElement('style'); st.id = 'sgStyles';
+  st.textContent = `
+  .dash-stats.sg-r4{grid-template-columns:repeat(4,1fr)}
+  .dash-stats.sg-r3{grid-template-columns:repeat(3,1fr)}
+  .dash-stats.sg-r2{grid-template-columns:repeat(2,1fr)}
+  .ds-race-flag{display:inline-block;width:8px;height:8px;margin-right:5px;vertical-align:baseline;border-radius:2px;
+    background:repeating-conic-gradient(#5230da 0 25%, transparent 0 50%) 0 / 4px 4px;opacity:.6}
+  @media (max-width:600px){
+    .dash-stats.sg-r4,.dash-stats.sg-r3,.dash-stats.sg-r2{grid-template-columns:repeat(2,1fr)}
+    .dash-stats.sg-r3 > :last-child:nth-child(odd){grid-column:span 2}
+  }`;
+  document.head.appendChild(st);
+}
+
+// Stable 4 + 3 grid: row 1 = the four activity counts, row 2 = the rest.
 function renderStats(s){
-  const cards = [
+  injectStatGridStyles();
+  const row1 = [
     { label: 'Sessions', val: s.sessionCount, color: '#5230da' },
     { label: 'Solo',     val: s.soloCount,    color: '#401d91' },
     { label: 'Experiments', val: s.experimentsCompleted || 0, color: '#6b3fd4' },
-    { label: 'Races', val: s.raceCount || 0, color: '#5230da' },
+    { label: 'Races', val: s.raceCount || 0, color: '#5230da', race: true },
+  ];
+  const row2 = [
     s.clientsCount != null ? { label: 'Members', val: s.clientsCount, color: '#0f8a52' } : null,
     { label: 'Best Avg', val: s.total ? s.bestAvg.toFixed(1) : '–', color: s.total ? vColor(s.bestAvg) : '#99a2a7' },
     { label: 'Verified', val: s.total ? s.verifiedRatio + '%' : '–', color: '#b8860b' },
   ].filter(Boolean);
-  return `<div class="dash-stats">
-    ${cards.map(c => `
+  const card = c => `
       <div class="dash-stat">
         <div class="dash-stat-val" style="color:${c.color}">${c.val}</div>
-        <div class="dash-stat-lbl">${esc(c.label)}</div>
-      </div>`).join('')}
-  </div>`;
+        <div class="dash-stat-lbl">${c.race ? '<span class="ds-race-flag" aria-hidden="true"></span>' : ''}${esc(c.label)}</div>
+      </div>`;
+  return `<div class="dash-stats sg-r4">${row1.map(card).join('')}</div>
+    <div class="dash-stats sg-r${row2.length}" style="margin-top:10px">${row2.map(card).join('')}</div>`;
 }
 
 // ---- Continue Experiment ---------------------------------------------------
