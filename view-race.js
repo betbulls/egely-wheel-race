@@ -1,18 +1,27 @@
 // view-race.js — the Race room (#/race/:id, and #/join/<token> for race invites).
 //
-// PHASE 4 = the LOBBY only: a premium, real-time waiting room. People gather,
-// connect their wheel and practise together while a countdown runs. NOTHING is
-// scored, saved, broadcast to measurements/results, or ranked here — the live
-// "currentValue" is ephemeral lobby feedback only.
+// PHASE 4 = LOBBY (premium waiting room). PHASE 5 = LIVE RACE ENGINE.
+// PHASE 6 (separate) will add tail-drain, official result saving, the verified
+// ranking and the results page. Phase 5 saves NOTHING to the DB.
 //
-// The official race engine (3-2-1 start, lanes, cumulative scoring, result
-// saving) is PHASE 5 — see the "PHASE 5 HOOK" marker in updateStage().
+// ── Realtime protocol ──────────────────────────────────────────────────────
+// Channel: `room-<raceId>` (presence + broadcast), same as the lobby.
+// Canonical slots (jitter-independent, identical for everyone):
+//   SLOT_MS = 500;  TOTAL_SLOTS = round(duration_ms / 500)
+//   slotIndex = floor((now - scheduledStart) / 500)
+// Each client samples ITS OWN held de-spiked LED every 250ms and writes it into
+// the current slot (first-write-wins → no double count, cumulative only grows).
+// missing / disconnected slot = 0; out-of-range dropped. progress = cum/(24*TOTAL_SLOTS).
+// Broadcast has no history, so every client ALSO publishes its state into presence
+// (slot, cum, live, verified, firstSlot, clientId) every ~2.5s — a reconnecting or
+// late client rebuilds the standings from presence, not from ticks. Fast updates
+// ride a 500ms `race-tick` broadcast. Per identity (uid), the highest-cumulative
+// state wins (multi-tab dedup; the wheel tab naturally leads, the empty tab can't
+// overwrite). Ranked iff self-reported firstSlot <= RANKED_GRACE_SLOTS (first 5s) —
+// self-reported so every client classifies the same roster deterministically.
+// Start is driven ONLY by scheduled_start (slot 0); no host "start" button.
 //
-// This is a separate module from view-room.js on purpose: the live session room
-// stays untouched (zero regression), and the race experience can grow its own
-// character. The access gate below is ported verbatim from the session room and
-// runs BEFORE any presence-channel join, so an unauthorized visitor never shows
-// up as a participant.
+// Separate module from view-room.js on purpose (zero session-room regression).
 import { supabase } from './db.js';
 import * as ble from './ble.js';
 import * as auth from './auth.js';
@@ -40,7 +49,6 @@ function flagImg(cc){
   return `<img src="${flagUrl(cc)}" alt="${u}" title="${u}" loading="lazy" style="width:18px;height:13px;border-radius:3px;object-fit:cover;flex-shrink:0;box-shadow:0 0 0 1px rgba(1,22,36,.08)">`;
 }
 
-// Adaptive "starts in" — readable at any distance (mirrors the session views).
 function formatUntil(ms){
   if(ms <= 0) return 'now';
   const sec = Math.floor(ms / 1000);
@@ -52,7 +60,6 @@ function formatUntil(ms){
   if(mins >= 1) return `${mins} min`;
   return `${sec}s`;
 }
-// Precise MM:SS / H:MM:SS for the final stretch + live duration.
 function fmt(ms){
   const s = Math.max(0, Math.floor(ms / 1000));
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
@@ -61,6 +68,7 @@ function fmt(ms){
 }
 
 const racerId = name => name.trim().toLowerCase().replace(/\s+/g, '_');
+const prefersReducedMotion = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function injectRaceStyles(){
   if(document.getElementById('raceLobbyStyles')) return;
@@ -74,8 +82,9 @@ function injectRaceStyles(){
   .rl-eyebrow .rl-dot{width:7px;height:7px;border-radius:50%;background:#5230da}
   .rl-title{font-family:'Montserrat',sans-serif;font-weight:600;font-size:27px;color:#011624;letter-spacing:-0.3px;margin:10px 0 4px}
   .rl-host{display:flex;align-items:center;gap:8px;color:#67737c;font-size:14px;margin:6px 0 2px}
-  .rl-host .sess-avatar,.rl-av{width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0}
-  .rl-av-init{display:inline-flex;align-items:center;justify-content:center;background:#eef0f2;color:#5a6571;font-weight:700;font-size:12px}
+  .rl-host .rl-av{width:26px;height:26px}
+  .rl-av{width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0;display:inline-block}
+  .rl-av-init{display:inline-flex;align-items:center;justify-content:center;background:#eef0f2;color:#5a6571;font-weight:700;font-size:13px}
   .rl-meta{color:#67737c;font-size:13.5px;margin-top:4px}
   .rl-badges{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px;align-items:center}
   .rl-badge{font-size:11px;font-weight:700;letter-spacing:.03em;border-radius:999px;padding:3px 9px}
@@ -84,9 +93,8 @@ function injectRaceStyles(){
   .rl-badge.verified{color:#0f8a52;background:rgba(32,178,107,.12)}
   .rl-actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:14px}
   .rl-btn{display:inline-flex;align-items:center;gap:7px;font-family:'Inter',sans-serif;font-size:13px;font-weight:700;
-    padding:8px 14px;border-radius:999px;border:1px solid #dfe3e6;background:#fff;color:#011624;cursor:pointer;transition:border-color .15s,color .15s,background .15s}
+    padding:8px 14px;border-radius:999px;border:1px solid #dfe3e6;background:#fff;color:#011624;cursor:pointer;transition:border-color .15s,color .15s}
   .rl-btn:hover{border-color:#5230da;color:#5230da}
-  /* stage: practice banner + countdown (swaps with phase) */
   .rl-stage{margin:18px 0 14px}
   .rl-practice{background:rgba(14,116,144,.08);border:1px solid rgba(14,116,144,.22);border-radius:14px;padding:14px 16px}
   .rl-practice b{color:#0e7490;display:block;font-size:14px;margin-bottom:3px}
@@ -97,16 +105,22 @@ function injectRaceStyles(){
   .rl-cd.soon .rl-cd-val{color:#5230da}
   .rl-cd.soon{animation:rlSoon 1s ease-in-out infinite}
   @keyframes rlSoon{0%,100%{opacity:1}50%{opacity:.62}}
+  /* 3-2-1 overlay (concentric energy ring) */
+  .rl-countin{position:relative;display:flex;align-items:center;justify-content:center;height:150px;margin-top:6px}
+  .rl-countin .rl-ring{position:absolute;width:120px;height:120px;border-radius:50%;border:2px solid rgba(82,48,218,.5)}
+  .rl-countin .rl-ring.r2{width:160px;height:160px;border-color:rgba(55,219,255,.35)}
+  .rl-countin .rl-ring.pulse{animation:rlRing 1s ease-out infinite}
+  @keyframes rlRing{0%{transform:scale(.7);opacity:.9}100%{transform:scale(1.25);opacity:0}}
+  .rl-countin .rl-num{font-family:'Montserrat',sans-serif;font-weight:700;font-size:64px;color:#5230da;animation:rlPop .9s ease-out}
+  @keyframes rlPop{from{transform:scale(.6);opacity:.2}to{transform:scale(1);opacity:1}}
   .rl-prep{background:#011624;border-radius:16px;padding:22px 20px;text-align:center;box-shadow:0 14px 36px -16px rgba(1,22,36,.5)}
   .rl-prep b{display:block;font-family:'Montserrat',sans-serif;font-weight:600;font-size:20px;color:#fff;margin-bottom:5px}
   .rl-prep span{color:#aeb9c2;font-size:13.5px}
   .rl-prep .rl-prep-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#37dbff;margin-right:7px;animation:rlSoon 1.1s ease-in-out infinite}
-  .rl-321{font-family:'Montserrat',sans-serif;font-weight:700;font-size:46px;color:#5230da;text-align:center;margin-top:6px;animation:rlPop .9s ease-out}
-  @keyframes rlPop{from{transform:scale(.7);opacity:.2}to{transform:scale(1);opacity:1}}
   .rl-finished{background:#f7f8f8;border:1px solid #dfe3e6;border-radius:16px;padding:22px 20px;text-align:center}
   .rl-finished b{display:block;font-family:'Montserrat',sans-serif;font-weight:600;font-size:19px;color:#011624;margin-bottom:5px}
   .rl-finished span{color:#67737c;font-size:13.5px}
-  /* people */
+  /* lobby people */
   .rl-people-head{display:flex;align-items:center;justify-content:space-between;margin:8px 0 10px}
   .rl-people-title{font-family:'Montserrat',sans-serif;font-weight:600;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:#67737c}
   .rl-count{font-size:13px;color:#99a2a7;font-weight:600}
@@ -114,7 +128,6 @@ function injectRaceStyles(){
   .rl-row{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;
     background:#fff;border:1px solid #dfe3e6;border-radius:14px;padding:11px 14px;box-shadow:0 8px 22px rgba(1,22,36,.05)}
   .rl-row.me{border-color:rgba(82,48,218,.4);box-shadow:0 0 0 3px rgba(82,48,218,.08)}
-  .rl-row .rl-av{width:38px;height:38px}
   .rl-mid{min-width:0}
   .rl-name-row{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
   .rl-name{font-weight:700;color:#011624;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px}
@@ -147,33 +160,100 @@ function injectRaceStyles(){
   .rl-join{align-self:flex-start;font-family:'Inter',sans-serif;font-weight:700;font-size:14px;padding:10px 20px;border-radius:999px;
     background:#401d91;color:#fff;border:none;cursor:pointer}
   .rl-join:hover{background:#011624}
+  /* ── RACE TRACK (Phase 5) ─────────────────────────────────────────────── */
+  .rr-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#011624;border-radius:14px;
+    padding:12px 16px;margin-bottom:14px;box-shadow:0 14px 36px -18px rgba(1,22,36,.6)}
+  .rr-bar .rr-live-pill{display:inline-flex;align-items:center;gap:7px;color:#fff;font-weight:700;font-size:13px;letter-spacing:.04em}
+  .rr-bar .rr-live-pill .d{width:8px;height:8px;border-radius:50%;background:#ff5a5f;animation:rlSoon 1.1s ease-in-out infinite}
+  .rr-clock{font-family:'Montserrat',sans-serif;font-weight:700;font-size:22px;color:#fff}
+  .rr-clock.final10{color:#ffd66b}
+  .rr-watch{font-size:12.5px;color:#99a2a7;margin:0 0 10px}
+  .rr-list{display:flex;flex-direction:column;gap:10px}
+  .rr-lane{display:grid;grid-template-columns:30px auto 1fr auto;align-items:center;gap:12px;
+    background:#fff;border:1px solid #dfe3e6;border-radius:14px;padding:12px 14px;box-shadow:0 8px 22px rgba(1,22,36,.06);
+    transition:box-shadow .25s,border-color .25s}
+  .rr-lane.me{border-color:rgba(82,48,218,.5);box-shadow:0 0 0 3px rgba(82,48,218,.1)}
+  .rr-lane.leader{border-color:rgba(217,165,32,.65);box-shadow:0 0 0 2px rgba(217,165,32,.35),0 10px 26px rgba(1,22,36,.08)}
+  .rr-lane.unranked{opacity:.86}
+  .rr-rank{font-family:'Montserrat',sans-serif;font-weight:700;font-size:17px;color:#011624;text-align:center}
+  .rr-lane.leader .rr-rank{color:#b8860b}
+  .rr-rank.dash{color:#b9c0c6;font-size:13px}
+  .rr-av{width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;display:inline-block}
+  .rr-av-init{display:inline-flex;align-items:center;justify-content:center;background:#eef0f2;color:#5a6571;font-weight:700;font-size:13px}
+  .rr-info{min-width:0}
+  .rr-name-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+  .rr-name{font-weight:700;color:#011624;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
+  .rr-tag{font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border-radius:999px;padding:2px 6px}
+  .rr-tag.host{color:#9a7400;background:rgba(245,183,0,.16)}
+  .rr-tag.you{color:#5230da;background:rgba(82,48,218,.1)}
+  .rr-tag.unranked{color:#67737c;background:#eef0f2}
+  .rr-tag.unverified{color:#b3415a;background:rgba(240,68,56,.1)}
+  /* defined track (stronger contrast than the lobby) + 25/50/75 marks + finish */
+  .rr-track{position:relative;height:14px;border-radius:999px;background:#e3e7ea;box-shadow:inset 0 1px 2px rgba(1,22,36,.12);
+    background-image:linear-gradient(90deg,transparent calc(25% - 1px),#c4ccd2 25%,transparent calc(25% + 1px)),
+      linear-gradient(90deg,transparent calc(50% - 1px),#c4ccd2 50%,transparent calc(50% + 1px)),
+      linear-gradient(90deg,transparent calc(75% - 1px),#c4ccd2 75%,transparent calc(75% + 1px))}
+  .rr-finish{position:absolute;right:0;top:-3px;bottom:-3px;width:4px;border-radius:2px;
+    background:repeating-linear-gradient(45deg,#011624 0 3px,#ffd66b 3px 6px)}
+  .rr-marker{position:absolute;top:50%;left:0;transform:translate(-50%,-50%);transition:left .42s linear}
+  .rr-marker .rr-dot{display:block;width:16px;height:16px;border-radius:50%;background:#5230da;
+    box-shadow:0 0 0 3px rgba(82,48,218,.18),0 2px 6px rgba(1,22,36,.3)}
+  .rr-lane.leader .rr-marker .rr-dot{background:#b8860b;box-shadow:0 0 0 3px rgba(217,165,32,.25),0 2px 6px rgba(1,22,36,.3)}
+  .rr-comet{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:26px;height:8px;border-radius:999px;
+    background:linear-gradient(90deg,rgba(55,219,255,0),rgba(55,219,255,.8));opacity:0;transition:opacity .2s}
+  .rr-lane.moving .rr-comet{opacity:1}
+  .rr-nums{text-align:right;min-width:54px}
+  .rr-livev{font-family:'Montserrat',sans-serif;font-weight:700;font-size:21px;line-height:1}
+  .rr-pct{font-size:11.5px;color:#67737c;font-weight:600;margin-top:2px}
+  @media (prefers-reduced-motion: reduce){
+    .rr-marker{transition:none}.rr-lane.moving .rr-comet{opacity:0}
+    .rl-pill.practicing .d,.rl-pill.reconnecting .d,.rr-bar .rr-live-pill .d{animation:none}
+  }
   @media (max-width:600px){
     .rl-title{font-size:23px}
     .rl-row{grid-template-columns:auto 1fr;gap:10px 12px}
     .rl-right{grid-column:1 / -1;flex-direction:row;align-items:center;justify-content:space-between;width:100%}
+    .rr-lane{grid-template-columns:26px auto 1fr;gap:9px 10px}
+    .rr-nums{grid-column:2 / -1;display:flex;align-items:baseline;gap:10px;justify-content:flex-start;text-align:left}
+    .rr-pct{margin-top:0}
   }`;
   document.head.appendChild(st);
 }
 
 export function mount(el, raceId, inviteToken = null){
   injectRaceStyles();
-  let session = null, startMs = 0, endMs = 0, durationMs = 0, hostAvatar = null;
+  let session = null, startMs = 0, endMs = 0, durationMs = 0, TOTAL_SLOTS = 0, hostAvatar = null;
   let myName = (auth.getState().displayName || localStorage.getItem('ewr_name') || '').trim();
+  const myUid = auth.getState().user?.id || null;
+  const myClientId = 'c' + Math.random().toString(36).slice(2, 9);
+  const myId = myUid ? 'u:' + myUid : 'n:' + racerId(myName || 'guest');
+
   let channel = null;
-  let bleConnected = false, myLed = 0;
-  let lobbyBuilt = false, lastStagePhase = null, last321 = null;
-  let broadcastTimer = null, liveTimer = null, countdownTimer = null;
+  let bleConnected = false, myLed = 0, myEma = 0;
+  let view = null;              // 'lobby' | 'race' | 'final'
+  let countin = null;           // last 3-2-1 number shown
+
+  // My canonical race state (Phase 5; Phase 6 reads these to finalize + save).
+  let mySlots = null, myCumulative = 0, myFirstSlot = null, myVerified = true;
+  let swingWin = [], swings = 0, wasSwing = false, cheatDetected = false;
+
+  let engineTimer = null, netTimer = null, presenceTimer = null, paintTimer = null, phaseTimer = null;
   let unsubFrames = null, unsubStatus = null;
 
-  // roster: name -> { name, uid, avatar, country, host, wheel }
+  // roster: identity -> { id, name, uid, clientId, avatar, country, host, wheel,
+  //                       live:{led,ts}, slot, cum, verified, firstSlot, lastSeen }
   const roster = new Map();
-  // ephemeral live values (NEVER persisted): name -> { led, ts }
-  const live = new Map();
-  const LIVE_STALE_MS = 4000, BROADCAST_MS = 500;
+
+  const SLOT_MS = 500, SAMPLE_MS = 250, BROADCAST_MS = 500, PRESENCE_MS = 2500;
+  const RANKED_GRACE_SLOTS = 10;             // first valid tick within 5s → ranked
+  const LIVE_STALE_MS = 4000, RECONNECT_MS = 12000;
+  const CHEAT_WINDOW_MS = 2000, SWING_LIMIT = 7, MAX_SWINGS = 2;
 
   const zText = led => led < 6 ? '#c2415b' : led < 13 ? '#b8860b' : '#0f8a52';
   const isHostName = name => session && name && name.trim().toLowerCase() === (session.created_by || '').trim().toLowerCase();
   const phase = () => { const n = Date.now(); return n < startMs ? 'pre' : n <= endMs ? 'active' : 'post'; };
+  const curSlot = () => Math.floor((Date.now() - startMs) / SLOT_MS);
+  const progressOf = cum => TOTAL_SLOTS ? Math.max(0, Math.min(1, (cum || 0) / (24 * TOTAL_SLOTS))) : 0;
 
   el.innerHTML = `<div class="rl-wrap"><div class="rl-head" id="rlHead"><div class="rl-title">Loading…</div></div><div id="rlBody"></div></div>`;
   const $ = id => el.querySelector('#' + id);
@@ -188,23 +268,18 @@ export function mount(el, raceId, inviteToken = null){
       return;
     }
     session = data; raceId = data.id;
-    // If this row isn't actually a race, hand off to the normal session room.
     if(session.event_type !== 'race'){ location.hash = '#/room/' + raceId; return; }
     startMs = new Date(session.scheduled_start).getTime();
     durationMs = (session.duration_minutes || 0) * 60000;
     endMs = startMs + durationMs;
+    TOTAL_SLOTS = Math.max(1, Math.round(durationMs / SLOT_MS));
 
-    // Access gate (ported from the session room) — BEFORE any channel join.
     const accessMode = session.access_mode || 'public';
     const meId = auth.getState().user?.id || null;
     const isHostUser = !!(meId && session.created_by_user_id && meId === session.created_by_user_id);
     let accessOk = accessMode === 'public' || isHostUser;
-    if(!accessOk && accessMode === 'invite'){
-      accessOk = !!(inviteToken && session.invite_token && inviteToken === session.invite_token);
-    }
-    if(!accessOk && accessMode === 'followers'){
-      accessOk = !!(meId && await auth.isConnectedTo(session.created_by_user_id));
-    }
+    if(!accessOk && accessMode === 'invite') accessOk = !!(inviteToken && session.invite_token && inviteToken === session.invite_token);
+    if(!accessOk && accessMode === 'followers') accessOk = !!(meId && await auth.isConnectedTo(session.created_by_user_id));
     if(!accessOk){ renderLocked(accessMode); return; }
 
     if(session.created_by_user_id){
@@ -216,8 +291,8 @@ export function mount(el, raceId, inviteToken = null){
   })();
 
   function avatarHtml(url, name, cls){
-    if(url) return `<img class="rl-av ${cls || ''}" src="${esc(url)}" alt="">`;
-    return `<span class="rl-av rl-av-init ${cls || ''}">${esc((name || '?').charAt(0).toUpperCase())}</span>`;
+    if(url) return `<img class="${cls || 'rl-av'}" src="${esc(url)}" alt="">`;
+    return `<span class="${cls || 'rl-av'} ${(cls || 'rl-av').includes('rr') ? 'rr-av-init' : 'rl-av-init'}">${esc((name || '?').charAt(0).toUpperCase())}</span>`;
   }
 
   function renderHead(){
@@ -260,7 +335,6 @@ export function mount(el, raceId, inviteToken = null){
     });
     return b;
   }
-
   function copyButton(label, text){
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'rl-btn'; b.textContent = label;
@@ -285,214 +359,352 @@ export function mount(el, raceId, inviteToken = null){
         body = `This race is for ${esc(host)}'s connected members. Log in to join.`;
         cta = `<a class="rl-join" href="#/login">Log in</a>`;
         try { localStorage.setItem('ewr_pending_room', location.hash); } catch {}
-      } else {
-        body = `This race is for ${esc(host)}'s connected members.`;
-      }
+      } else { body = `This race is for ${esc(host)}'s connected members.`; }
     }
     $('rlBody').innerHTML = `<div class="rl-locked"><h2>${title}</h2><p>${body}</p>
       <div class="rl-actions">${cta}<a class="link" href="#/my-races">Back to races</a></div></div>`;
   }
 
-  // ---- Name gate (anonymous viewers can still gather in the lobby) -----------
+  // ---- Entry: name gate, then start everything -------------------------------
   function enter(){
-    if(myName){ showLobby(); return; }
+    if(myName){ begin(); return; }
     $('rlBody').innerHTML = `<div class="rl-gate">
       <label for="rlName" style="font-weight:700;color:#011624">Your name</label>
       <input type="text" id="rlName" maxlength="60" placeholder="Your name">
-      <button type="button" class="rl-join" id="rlJoin">Join the lobby</button></div>`;
+      <button type="button" class="rl-join" id="rlJoin">Join</button></div>`;
     const input = $('rlName'); input.focus();
     $('rlJoin').addEventListener('click', () => {
       const v = input.value.trim();
       if(!v) return;
       myName = v; try { localStorage.setItem('ewr_name', v); } catch {}
-      showLobby();
+      begin();
     });
   }
 
-  // ---- Lobby -----------------------------------------------------------------
-  function showLobby(){
-    lobbyBuilt = true;
-    $('rlBody').innerHTML = `
-      <div class="rl-stage" id="rlStage"></div>
-      <div class="rl-people-head">
-        <span class="rl-people-title">In the lobby</span>
-        <span class="rl-count" id="rlCount">0 here</span>
-      </div>
-      <div class="rl-list" id="rlList"><div class="rl-empty">Waiting for racers to arrive…</div></div>`;
-
+  function begin(){
     joinChannel();
-    unsubStatus = ble.subscribeStatus(s => { bleConnected = s.connected; trackPresence(); });
-    unsubFrames = ble.subscribeFrames(f => { myLed = f.led; });   // ephemeral; never persisted
+    unsubStatus = ble.subscribeStatus(s => { bleConnected = s.connected; if(!s.connected){ myLed = 0; } trackPresence(); });
+    unsubFrames = ble.subscribeFrames(f => {
+      myLed = f.led;
+      if(phase() === 'active'){
+        const now = Date.now();
+        swingWin.push({ t: now, led: f.led });
+        swingWin = swingWin.filter(x => now - x.t <= CHEAT_WINDOW_MS);
+        const leds = swingWin.map(x => x.led);
+        const swingNow = (Math.max(...leds) - Math.min(...leds)) >= SWING_LIMIT;
+        if(swingNow && !wasSwing && !cheatDetected && ++swings >= MAX_SWINGS){ cheatDetected = true; myVerified = false; }
+        wasSwing = swingNow;
+      }
+    });
 
-    // Throttled live broadcast — one message per BROADCAST_MS, not per BLE frame.
-    broadcastTimer = setInterval(() => {
-      if(!bleConnected || !channel) return;
-      const now = Date.now();
-      live.set(myName, { led: myLed, ts: now });   // self (broadcast is self:false)
-      channel.send({ type: 'broadcast', event: 'lobby-tick',
-        payload: { name: myName, led: myLed, country: auth.getState().country || null, avatar: auth.getState().avatarUrl || null } });
-    }, BROADCAST_MS);
-
-    liveTimer = setInterval(paintLive, 400);
-    countdownTimer = setInterval(updateStage, 1000);
-    updateStage();
+    engineTimer = setInterval(sample, SAMPLE_MS);
+    netTimer = setInterval(broadcastState, BROADCAST_MS);
+    presenceTimer = setInterval(trackPresence, PRESENCE_MS);
+    paintTimer = setInterval(paint, 300);
+    phaseTimer = setInterval(applyView, 1000);
+    applyView();
   }
 
+  // ---- Channel ---------------------------------------------------------------
   function joinChannel(){
     channel = supabase.channel('room-' + raceId, {
-      config: { broadcast: { self: false }, presence: { key: racerId(myName) } },
+      config: { broadcast: { self: false }, presence: { key: myClientId } },
     });
     channel.on('broadcast', { event: 'lobby-tick' }, ({ payload }) => {
-      if(!payload || !payload.name) return;
-      live.set(payload.name, { led: payload.led, ts: Date.now() });
-      const r = roster.get(payload.name);
-      if(r){ if(payload.country) r.country = payload.country; if(payload.avatar) r.avatar = payload.avatar; }
+      if(!payload || !payload.id) return;
+      const r = ensureEntry(payload);
+      r.live = { led: payload.led, ts: Date.now() }; r.lastSeen = Date.now();
+    });
+    channel.on('broadcast', { event: 'race-tick' }, ({ payload }) => {
+      if(!payload || !payload.id) return;
+      acceptRacerState(payload);
     });
     channel.on('presence', { event: 'sync' }, syncPresence);
     channel.subscribe(status => { if(status === 'SUBSCRIBED') trackPresence(); });
   }
 
-  function trackPresence(){
-    if(!channel) return;
-    channel.track({ name: myName, uid: auth.getState().user?.id || null, avatar: auth.getState().avatarUrl || null,
-      country: auth.getState().country || null, wheel: bleConnected }).catch(() => {});
+  function ensureEntry(p){
+    let r = roster.get(p.id);
+    if(!r){ r = { id: p.id, name: p.name, cum: 0, slot: -1, firstSlot: null, verified: true, live: { led: 0, ts: 0 } }; roster.set(p.id, r); }
+    if(p.name) r.name = p.name;
+    if(p.uid !== undefined) r.uid = p.uid;
+    if(p.avatar) r.avatar = p.avatar;
+    if(p.country) r.country = p.country;
+    if(p.wheel !== undefined) r.wheel = !!p.wheel;
+    r.host = isHostName(r.name);
+    return r;
   }
 
+  // Per identity, the highest-cumulative state wins (multi-tab dedup: the wheel
+  // tab leads; an empty second tab at cum 0 can never overwrite it). Same client
+  // always advances its own entry.
+  function acceptRacerState(p){
+    const r = ensureEntry(p);
+    const better = (p.clientId && p.clientId === r.clientId) || r.cum == null || (p.cum || 0) >= (r.cum || 0);
+    if(!better) return;
+    r.clientId = p.clientId || r.clientId;
+    r.slot = p.slot != null ? p.slot : r.slot;
+    r.cum = p.cum || 0;
+    r.live = { led: p.live || 0, ts: Date.now() };
+    r.verified = p.verified !== false;
+    if(p.firstSlot != null) r.firstSlot = (r.firstSlot == null) ? p.firstSlot : Math.min(r.firstSlot, p.firstSlot);
+    r.lastSeen = Date.now();
+  }
+
+  function trackPresence(){
+    if(!channel) return;
+    channel.track({
+      id: myId, clientId: myClientId, name: myName, uid: myUid,
+      avatar: auth.getState().avatarUrl || null, country: auth.getState().country || null,
+      wheel: bleConnected, slot: curSlot(), cum: myCumulative, live: Math.round(myEma),
+      verified: myVerified, firstSlot: myFirstSlot, ts: Date.now(),
+    }).catch(() => {});
+  }
+
+  // Presence is the RECOVERY channel — rebuild standings for reconnect / late join.
   function syncPresence(){
     const state = channel ? channel.presenceState() : {};
     const seen = new Set();
     for(const metas of Object.values(state)){
       const m = metas[metas.length - 1];
-      if(!m || !m.name) continue;
-      seen.add(m.name);
-      const r = roster.get(m.name) || {};
-      r.name = m.name; r.uid = m.uid || r.uid || null;
-      r.avatar = m.avatar || r.avatar || null; r.country = m.country || r.country || null;
-      r.wheel = !!m.wheel; r.host = isHostName(m.name);
-      roster.set(m.name, r);
+      if(!m || !m.id) continue;
+      seen.add(m.id);
+      ensureEntry(m);
+      // Seed race state from the snapshot (broadcast keeps it fresh afterwards).
+      if(phase() !== 'pre') acceptRacerState(m);
+      else { const r = roster.get(m.id); if(r){ r.lastSeen = Date.now(); } }
     }
-    for(const name of [...roster.keys()]) if(!seen.has(name)) roster.delete(name);
-    renderRoster();
+    // Drop people who left presence AND aren't a still-relevant racer with score.
+    for(const [id, r] of roster){
+      if(!seen.has(id) && !((r.cum || 0) > 0 && phase() !== 'pre')) roster.delete(id);
+    }
+    if(view) (view === 'race' ? renderRaceList() : renderLobbyList());
   }
 
-  function statusOf(p){
-    const lv = live.get(p.name); const now = Date.now();
-    const fresh = lv && (now - lv.ts < LIVE_STALE_MS);
+  // ---- Sampling / scoring (canonical slots) ----------------------------------
+  function sample(){
+    // live "speed" EMA always tracks (decays to 0 on disconnect).
+    const raw = bleConnected ? myLed : 0;
+    myEma = myEma == null ? raw : myEma * 0.7 + raw * 0.3;
+    if(phase() !== 'active' || !mySlots) return;
+    const slot = curSlot();
+    if(slot < 0 || slot >= TOTAL_SLOTS) return;          // out of range dropped
+    if(bleConnected && myFirstSlot === null) myFirstSlot = slot;   // first contributing slot → ranked window
+    if(mySlots[slot] === undefined){                      // first-write-wins → no double count, monotonic
+      mySlots[slot] = raw;
+      myCumulative += raw;
+    }
+    // Keep my own roster entry live without waiting for the (self:false) echo.
+    const me = ensureEntry({ id: myId, name: myName, uid: myUid, avatar: auth.getState().avatarUrl, country: auth.getState().country, wheel: bleConnected });
+    me.clientId = myClientId; me.slot = slot; me.cum = myCumulative; me.live = { led: Math.round(myEma), ts: Date.now() };
+    me.verified = myVerified; me.firstSlot = myFirstSlot; me.lastSeen = Date.now();
+  }
+
+  function broadcastState(){
+    if(!channel) return;
+    const ph = phase();
+    if(ph === 'pre'){
+      if(!bleConnected) return;
+      channel.send({ type: 'broadcast', event: 'lobby-tick',
+        payload: { id: myId, name: myName, uid: myUid, led: myLed, country: auth.getState().country || null, avatar: auth.getState().avatarUrl || null, wheel: true } });
+    } else if(ph === 'active'){
+      channel.send({ type: 'broadcast', event: 'race-tick',
+        payload: { id: myId, clientId: myClientId, name: myName, uid: myUid, slot: curSlot(),
+          cum: myCumulative, live: Math.round(myEma), verified: myVerified, firstSlot: myFirstSlot,
+          country: auth.getState().country || null, avatar: auth.getState().avatarUrl || null, wheel: bleConnected } });
+    }
+  }
+
+  // ---- View switching (pre → race → final), driven only by scheduled_start ---
+  function applyView(){
+    const ph = phase();
+    if(ph === 'pre'){
+      if(view !== 'lobby'){ buildLobby(); view = 'lobby'; }
+      updateLobbyStage();
+    } else if(ph === 'active'){
+      if(view !== 'race'){ onRaceStart(); buildRace(); view = 'race'; }
+      updateRaceStage();
+    } else {
+      if(view !== 'final'){ buildFinalizing(); view = 'final'; }
+    }
+  }
+
+  function onRaceStart(){
+    // Drop practice scaffolding; the official window begins at slot 0.
+    mySlots = new Array(TOTAL_SLOTS); myCumulative = 0; myFirstSlot = (phase() === 'active' && bleConnected) ? curSlot() : null;
+    // A client opening mid-race is a late entry; firstSlot may already be > grace.
+  }
+
+  // ---- LOBBY (Phase 4) -------------------------------------------------------
+  function buildLobby(){
+    $('rlBody').innerHTML = `
+      <div class="rl-stage" id="rlStage"></div>
+      <div class="rl-people-head"><span class="rl-people-title">In the lobby</span><span class="rl-count" id="rlCount">0 here</span></div>
+      <div class="rl-list" id="rlList"><div class="rl-empty">Waiting for racers to arrive…</div></div>`;
+    renderLobbyList();
+  }
+  function lobbyStatus(p){
+    const now = Date.now(); const lv = p.live; const fresh = lv && (now - lv.ts < LIVE_STALE_MS);
     if(p.wheel && fresh && lv.led > 0) return { key: 'practicing', label: 'Practicing' };
-    if(p.wheel && lv && !fresh && (now - lv.ts < 12000)) return { key: 'reconnecting', label: 'Reconnecting' };
+    if(p.wheel && lv && !fresh && (now - lv.ts < RECONNECT_MS)) return { key: 'reconnecting', label: 'Reconnecting' };
     if(p.wheel) return { key: 'ready', label: 'Wheel ready' };
     return { key: 'lobby', label: 'In lobby' };
   }
-
-  // Host first, then You, then arrival/name order — the host is NOT a leader,
-  // just anchored at the top as the organizer.
-  function sortedRoster(){
+  function sortedLobby(){
     return [...roster.values()].sort((a, b) => {
       if(a.host !== b.host) return a.host ? -1 : 1;
-      const am = a.name === myName, bm = b.name === myName;
+      const am = a.id === myId, bm = b.id === myId;
       if(am !== bm) return am ? -1 : 1;
-      return a.name.localeCompare(b.name);
+      return (a.name || '').localeCompare(b.name || '');
     });
   }
-
-  function rowHtml(p){
-    const st = statusOf(p);
-    const mine = p.name === myName;
-    const lv = live.get(p.name);
-    const showLive = st.key === 'practicing' && lv;
-    const tags = (p.host ? '<span class="rl-tag host">Host</span>' : '') + (mine ? '<span class="rl-tag you">You</span>' : '');
-    return `
-      <div class="rl-row ${st.key === 'practicing' ? 'practicing' : ''} ${mine ? 'me' : ''}" data-name="${esc(p.name)}">
+  function renderLobbyList(){
+    const list = $('rlList'), count = $('rlCount'); if(!list) return;
+    const arr = sortedLobby();
+    if(count) count.textContent = arr.length + ' here';
+    list.innerHTML = arr.length ? arr.map(p => {
+      const st = lobbyStatus(p), mine = p.id === myId, lv = p.live, showLive = st.key === 'practicing' && lv;
+      const tags = (p.host ? '<span class="rl-tag host">Host</span>' : '') + (mine ? '<span class="rl-tag you">You</span>' : '');
+      return `<div class="rl-row ${st.key === 'practicing' ? 'practicing' : ''} ${mine ? 'me' : ''}" data-id="${esc(p.id)}">
         ${avatarHtml(p.avatar, p.name)}
-        <div class="rl-mid">
-          <div class="rl-name-row"><span class="rl-name">${esc(p.name)}</span>${flagImg(p.country)}${tags}</div>
-          <div class="rl-track"><span class="rl-pulse"></span></div>
-        </div>
-        <div class="rl-right">
-          <span class="rl-pill ${st.key}"><span class="d"></span>${st.label}</span>
-          <span class="rl-live" style="color:${showLive ? zText(lv.led) : 'transparent'}">${showLive ? lv.led : ''}</span>
-        </div>
+        <div class="rl-mid"><div class="rl-name-row"><span class="rl-name">${esc(p.name)}</span>${flagImg(p.country)}${tags}</div>
+          <div class="rl-track"><span class="rl-pulse"></span></div></div>
+        <div class="rl-right"><span class="rl-pill ${st.key}"><span class="d"></span>${st.label}</span>
+          <span class="rl-live" style="color:${showLive ? zText(lv.led) : 'transparent'}">${showLive ? lv.led : ''}</span></div>
       </div>`;
+    }).join('') : '<div class="rl-empty">Waiting for racers to arrive…</div>';
   }
-
-  function renderRoster(){
-    const list = $('rlList'); const count = $('rlCount');
-    if(!list) return;
-    const arr = sortedRoster();
-    if(count) count.textContent = arr.length + (arr.length === 1 ? ' here' : ' here');
-    list.innerHTML = arr.length ? arr.map(rowHtml).join('') : '<div class="rl-empty">Waiting for racers to arrive…</div>';
-  }
-
-  // Light per-tick refresh of the dynamic bits only (no avatar reflow / flicker).
-  function paintLive(){
+  function paintLobby(){
     const list = $('rlList'); if(!list) return;
-    for(const p of roster.values()){
-      const row = list.querySelector(`.rl-row[data-name="${CSS.escape(p.name)}"]`);
-      if(!row) continue;
-      const st = statusOf(p);
-      const lv = live.get(p.name);
-      const showLive = st.key === 'practicing' && lv;
+    const arr = sortedLobby();
+    if(arr.length !== list.querySelectorAll('.rl-row').length){ renderLobbyList(); return; }
+    for(const p of arr){
+      const row = list.querySelector(`.rl-row[data-id="${CSS.escape(p.id)}"]`); if(!row) continue;
+      const st = lobbyStatus(p), lv = p.live, showLive = st.key === 'practicing' && lv;
       row.classList.toggle('practicing', st.key === 'practicing');
-      const pill = row.querySelector('.rl-pill');
-      if(pill){ pill.className = 'rl-pill ' + st.key; pill.innerHTML = `<span class="d"></span>${st.label}`; }
-      const liveEl = row.querySelector('.rl-live');
-      if(liveEl){ liveEl.textContent = showLive ? lv.led : ''; liveEl.style.color = showLive ? zText(lv.led) : 'transparent'; }
+      const pill = row.querySelector('.rl-pill'); if(pill){ pill.className = 'rl-pill ' + st.key; pill.innerHTML = `<span class="d"></span>${st.label}`; }
+      const liveEl = row.querySelector('.rl-live'); if(liveEl){ liveEl.textContent = showLive ? lv.led : ''; liveEl.style.color = showLive ? zText(lv.led) : 'transparent'; }
     }
   }
-
-  // ---- Countdown + phase (lobby → "race starting" → finished) ----------------
-  function updateStage(){
+  function updateLobbyStage(){
     const stage = $('rlStage'); if(!stage) return;
-    const ph = phase();
-    const now = Date.now();
-
-    if(ph === 'pre'){
-      const left = startMs - now;
-      const soon = left <= 60000;
-      // Final 3 seconds: a purely-visual 3-2-1. It does NOT start any engine.
-      // PHASE 5 HOOK: when the official race engine lands, the startMs boundary
-      // below is where the 3-2-1 should hand off to live race tracking.
-      const sec = Math.ceil(left / 1000);
-      const big321 = left <= 3000 && left > 0 ? `<div class="rl-321">${sec}</div>` : '';
-      stage.innerHTML = `
-        <div class="rl-practice">
-          <b>Practice room open</b>
-          <span>Spin together while you wait. Practice readings are not saved or included in the race.</span>
-        </div>
-        <div class="rl-cd ${soon ? 'soon' : ''}">
-          <span class="rl-cd-lbl">Race starts</span>
-          <span class="rl-cd-val">${soon ? fmt(Math.max(0, left)) : 'in ' + formatUntil(left)}</span>
-        </div>${big321}`;
-      lastStagePhase = 'pre';
-    } else if(ph === 'active'){
-      // PHASE 5 HOOK: the real-time race engine + lanes + scoring render here.
-      // Until it exists, show an honest transitional state — never a half-baked chart.
-      if(lastStagePhase !== 'active'){
-        stage.innerHTML = `
-          <div class="rl-prep">
-            <b><span class="rl-prep-dot"></span>Race starting</b>
-            <span>Live race tracking is preparing — hang tight.</span>
-          </div>`;
-        lastStagePhase = 'active';
-      }
-    } else {
-      // Finished — Phase 4 saves nothing, so be honest about it.
-      if(lastStagePhase !== 'post'){
-        stage.innerHTML = `
-          <div class="rl-finished">
-            <b>Race finished</b>
-            <span>Detailed race results are coming soon.</span>
-          </div>`;
-        lastStagePhase = 'post';
-      }
+    const left = startMs - Date.now(), soon = left <= 60000;
+    if(left <= 3000 && left > 0){
+      const n = Math.ceil(left / 1000);
+      if(countin !== n){ countin = n; }
+      stage.innerHTML = `<div class="rl-practice"><b>Get ready</b><span>The official race is about to begin.</span></div>
+        <div class="rl-countin"><span class="rl-ring r2 pulse"></span><span class="rl-ring pulse"></span><span class="rl-num">${n}</span></div>`;
+      return;
     }
+    stage.innerHTML = `<div class="rl-practice"><b>Practice room open</b>
+        <span>Spin together while you wait. Practice readings are not saved or included in the race.</span></div>
+      <div class="rl-cd ${soon ? 'soon' : ''}"><span class="rl-cd-lbl">Race starts</span>
+        <span class="rl-cd-val">${soon ? fmt(Math.max(0, left)) : 'in ' + formatUntil(left)}</span></div>`;
   }
+
+  // ---- RACE (Phase 5) --------------------------------------------------------
+  // Stable lane order (no 500ms reshuffles) — the rank BADGE updates, markers move.
+  let raceOrder = null;
+  function buildRace(){
+    $('rlBody').innerHTML = `
+      <div class="rr-bar">
+        <span class="rr-live-pill"><span class="d"></span>LIVE RACE</span>
+        <span class="rr-clock" id="rrClock">--:--</span>
+      </div>
+      <p class="rr-watch" id="rrWatch"></p>
+      <div class="rr-list" id="rrList"></div>
+      <div class="rl-stage" id="rlStage" style="margin-top:16px"></div>`;
+    raceOrder = null;
+    renderRaceList();
+  }
+  function racers(){
+    // Anyone who has (or had) a wheel this race = a racer; pure spectators excluded.
+    return [...roster.values()].filter(p => p.firstSlot != null || (p.cum || 0) > 0 || p.wheel);
+  }
+  function isRanked(p){ return p.firstSlot != null && p.firstSlot <= RANKED_GRACE_SLOTS; }
+  function renderRaceList(){
+    const list = $('rrList'); if(!list) return;
+    const all = racers();
+    if(!raceOrder){
+      // Lock the lane order once (host, you, then by name) so lanes don't jump.
+      raceOrder = all.slice().sort((a, b) => {
+        if(a.host !== b.host) return a.host ? -1 : 1;
+        const am = a.id === myId, bm = b.id === myId; if(am !== bm) return am ? -1 : 1;
+        return (a.name || '').localeCompare(b.name || '');
+      }).map(p => p.id);
+    } else {
+      for(const p of all) if(!raceOrder.includes(p.id)) raceOrder.push(p.id);   // late entries append
+    }
+    const ordered = raceOrder.map(id => roster.get(id)).filter(Boolean);
+    list.innerHTML = ordered.map(laneHtml).join('') || '<div class="rl-empty">No racers yet.</div>';
+    paintRace();
+  }
+  function laneHtml(p){
+    const mine = p.id === myId, ranked = isRanked(p);
+    const tags = (p.host ? '<span class="rr-tag host">Host</span>' : '')
+      + (mine ? '<span class="rr-tag you">You</span>' : '')
+      + (!ranked ? '<span class="rr-tag unranked">Late · Unranked</span>' : '')
+      + (p.verified === false ? '<span class="rr-tag unverified">Unverified</span>' : '');
+    return `<div class="rr-lane ${mine ? 'me' : ''} ${ranked ? '' : 'unranked'}" data-id="${esc(p.id)}">
+      <div class="rr-rank">–</div>
+      ${avatarHtml(p.avatar, p.name, 'rr-av')}
+      <div class="rr-info">
+        <div class="rr-name-row"><span class="rr-name">${esc(p.name)}</span>${flagImg(p.country)}${tags}</div>
+        <div class="rr-track"><span class="rr-finish"></span><span class="rr-marker"><span class="rr-dot"></span><span class="rr-comet"></span></span></div>
+      </div>
+      <div class="rr-nums"><div class="rr-livev">0</div><div class="rr-pct">0%</div></div>
+    </div>`;
+  }
+  function paintRace(){
+    const list = $('rrList'); if(!list) return;
+    const all = racers();
+    if(raceOrder && all.length !== raceOrder.length){ renderRaceList(); return; }
+    // Live rank among ranked racers by cumulative.
+    const rankedSorted = all.filter(isRanked).sort((a, b) => (b.cum || 0) - (a.cum || 0));
+    const rankById = new Map(rankedSorted.map((p, i) => [p.id, i + 1]));
+    const leaderId = rankedSorted.length ? rankedSorted[0].id : null;
+    const now = Date.now();
+    for(const p of all){
+      const row = list.querySelector(`.rr-lane[data-id="${CSS.escape(p.id)}"]`); if(!row) continue;
+      const ranked = isRanked(p);
+      const stale = !p.lastSeen || (now - p.lastSeen > LIVE_STALE_MS);
+      const lv = (p.live && !stale) ? p.live.led : 0;          // disconnect/stale → speed 0, marker stays
+      const rankEl = row.querySelector('.rr-rank');
+      if(ranked){ rankEl.textContent = rankById.get(p.id) || '–'; rankEl.classList.remove('dash'); }
+      else { rankEl.textContent = '–'; rankEl.classList.add('dash'); }
+      row.classList.toggle('leader', ranked && p.id === leaderId && (p.cum || 0) > 0);
+      row.classList.toggle('moving', lv > 0 && !stale);
+      const marker = row.querySelector('.rr-marker'); if(marker) marker.style.left = (progressOf(p.cum) * 100).toFixed(1) + '%';
+      const liveEl = row.querySelector('.rr-livev'); if(liveEl){ liveEl.textContent = lv; liveEl.style.color = lv > 0 ? zText(lv) : '#99a2a7'; }
+      const pctEl = row.querySelector('.rr-pct'); if(pctEl) pctEl.textContent = Math.round(progressOf(p.cum) * 100) + '%';
+    }
+    const watch = $('rrWatch');
+    if(watch){ const n = roster.size - all.length; watch.textContent = n > 0 ? `${all.length} racing · ${n} watching` : `${all.length} racing`; }
+  }
+  function updateRaceStage(){
+    const clock = $('rrClock'); if(clock){ const left = endMs - Date.now(); clock.textContent = fmt(Math.max(0, left)) + ' left'; clock.classList.toggle('final10', left <= 10000); }
+  }
+
+  // ---- Finalizing (Phase 5 end; Phase 6 will save + show official results) ---
+  function buildFinalizing(){
+    // Slot collection stops (sample() bails when phase !== active). The full
+    // canonical series (mySlots) + standings stay in memory for the Phase 6 hook.
+    // PHASE 6 HOOK: tail-drain → compute final stats → save results → results page.
+    const all = racers().filter(isRanked).sort((a, b) => (b.cum || 0) - (a.cum || 0));
+    const lead = all[0];
+    $('rlBody').innerHTML = `
+      <div class="rl-prep">
+        <b><span class="rl-prep-dot"></span>Finalizing race…</b>
+        <span>Locking in everyone's run. Official results are coming up.</span>
+      </div>
+      ${lead ? `<p class="rr-watch" style="margin-top:12px;text-align:center">${all.length} racer${all.length > 1 ? 's' : ''} finished · final standings are being verified</p>` : ''}`;
+  }
+
+  function paint(){ if(view === 'lobby') paintLobby(); else if(view === 'race') paintRace(); }
 
   // ---- Cleanup ---------------------------------------------------------------
   return () => {
-    if(broadcastTimer) clearInterval(broadcastTimer);
-    if(liveTimer) clearInterval(liveTimer);
-    if(countdownTimer) clearInterval(countdownTimer);
+    for(const t of [engineTimer, netTimer, presenceTimer, paintTimer, phaseTimer]) if(t) clearInterval(t);
     if(unsubFrames) unsubFrames();
     if(unsubStatus) unsubStatus();
     if(channel) supabase.removeChannel(channel);
