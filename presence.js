@@ -173,6 +173,7 @@ export function init(){
 
 // Effective status. An activity (solo/experiment/session) implies a connected wheel.
 function deriveStatus(){
+  if(activity === 'race') return 'race';
   if(activity === 'session') return 'session';
   if(activity === 'experiment') return 'experiment';
   if(activity === 'solo') return 'measuring';
@@ -190,6 +191,7 @@ function setActivity(kind, on){
 export function setMeasuring(on){ setActivity('solo', on); }        // solo measurement
 export function setExperiment(on){ setActivity('experiment', on); } // structured experiment
 export function setSession(on){ setActivity('session', on); }       // group session room
+export function setRace(on){ setActivity('race', on); }             // race room (lobby + live)
 
 // Broadcast the live wheel value while connected (so others see it spin), and feed
 // our own value locally (broadcast is self:false, so we don't receive our own).

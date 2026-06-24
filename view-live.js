@@ -28,6 +28,7 @@ const STATUS = {
   measuring:  { label: 'Measuring live', cls: 'measuring',  live: true },
   experiment: { label: 'In an experiment',cls: 'experiment', live: true },
   session:    { label: 'In a session',    cls: 'session',    live: true },
+  race:       { label: 'In a race',        cls: 'session',    live: true },
   online:     { label: 'Online',          cls: 'online',     live: false },
   featured:   { label: 'Featured Maker',  cls: 'featured',   live: false },
   offline:    { label: 'Offline',         cls: 'offline',    live: false },

@@ -25,6 +25,7 @@
 import { supabase } from './db.js';
 import * as ble from './ble.js';
 import * as auth from './auth.js';
+import * as presence from './presence.js';
 import { flagUrl } from './countries.js';
 import { createAddToCalendar } from './calendar.js';
 import { computeStats, downsample } from './analytics.js';
@@ -466,6 +467,7 @@ export function mount(el, raceId, inviteToken = null){
   }
 
   function begin(){
+    presence.setRace(true);   // show "In a race" on the global Live wall while in the room
     joinChannel();
     unsubStatus = ble.subscribeStatus(s => { bleConnected = s.connected; if(!s.connected){ myLed = 0; } trackPresence(); });
     unsubFrames = ble.subscribeFrames(f => {
@@ -570,24 +572,27 @@ export function mount(el, raceId, inviteToken = null){
 
   // ---- Sampling / scoring (canonical slots) ----------------------------------
   function sample(){
-    // live "speed" EMA always tracks (decays to 0 on disconnect).
     const raw = bleConnected ? myLed : 0;
     myEma = myEma == null ? raw : myEma * 0.7 + raw * 0.3;
-    if(phase() !== 'active' || !mySlots) return;
-    const slot = curSlot();
-    if(slot < 0 || slot >= TOTAL_SLOTS) return;          // out of range dropped
-    if(bleConnected && myFirstSlot === null) myFirstSlot = slot;   // first contributing slot → ranked window
-    if(mySlots[slot] === undefined){                      // first-write-wins → no double count, monotonic
-      mySlots[slot] = raw;
-      myCumulative += raw;
-      // Trailing held-run (slot fills with no fresh frame between) — the finalize
-      // tail-drain may correct exactly those last slots.
-      if(frameFresh){ frameFresh = false; holdRun = 0; } else holdRun++;
-    }
-    // Keep my own roster entry live without waiting for the (self:false) echo.
+    // Keep my OWN roster entry fresh in EVERY phase (lobby too) — the broadcast is
+    // self:false, so nothing else updates "me". Without this my own lobby row never
+    // flips to "Practicing" while I spin (it stuck on In lobby / Wheel ready).
     const me = ensureEntry({ id: myId, name: myName, uid: myUid, avatar: auth.getState().avatarUrl, country: auth.getState().country, wheel: bleConnected });
-    me.clientId = myClientId; me.slot = slot; me.cum = myCumulative; me.live = { led: Math.round(myEma), ts: Date.now() };
-    me.verified = myVerified; me.firstSlot = myFirstSlot; me.lastSeen = Date.now();
+    me.wheel = bleConnected;
+    me.live = { led: Math.round(myEma), ts: Date.now() };
+    me.lastSeen = Date.now();
+    if(phase() === 'active' && mySlots){
+      const slot = curSlot();
+      if(slot >= 0 && slot < TOTAL_SLOTS){                 // out of range dropped
+        if(bleConnected && myFirstSlot === null) myFirstSlot = slot;
+        if(mySlots[slot] === undefined){                   // first-write-wins → no double count, monotonic
+          mySlots[slot] = raw; myCumulative += raw;
+          if(frameFresh){ frameFresh = false; holdRun = 0; } else holdRun++;
+        }
+        me.clientId = myClientId; me.slot = slot; me.cum = myCumulative;
+        me.verified = myVerified; me.firstSlot = myFirstSlot;
+      }
+    }
   }
 
   function broadcastState(){
@@ -988,6 +993,7 @@ export function mount(el, raceId, inviteToken = null){
     if(unsubFrames) unsubFrames();
     if(unsubStatus) unsubStatus();
     if(unsubAuth) unsubAuth();
+    presence.setRace(false);
     if(channel) supabase.removeChannel(channel);
   };
 }
