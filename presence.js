@@ -19,9 +19,15 @@ const BEAT_MS = 2500;           // status heartbeat cadence (covers online users
 const SERIES_MAX = 120;         // live-curve history (~60s at 500ms, like the solo preview)
 const STALE_MS = 4000;          // a live value older than this is treated as gone
 const STATUS_STALE_MS = 7000;   // a broadcast status older than this falls back to presence
+const REFRESH_MS = 30000;       // periodically rebuild the presence channel from scratch. A
+                                // long-lived socket's presenceState() can keep stale "ghosts"
+                                // (users who left) until a fresh subscribe — this is that
+                                // refresh, without a page reload. It only re-reads the TRUE
+                                // server state, so it never drops a genuinely-present user.
 
 let inited = false;
 let channel = null;
+let rebuilding = false;              // true while we tear down + re-subscribe the channel
 let tracking = false;
 let lastTrackedJson = null;          // guards against redundant / racing re-tracks (excludes ts)
 const myKey = 'tab-' + Math.random().toString(36).slice(2);   // stable per-tab presence key
@@ -94,7 +100,7 @@ function beat(){
 
 const sig = l => l.map(p => p.uid + ':' + p.status).sort().join('|');
 let lastSig = '';
-function emit(){ const l = list(); lastSig = sig(l); listeners.forEach(cb => { try { cb(l); } catch {} }); }
+function emit(){ if(rebuilding) return; const l = list(); lastSig = sig(l); listeners.forEach(cb => { try { cb(l); } catch {} }); }
 
 async function applyTrack(){
   if(!channel) return;
@@ -112,12 +118,33 @@ async function applyTrack(){
   emit();
 }
 
+// The first presence sync after a (re)subscribe carries the full, fresh server state — use
+// it to END a rebuild window and repaint (any ghosts from the old socket are now gone).
+function onSync(){ rebuilding = false; emit(); }
+
+// Periodically rebuild the channel from scratch. Supabase presence 'leave' diffs are
+// unreliable on a long-lived socket, so users who left can linger in presenceState() until
+// a fresh subscribe (the "bots still online after they left, gone on refresh" bug). We AWAIT
+// the teardown before re-creating — a clean rejoin, never the racy same-topic churn — and
+// HOLD the last render until the new sync arrives (emit is gated on `rebuilding`), so there
+// is no empty flicker. This never filters a present user; it just re-reads the true state.
+async function refreshChannel(){
+  if(rebuilding || !channel) return;
+  rebuilding = true;
+  setTimeout(() => { if(rebuilding){ rebuilding = false; emit(); } }, 6000);   // failsafe unfreeze
+  const old = channel;
+  channel = null;
+  lastTrackedJson = null; tracking = false;            // force a fresh re-track on the new channel
+  try { await supabase.removeChannel(old); } catch {}
+  buildChannel();                                       // subscribes; its first onSync clears `rebuilding`
+}
+
 function buildChannel(){
   channel = supabase.channel('live-presence', {
     config: { presence: { key: myKey }, broadcast: { self: false } },
   });
-  // Re-render on ANY presence change — sync (full state) plus join/leave diffs.
-  channel.on('presence', { event: 'sync' }, emit);
+  // Re-render on ANY presence change — sync (full state, also ends a rebuild) plus diffs.
+  channel.on('presence', { event: 'sync' }, onSync);
   channel.on('presence', { event: 'join' }, emit);
   channel.on('presence', { event: 'leave' }, emit);
   // Live wheel values from anyone with a connected wheel (high-frequency, ephemeral).
@@ -156,6 +183,7 @@ export function init(){
   // and re-render only when it actually changed — so connect/disconnect/leave shows
   // up without a manual page refresh.
   setInterval(() => {
+    if(rebuilding) return;
     const l = list();
     const s = sig(l);
     if(s !== lastSig){ lastSig = s; listeners.forEach(cb => { try { cb(l); } catch {} }); }
@@ -163,6 +191,8 @@ export function init(){
   // Status heartbeat — broadcast my status periodically so others stay in sync even
   // when presence re-tracks don't propagate (the curve/value broadcast is reliable).
   setInterval(beat, BEAT_MS);
+  // Shed stale presence ghosts from the long-lived socket (see refreshChannel).
+  setInterval(refreshChannel, REFRESH_MS);
   // Returning to the tab: re-assert our presence and refresh the wall immediately.
   if(typeof document !== 'undefined'){
     document.addEventListener('visibilitychange', () => {
