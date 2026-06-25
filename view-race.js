@@ -1020,6 +1020,13 @@ export function mount(el, raceId, inviteToken = null){
     const nm = r => { const p = prof.get(r.user_id); return (p && p.approved_maker && p.practitioner_handle)
       ? `<a class="maker-name-link" href="#/connect/${esc(p.practitioner_handle)}">${esc(r.racer_name)}</a>` : esc(r.racer_name); };
     const mine = r => !!(myUid && r.user_id === myUid);
+    // The official ranking is by race_score (cumulative points = fair full-window average ×
+    // slots). Show the avg DERIVED from race_score so it ALWAYS agrees with the points order —
+    // the app saves the two consistently, but a bot can save an `avg` computed on a different
+    // basis, which made "#1 has a lower avg than #2" look wrong. (peak stays as saved — it's a
+    // genuinely independent stat that can outrank the average.)
+    const totalSlots = Math.max(1, Math.round((session.duration_minutes || 0) * 60000 / 500));
+    const avgOf = r => totalSlots ? (r.race_score || 0) / totalSlots : (r.avg || 0);
     const medal = ['#d9a520', '#9fb0bd', '#c08457'];
     const medalEmoji = ['🥇', '🥈', '🥉'];   // same medals as the Global Ranking podium
 
@@ -1037,7 +1044,7 @@ export function mount(el, raceId, inviteToken = null){
         <div class="rr-your-grid">
           <div><div class="rr-your-v">${myRow.final_rank != null ? '#' + myRow.final_rank : '—'}</div><div class="rr-your-l">Place</div></div>
           <div><div class="rr-your-v">${myRow.race_score}</div><div class="rr-your-l">Score</div></div>
-          <div><div class="rr-your-v">${(myRow.avg || 0).toFixed(1)}</div><div class="rr-your-l">Avg</div></div>
+          <div><div class="rr-your-v">${avgOf(myRow).toFixed(1)}</div><div class="rr-your-l">Avg</div></div>
           <div><div class="rr-your-v">${myRow.peak || 0}</div><div class="rr-your-l">Peak</div></div>
           <div><div class="rr-your-v">${myRow.steadiness || 0}</div><div class="rr-your-l">Steady</div></div>
         </div>
@@ -1048,7 +1055,7 @@ export function mount(el, raceId, inviteToken = null){
       <div class="rr-srow${mine(r) ? ' me' : ''}">
         <div class="rr-srank">${r.final_rank}</div>${av(r)}
         <div class="rr-sname">${nm(r)}${cc(r)}${r.is_host ? '<span class="rr-tag host">Host</span>' : ''}${r.verified === false ? '<span class="rr-vrf bad">Unverified</span>' : ''}</div>
-        <div class="rr-sscore"><b>${r.race_score}</b><span>avg ${(r.avg || 0).toFixed(1)} · peak ${r.peak || 0}</span></div>
+        <div class="rr-sscore"><b>${r.race_score}</b><span>avg ${avgOf(r).toFixed(1)} · peak ${r.peak || 0}</span></div>
       </div>`;
 
     let awards = '';
@@ -1068,7 +1075,7 @@ export function mount(el, raceId, inviteToken = null){
         ${awards}
         ${ranked.length ? `<h3 class="rr-sec">Full standings</h3><div class="rr-standings">${ranked.map(standRow).join('')}</div>` : ''}
         ${unranked.length ? `<h3 class="rr-sec">Unranked <span class="rr-sec-sub">late entry / not verified</span></h3>
-          <div class="rr-standings">${unranked.map(r => `<div class="rr-srow unr${mine(r) ? ' me' : ''}"><div class="rr-srank dash">–</div>${av(r)}<div class="rr-sname">${nm(r)}${cc(r)}${r.verified === false ? '<span class="rr-vrf bad">Unverified</span>' : ''}</div><div class="rr-sscore"><b>${r.race_score || 0}</b><span>avg ${(r.avg || 0).toFixed(1)}</span></div></div>`).join('')}</div>` : ''}
+          <div class="rr-standings">${unranked.map(r => `<div class="rr-srow unr${mine(r) ? ' me' : ''}"><div class="rr-srank dash">–</div>${av(r)}<div class="rr-sname">${nm(r)}${cc(r)}${r.verified === false ? '<span class="rr-vrf bad">Unverified</span>' : ''}</div><div class="rr-sscore"><b>${r.race_score || 0}</b><span>avg ${avgOf(r).toFixed(1)}</span></div></div>`).join('')}</div>` : ''}
         <p class="rl-meta" style="margin-top:18px"><a href="#/my-races" class="link">← Back to races</a></p>
       </div>`;
   }
