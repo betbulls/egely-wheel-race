@@ -94,7 +94,19 @@ function beat(){
 
 const sig = l => l.map(p => p.uid + ':' + p.status).sort().join('|');
 let lastSig = '';
-function emit(){ const l = list(); lastSig = sig(l); listeners.forEach(cb => { try { cb(l); } catch {} }); }
+// Drop live data for users who have LEFT — absent from presence AND past the stale
+// window — so a departed racer leaves no frozen value/curve behind, and a later rejoin
+// starts clean instead of resurrecting an old sparkline. The stale guard means a value
+// recorded just before its presence 'join' propagates is never pruned prematurely.
+function pruneLive(){
+  if(!channel) return;
+  const present = new Set();
+  try { const st = channel.presenceState(); for(const k in st) for(const e of st[k]) if(e && e.uid) present.add(e.uid); } catch { return; }
+  const now = Date.now();
+  for(const [uid, v] of liveValues){ if(!present.has(uid) && now - (v.ts || 0) > STALE_MS){ liveValues.delete(uid); liveSeries.delete(uid); } }
+  for(const [uid, v] of liveStatus){ if(!present.has(uid) && now - (v.ts || 0) > STATUS_STALE_MS){ liveStatus.delete(uid); } }
+}
+function emit(){ pruneLive(); const l = list(); lastSig = sig(l); listeners.forEach(cb => { try { cb(l); } catch {} }); }
 
 async function applyTrack(){
   if(!channel) return;

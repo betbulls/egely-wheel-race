@@ -39,7 +39,10 @@
       "PowerShell($env:Path = \"C:\\\\Program Files\\\\nodejs;\" + $env:Path; Set-Location \"C:\\\\Users\\\\User\\\\Documents\\\\ewr-bot-railway\"; npm install --no-fund --no-audit 2>&1 | Select-Object -Last 25)",
       "Bash(cp \"C:/Users/User/Documents/GitHub/egely-wheel-race/view-race.js\" /tmp/vr3.mjs)",
       "Bash(node --check /tmp/vr3.mjs)",
-      "Bash(rm /tmp/vr3.mjs)"
+      "Bash(rm /tmp/vr3.mjs)",
+      "Bash(cp \"C:/Users/User/Documents/GitHub/egely-wheel-race/presence.js\" /tmp/pr.mjs)",
+      "Bash(node --check /tmp/pr.mjs)",
+      "Bash(rm /tmp/pr.mjs)"
     ]
   }
 }
