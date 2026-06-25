@@ -36,7 +36,10 @@
       "PowerShell(winget install --id OpenJS.NodeJS.LTS -e --accept-source-agreements --accept-package-agreements --silent 2>&1)",
       "PowerShell($node = \"C:\\\\Program Files\\\\nodejs\\\\node.exe\"; if \\(Test-Path $node\\) { \"node.exe FOUND\"; & $node --version; & \"C:\\\\Program Files\\\\nodejs\\\\npm.cmd\" --version } else { \"not at default path; searching...\"; Get-ChildItem \"C:\\\\Program Files\\\\nodejs\" -ErrorAction SilentlyContinue | Select-Object Name })",
       "PowerShell($root = \"C:\\\\Users\\\\User\\\\Documents\\\\ewr-bot-railway\"; New-Item -ItemType Directory -Force -Path $root, \"$root\\\\src\", \"$root\\\\public\", \"$root\\\\sql\" | Out-Null; Copy-Item \"C:\\\\Users\\\\User\\\\Documents\\\\ewr-bot-console\\\\curves.js\" \"$root\\\\curves.js\" -Force; \"Created structure:\"; Get-ChildItem $root -Recurse | Select-Object FullName; \"curves.js size: \" + \\(\\(Get-Item \"$root\\\\curves.js\"\\).Length\\) + \" bytes\")",
-      "PowerShell($env:Path = \"C:\\\\Program Files\\\\nodejs;\" + $env:Path; Set-Location \"C:\\\\Users\\\\User\\\\Documents\\\\ewr-bot-railway\"; npm install --no-fund --no-audit 2>&1 | Select-Object -Last 25)"
+      "PowerShell($env:Path = \"C:\\\\Program Files\\\\nodejs;\" + $env:Path; Set-Location \"C:\\\\Users\\\\User\\\\Documents\\\\ewr-bot-railway\"; npm install --no-fund --no-audit 2>&1 | Select-Object -Last 25)",
+      "Bash(cp \"C:/Users/User/Documents/GitHub/egely-wheel-race/view-race.js\" /tmp/vr3.mjs)",
+      "Bash(node --check /tmp/vr3.mjs)",
+      "Bash(rm /tmp/vr3.mjs)"
     ]
   }
 }

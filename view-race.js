@@ -290,7 +290,7 @@ export function mount(el, raceId, inviteToken = null){
   const myClientId = 'c' + Math.random().toString(36).slice(2, 9);
   const myId = myUid ? 'u:' + myUid : 'n:' + racerId(myName || 'guest');
 
-  let channel = null;
+  let channel = null, lastRx = 0;
   let bleConnected = false, myLed = 0, myEma = 0;
   let view = null;              // 'lobby' | 'race' | 'final'
   let countin = null;           // last 3-2-1 number shown
@@ -498,7 +498,11 @@ export function mount(el, raceId, inviteToken = null){
 
     engineTimer = setInterval(sample, SAMPLE_MS);
     netTimer = setInterval(broadcastState, BROADCAST_MS);
-    presenceTimer = setInterval(trackPresence, PRESENCE_MS);
+    // NO presence heartbeat — presence carries identity + wheel state only, tracked on
+    // subscribe and on BLE change, exactly like the proven session room (view-room.js).
+    // Live race state travels on the 500ms race-tick broadcast and recovers from it after
+    // a reconnect. Re-tracking presence every couple seconds churned the channel and —
+    // unlike the session room — made racers flicker / drop when navigating away and back.
     paintTimer = setInterval(paint, 300);
     phaseTimer = setInterval(applyView, 1000);
     applyView();
@@ -507,15 +511,32 @@ export function mount(el, raceId, inviteToken = null){
   // ---- Channel ---------------------------------------------------------------
   function joinChannel(){
     channel = supabase.channel('room-' + raceId, {
-      config: { broadcast: { self: false }, presence: { key: myClientId } },
+      // STABLE presence key (per identity), like the session room — NOT a random
+      // per-mount id. A random key leaves a ghost presence entry on every navigation and
+      // makes the same-topic rejoin race, so racers drop until a hard refresh. Multi-tab
+      // score dedup still works: it keys off payload.clientId + the monotonic cum, not
+      // the presence key.
+      config: { broadcast: { self: false }, presence: { key: myId } },
     });
+    // Inbound-broadcast canary: counts every received tick (watch `window.__ewrRaceRx`
+    // grow in the console) and — with `window.__ewrRaceDebug = true` — warns on any >4s
+    // gap. This cleanly separates "the channel dropped inbound messages" (gaps appear)
+    // from a render bug (ticks keep arriving but the UI still shows Reconnecting).
+    const noteRx = () => {
+      const now = Date.now();
+      window.__ewrRaceRx = (window.__ewrRaceRx || 0) + 1;
+      if(window.__ewrRaceDebug && lastRx && now - lastRx > LIVE_STALE_MS) console.warn(`[race] inbound broadcast gap ${now - lastRx}ms — channel dropped messages`);
+      lastRx = now;
+    };
     channel.on('broadcast', { event: 'lobby-tick' }, ({ payload }) => {
       if(!payload || !payload.id) return;
+      noteRx();
       const r = ensureEntry(payload);
       r.live = { led: payload.led, ts: Date.now() }; r.lastSeen = Date.now();
     });
     channel.on('broadcast', { event: 'race-tick' }, ({ payload }) => {
       if(!payload || !payload.id) return;
+      noteRx();
       acceptRacerState(payload, false);   // live broadcast — authoritative, fresh
     });
     channel.on('presence', { event: 'sync' }, syncPresence);
@@ -606,9 +627,16 @@ export function mount(el, raceId, inviteToken = null){
       if(phase() !== 'pre') acceptRacerState(m, true);
       else { const r = roster.get(m.id); if(r){ r.lastSeen = Date.now(); } }
     }
-    // Drop people who left presence AND aren't a still-relevant racer with score.
+    // Drop people who left — but KEEP anyone still broadcasting (a lobby-tick / race-tick
+    // within the reconnect window) or holding a live score, mirroring how the session room
+    // keeps its data-producing racers. Without this, a bot known only from broadcasts (its
+    // presence absent from THIS sync — random key / timing) was deleted and re-created on
+    // every sync → the flicker / "disappearing racers" the session room never shows.
+    const nowDel = Date.now();
     for(const [id, r] of roster){
-      if(!seen.has(id) && !((r.cum || 0) > 0 && phase() !== 'pre')) roster.delete(id);
+      const recentlyLive = r.lastSeen && (nowDel - r.lastSeen < RECONNECT_MS);
+      const scoringRacer = (r.cum || 0) > 0 && phase() !== 'pre';
+      if(!seen.has(id) && !recentlyLive && !scoringRacer) roster.delete(id);
     }
     if(view) (view === 'race' ? renderRaceList() : renderLobbyList());
   }
