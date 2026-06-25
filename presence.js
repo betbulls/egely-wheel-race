@@ -19,6 +19,9 @@ const BEAT_MS = 2500;           // status heartbeat cadence (covers online users
 const SERIES_MAX = 120;         // live-curve history (~60s at 500ms, like the solo preview)
 const STALE_MS = 4000;          // a live value older than this is treated as gone
 const STATUS_STALE_MS = 7000;   // a broadcast status older than this falls back to presence
+const PRESENCE_TTL = 12000;     // once we've heard a user beat, they must beat again within
+                                // this window to stay on the wall (covers unreliable presence
+                                // 'leave' diffs that otherwise linger until a hard refresh)
 
 let inited = false;
 let channel = null;
@@ -63,12 +66,25 @@ function list(){
       if(!cur || (e.ts || 0) > (cur.ts || 0)) byUid.set(e.uid, e);
     }
   }
-  // Overlay the broadcast status (reliable on flaky networks) over the presence
-  // status, which doesn't always propagate on re-tracks.
-  return [...byUid.values()].map(e => {
-    const ls = liveStatusOf(e.uid);
-    return ls ? { ...e, status: ls } : e;
-  });
+  // Liveness gate. Supabase presence 'leave'/'sync' diffs are UNRELIABLE — a user who
+  // left can stay stuck in presenceState() until a hard refresh (this is the bug behind
+  // "bots still online after they left; only a refresh clears them"). So presence-membership
+  // alone is not enough: anyone we've HEARD broadcasting (live-tick / live-beat) must have
+  // done so within PRESENCE_TTL to stay on the wall. When they leave they go silent and drop
+  // on their own within the window — no refresh, independent of the flaky leave diff. Users
+  // we've NEVER heard a beat from fall back to presence-only (no regression). Self always shows.
+  const now = Date.now();
+  const me = auth.getState().user?.id || null;
+  return [...byUid.values()]
+    .filter(e => {
+      if(e.uid === me) return true;
+      const v = liveStatus.get(e.uid);
+      return !v || (now - (v.ts || 0)) <= PRESENCE_TTL;
+    })
+    .map(e => {
+      const ls = liveStatusOf(e.uid);
+      return ls ? { ...e, status: ls } : e;
+    });
 }
 
 function liveStatusOf(uid){
