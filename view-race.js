@@ -1012,9 +1012,13 @@ export function mount(el, raceId, inviteToken = null){
     }
     const uids = [...new Set(all.map(r => r.user_id).filter(Boolean))];
     let prof = new Map();
-    if(uids.length){ const { data: ps } = await supabase.from('profiles').select('id, avatar_url, country').in('id', uids); prof = new Map((ps || []).map(p => [p.id, p])); }
+    if(uids.length){ const { data: ps } = await supabase.from('profiles').select('id, avatar_url, country, approved_maker, practitioner_handle').in('id', uids); prof = new Map((ps || []).map(p => [p.id, p])); }
     const av = r => { const p = prof.get(r.user_id); return avatarHtml(p && p.avatar_url, r.racer_name, 'rr-av'); };
     const cc = r => { const p = prof.get(r.user_id); return p && p.country ? flagImg(p.country) : ''; };
+    // Approved Spiritual Makers get a clickable name → their public connect page (same as
+    // the Live wall / sessions / room). Everyone else stays plain text.
+    const nm = r => { const p = prof.get(r.user_id); return (p && p.approved_maker && p.practitioner_handle)
+      ? `<a class="maker-name-link" href="#/connect/${esc(p.practitioner_handle)}">${esc(r.racer_name)}</a>` : esc(r.racer_name); };
     const mine = r => !!(myUid && r.user_id === myUid);
     const medal = ['#d9a520', '#9fb0bd', '#c08457'];
     const medalEmoji = ['🥇', '🥈', '🥉'];   // same medals as the Global Ranking podium
@@ -1022,7 +1026,7 @@ export function mount(el, raceId, inviteToken = null){
     const podium = ranked.slice(0, 3).map((r, i) => `
       <div class="rr-pod p${i + 1}${mine(r) ? ' me' : ''}" style="--medal:${medal[i]}">
         <div class="rr-pod-rank">${medalEmoji[i]}</div>${av(r)}
-        <div class="rr-pod-name">${esc(r.racer_name)}${cc(r)}</div>
+        <div class="rr-pod-name">${nm(r)}${cc(r)}</div>
         <div class="rr-pod-score">${r.race_score} pts</div>
       </div>`).join('');
 
@@ -1043,7 +1047,7 @@ export function mount(el, raceId, inviteToken = null){
     const standRow = r => `
       <div class="rr-srow${mine(r) ? ' me' : ''}">
         <div class="rr-srank">${r.final_rank}</div>${av(r)}
-        <div class="rr-sname">${esc(r.racer_name)}${cc(r)}${r.is_host ? '<span class="rr-tag host">Host</span>' : ''}${r.verified === false ? '<span class="rr-vrf bad">Unverified</span>' : ''}</div>
+        <div class="rr-sname">${nm(r)}${cc(r)}${r.is_host ? '<span class="rr-tag host">Host</span>' : ''}${r.verified === false ? '<span class="rr-vrf bad">Unverified</span>' : ''}</div>
         <div class="rr-sscore"><b>${r.race_score}</b><span>avg ${(r.avg || 0).toFixed(1)} · peak ${r.peak || 0}</span></div>
       </div>`;
 
@@ -1051,8 +1055,8 @@ export function mount(el, raceId, inviteToken = null){
     if(ranked.length){
       const peakW = ranked.reduce((a, r) => (r.peak || 0) > (a.peak || 0) ? r : a);
       const steadyW = ranked.reduce((a, r) => (r.steadiness || 0) > (a.steadiness || 0) ? r : a);
-      const card = (l, w, v) => `<div class="rr-award"><div class="rr-award-l">${l}</div><div class="rr-award-w">${esc(w)}</div><div class="rr-award-v">${v}</div></div>`;
-      awards = `<div class="rr-awards">${card('Highest Peak', peakW.racer_name, peakW.peak || 0)}${card('Most Steady', steadyW.racer_name, (steadyW.steadiness || 0) + ' / 100')}</div>`;
+      const card = (l, r, v) => `<div class="rr-award"><div class="rr-award-l">${l}</div><div class="rr-award-w">${nm(r)}</div><div class="rr-award-v">${v}</div></div>`;
+      awards = `<div class="rr-awards">${card('Highest Peak', peakW, peakW.peak || 0)}${card('Most Steady', steadyW, (steadyW.steadiness || 0) + ' / 100')}</div>`;
     }
 
     const dur = session.duration_minutes || 0;
@@ -1064,7 +1068,7 @@ export function mount(el, raceId, inviteToken = null){
         ${awards}
         ${ranked.length ? `<h3 class="rr-sec">Full standings</h3><div class="rr-standings">${ranked.map(standRow).join('')}</div>` : ''}
         ${unranked.length ? `<h3 class="rr-sec">Unranked <span class="rr-sec-sub">late entry / not verified</span></h3>
-          <div class="rr-standings">${unranked.map(r => `<div class="rr-srow unr${mine(r) ? ' me' : ''}"><div class="rr-srank dash">–</div>${av(r)}<div class="rr-sname">${esc(r.racer_name)}${cc(r)}${r.verified === false ? '<span class="rr-vrf bad">Unverified</span>' : ''}</div><div class="rr-sscore"><b>${r.race_score || 0}</b><span>avg ${(r.avg || 0).toFixed(1)}</span></div></div>`).join('')}</div>` : ''}
+          <div class="rr-standings">${unranked.map(r => `<div class="rr-srow unr${mine(r) ? ' me' : ''}"><div class="rr-srank dash">–</div>${av(r)}<div class="rr-sname">${nm(r)}${cc(r)}${r.verified === false ? '<span class="rr-vrf bad">Unverified</span>' : ''}</div><div class="rr-sscore"><b>${r.race_score || 0}</b><span>avg ${(r.avg || 0).toFixed(1)}</span></div></div>`).join('')}</div>` : ''}
         <p class="rl-meta" style="margin-top:18px"><a href="#/my-races" class="link">← Back to races</a></p>
       </div>`;
   }
