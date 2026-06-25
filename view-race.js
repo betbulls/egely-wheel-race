@@ -284,7 +284,7 @@ function injectRaceStyles(){
 
 export function mount(el, raceId, inviteToken = null){
   injectRaceStyles();
-  let session = null, startMs = 0, endMs = 0, durationMs = 0, TOTAL_SLOTS = 0, hostAvatar = null;
+  let session = null, startMs = 0, endMs = 0, durationMs = 0, TOTAL_SLOTS = 0, hostAvatar = null, hostName = null;
   let myName = (auth.getState().displayName || localStorage.getItem('ewr_name') || '').trim();
   const myUid = auth.getState().user?.id || null;
   const myClientId = 'c' + Math.random().toString(36).slice(2, 9);
@@ -319,7 +319,16 @@ export function mount(el, raceId, inviteToken = null){
   const CHEAT_WINDOW_MS = 2000, SWING_LIMIT = 7, MAX_SWINGS = 2;
 
   const zText = led => led < 6 ? '#c2415b' : led < 13 ? '#b8860b' : '#0f8a52';
-  const isHostName = name => session && name && name.trim().toLowerCase() === (session.created_by || '').trim().toLowerCase();
+  // Host identity is keyed on user id (robust). The name is only a fallback for
+  // anonymous racers — `created_by` is a legacy display-name snapshot that can differ
+  // from the host's current profile name, so it must NOT decide "is this the host".
+  const isHostUid = uid => !!(session && uid && session.created_by_user_id && uid === session.created_by_user_id);
+  const isHostName = name => {
+    if(!session || !name) return false;
+    const n = name.trim().toLowerCase();
+    return n === (session.created_by || '').trim().toLowerCase() || n === (hostName || '').trim().toLowerCase();
+  };
+  const isHostEntry = r => r ? (r.uid ? isHostUid(r.uid) : isHostName(r.name)) : false;
   const phase = () => { const n = Date.now(); return n < startMs ? 'pre' : n <= endMs ? 'active' : 'post'; };
   const curSlot = () => Math.floor((Date.now() - startMs) / SLOT_MS);
   const progressOf = cum => TOTAL_SLOTS ? Math.max(0, Math.min(1, (cum || 0) / (24 * TOTAL_SLOTS))) : 0;
@@ -352,8 +361,8 @@ export function mount(el, raceId, inviteToken = null){
     if(!accessOk){ renderLocked(accessMode); return; }
 
     if(session.created_by_user_id){
-      const { data: hp } = await supabase.from('profiles').select('avatar_url').eq('id', session.created_by_user_id).maybeSingle();
-      if(hp) hostAvatar = hp.avatar_url || null;
+      const { data: hp } = await supabase.from('profiles').select('avatar_url, display_name').eq('id', session.created_by_user_id).maybeSingle();
+      if(hp){ hostAvatar = hp.avatar_url || null; hostName = hp.display_name || null; }
     }
     renderHead();
     enter();
@@ -369,18 +378,19 @@ export function mount(el, raceId, inviteToken = null){
       weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
     });
     const mode = session.access_mode || 'public';
+    const hn = hostName || session.created_by || 'unknown';   // current profile name, not the legacy snapshot
     const accessBadge = mode === 'invite' ? '<span class="rl-badge invite">Invite link</span>'
       : mode === 'followers' ? '<span class="rl-badge followers">Followers only</span>' : '';
     const verifiedBadge = session.verified_only ? '<span class="rl-badge verified">✓ Verified race</span>' : '';
     $('rlHead').innerHTML = `
       <span class="rl-eyebrow"><span class="rl-dot"></span> Race</span>
       <div class="rl-title">${esc(session.name || 'Race')}</div>
-      <div class="rl-host">${avatarHtml(hostAvatar, session.created_by)}<span>Hosted by <b style="color:#011624">${esc(session.created_by || 'unknown')}</b></span></div>
+      <div class="rl-host">${avatarHtml(hostAvatar, hn)}<span>Hosted by <b style="color:#011624">${esc(hn)}</b></span></div>
       <div class="rl-meta">${esc(when)} · ${session.duration_minutes} min</div>
       <div class="rl-badges">${accessBadge}${verifiedBadge}</div>
       <div class="rl-actions" id="rlActions"></div>`;
     const actions = $('rlActions');
-    if(phase() === 'pre') actions.appendChild(createAddToCalendar({ ...session, _hostName: session.created_by }));
+    if(phase() === 'pre') actions.appendChild(createAddToCalendar({ ...session, _hostName: hn }));
     actions.appendChild(shareButton());
     if(mode === 'invite' && session.invite_token){
       const meId = auth.getState().user?.id || null;
@@ -506,10 +516,22 @@ export function mount(el, raceId, inviteToken = null){
     });
     channel.on('broadcast', { event: 'race-tick' }, ({ payload }) => {
       if(!payload || !payload.id) return;
-      acceptRacerState(payload);
+      acceptRacerState(payload, false);   // live broadcast — authoritative, fresh
     });
     channel.on('presence', { event: 'sync' }, syncPresence);
-    channel.subscribe(status => { if(status === 'SUBSCRIBED') trackPresence(); });
+    channel.on('presence', { event: 'join' }, syncPresence);
+    channel.on('presence', { event: 'leave' }, syncPresence);
+    channel.subscribe(status => {
+      if(status !== 'SUBSCRIBED') return;
+      trackPresence();
+      // On a soft re-mount (navigate away → back) the realtime socket is reused and the
+      // initial 'sync' event can be missed, leaving an empty roster until a hard refresh.
+      // Pull presence state explicitly once we're joined (and once more a beat later, in
+      // case the server state lands slightly after SUBSCRIBED) so the field rebuilds on
+      // its own — no manual refresh needed.
+      syncPresence();
+      setTimeout(() => { if(channel) syncPresence(); }, 600);
+    });
   }
 
   function ensureEntry(p){
@@ -520,24 +542,44 @@ export function mount(el, raceId, inviteToken = null){
     if(p.avatar) r.avatar = p.avatar;
     if(p.country) r.country = p.country;
     if(p.wheel !== undefined) r.wheel = !!p.wheel;
-    r.host = isHostName(r.name);
+    r.host = isHostEntry(r);
     return r;
   }
 
-  // Per identity, the highest-cumulative state wins (multi-tab dedup: the wheel
-  // tab leads; an empty second tab at cum 0 can never overwrite it). Same client
-  // always advances its own entry.
-  function acceptRacerState(p){
+  // Merge an incoming racer state into the roster. `cum` is MONOTONIC by construction,
+  // so it must never regress: a bot (or any client) that tracks presence ONCE carries a
+  // stale snapshot (cum 0) forever, and the old "same client always wins" rule let that
+  // snapshot drag the live score back to 0 on every presence sync. Now:
+  //   • firstSlot is always captured (earliest wins) regardless of source.
+  //   • fromPresence === true → RECOVERY SEED only: advance only if the snapshot is
+  //     strictly higher (true reconnect/late-join we missed broadcasts for); a lower or
+  //     equal snapshot is stale and ignored — never overwrites the fresh broadcast value.
+  //   • fromPresence === false → live broadcast: same client, or a stronger contender
+  //     (multi-tab dedup: the wheel tab leads), but cum is clamped non-decreasing.
+  function acceptRacerState(p, fromPresence){
     const r = ensureEntry(p);
-    const better = (p.clientId && p.clientId === r.clientId) || r.cum == null || (p.cum || 0) >= (r.cum || 0);
-    if(!better) return;
-    r.clientId = p.clientId || r.clientId;
-    r.slot = p.slot != null ? p.slot : r.slot;
-    r.cum = p.cum || 0;
-    r.live = { led: p.live || 0, ts: Date.now() };
-    r.verified = p.verified !== false;
+    const pCum = p.cum || 0;
     if(p.firstSlot != null) r.firstSlot = (r.firstSlot == null) ? p.firstSlot : Math.min(r.firstSlot, p.firstSlot);
-    r.lastSeen = Date.now();
+    if(fromPresence){
+      if(pCum > (r.cum || 0)){
+        r.clientId = p.clientId || r.clientId;
+        r.slot = p.slot != null ? p.slot : r.slot;
+        r.cum = pCum;
+        r.live = { led: p.live || 0, ts: Date.now() };
+        r.verified = p.verified !== false;
+      }
+      r.lastSeen = Date.now();
+      return;
+    }
+    const sameClient = p.clientId && p.clientId === r.clientId;
+    if(sameClient || pCum >= (r.cum || 0)){
+      r.clientId = p.clientId || r.clientId;
+      r.slot = p.slot != null ? p.slot : r.slot;
+      if(pCum >= (r.cum || 0)) r.cum = pCum;     // monotonic — never regress
+      r.live = { led: p.live || 0, ts: Date.now() };
+      r.verified = p.verified !== false;
+      r.lastSeen = Date.now();
+    }
   }
 
   function trackPresence(){
@@ -559,8 +601,9 @@ export function mount(el, raceId, inviteToken = null){
       if(!m || !m.id) continue;
       seen.add(m.id);
       ensureEntry(m);
-      // Seed race state from the snapshot (broadcast keeps it fresh afterwards).
-      if(phase() !== 'pre') acceptRacerState(m);
+      // Seed race state from the snapshot (broadcast keeps it fresh afterwards). Marked
+      // fromPresence so a stale snapshot can't regress a live score — see acceptRacerState.
+      if(phase() !== 'pre') acceptRacerState(m, true);
       else { const r = roster.get(m.id); if(r){ r.lastSeen = Date.now(); } }
     }
     // Drop people who left presence AND aren't a still-relevant racer with score.
@@ -626,7 +669,12 @@ export function mount(el, raceId, inviteToken = null){
 
   function onRaceStart(){
     // Drop practice scaffolding; the official window begins at slot 0.
-    mySlots = new Array(TOTAL_SLOTS); myCumulative = 0; myFirstSlot = (phase() === 'active' && bleConnected) ? curSlot() : null;
+    mySlots = new Array(TOTAL_SLOTS); myCumulative = 0;
+    myFirstSlot = (phase() === 'active' && bleConnected) ? Math.max(0, curSlot()) : null;
+    // Reflect the reset on my own roster entry right away so my lane doesn't briefly
+    // render as "Late · Unranked" before the next sample() tick syncs it.
+    const me = roster.get(myId);
+    if(me){ me.cum = 0; me.slot = curSlot(); me.firstSlot = myFirstSlot; me.lastSeen = Date.now(); }
     // A client opening mid-race is a late entry; firstSlot may already be > grace.
   }
 
@@ -737,16 +785,17 @@ export function mount(el, raceId, inviteToken = null){
   }
   function laneHtml(p){
     const mine = p.id === myId, ranked = isRanked(p);
+    // Host/You are stable; the "Late · Unranked" tag is dynamic (paintRace toggles it as
+    // firstSlot arrives), so it lives as a hidden, toggleable element — not baked in here.
     const tags = (p.host ? '<span class="rr-tag host">Host</span>' : '')
-      + (mine ? '<span class="rr-tag you">You</span>' : '')
-      + (!ranked ? '<span class="rr-tag unranked">Late · Unranked</span>' : '');
+      + (mine ? '<span class="rr-tag you">You</span>' : '');
     const puck = p.avatar
       ? `<img class="rr-puck-av" src="${esc(p.avatar)}" alt="">`
       : `<span class="rr-puck-init">${esc((p.name || '?').charAt(0).toUpperCase())}</span>`;
     return `<div class="rr-lane ${mine ? 'me' : ''} ${ranked ? '' : 'unranked'}" data-id="${esc(p.id)}" data-rank="">
       <div class="rr-rank dash">–</div>
       <div class="rr-info">
-        <div class="rr-name-row"><span class="rr-name">${esc(p.name)}</span>${flagImg(p.country)}${tags}<span class="rr-vrf" hidden></span><span class="rr-conn" hidden></span></div>
+        <div class="rr-name-row"><span class="rr-name">${esc(p.name)}</span>${flagImg(p.country)}${tags}<span class="rr-tag unranked" data-unr ${ranked ? 'hidden' : ''}>Late · Unranked</span><span class="rr-vrf" hidden></span><span class="rr-conn" hidden></span></div>
         <div class="rr-track"><span class="rr-finish"></span><span class="rr-puck"><span class="rr-tail"></span>${puck}</span></div>
       </div>
       <div class="rr-nums"><div class="rr-live-wrap"><div class="rr-livev">0</div><div class="rr-live-lbl">Live</div></div><div class="rr-score">SCORE 0</div></div>
@@ -779,8 +828,11 @@ export function mount(el, raceId, inviteToken = null){
       const ranked = isRanked(p);
       const racerLike = p.firstSlot != null || (p.cum || 0) > 0;
       const sinceSeen = p.lastSeen ? now - p.lastSeen : Infinity;
-      const gone = sinceSeen > RECONNECT_MS;                 // off the wire (presence/network lost)
-      const reconnecting = !gone && (p.wheel === false || sinceSeen > LIVE_STALE_MS);
+      // Liveness is judged purely by tick freshness — NOT the wheel flag. A bot (or any
+      // racer) that is actively streaming race-ticks is live even if it reports
+      // wheel:false; only a real gap in ticks means reconnecting / disconnected.
+      const gone = sinceSeen > RECONNECT_MS;                 // no ticks ~12s → off the wire
+      const reconnecting = !gone && sinceSeen > LIVE_STALE_MS; // no ticks ~4s
       const disrupted = gone || reconnecting;
       const lv = disrupted ? 0 : (p.live ? p.live.led : 0);  // disrupted → speed 0; puck stays; score unchanged
       const score = p.cum || 0;
@@ -799,6 +851,12 @@ export function mount(el, raceId, inviteToken = null){
       row.classList.toggle('leader', isLeader);
       row.classList.toggle('moving', lv > 0 && !disrupted);
       row.classList.toggle('stale', disrupted && racerLike);
+      // Ranked status is dynamic: a racer is often classified a beat AFTER the lane is
+      // first drawn (their firstSlot arrives slightly later), so re-evaluate every paint
+      // instead of baking it once in laneHtml — otherwise everyone sticks on Unranked.
+      row.classList.toggle('unranked', !ranked);
+      const unrEl = row.querySelector('.rr-tag.unranked[data-unr]');
+      if(unrEl) unrEl.hidden = ranked;
       const conn = row.querySelector('.rr-conn');
       if(conn){
         if(gone && racerLike){ conn.hidden = false; conn.className = 'rr-conn disconnected'; conn.innerHTML = '<span class="d"></span>Disconnected'; }
@@ -889,7 +947,7 @@ export function mount(el, raceId, inviteToken = null){
       avg: Number(s.avg.toFixed(2)), peak: s.peak, steadiness: s.steadiness,
       zone_green: Number(s.zone.green.toFixed(1)), zone_yellow: Number(s.zone.yellow.toFixed(1)), zone_red: Number(s.zone.red.toFixed(1)),
       trend: Number(s.trendTotal.toFixed(2)), green_streak: s.greenStreak,
-      samples: slots.filter(v => v > 0).length, is_host: isHostName(myName),
+      samples: slots.filter(v => v > 0).length, is_host: isHostUid(myUid),
       verified: myVerified, curve: downsample(slots, 80),
       duration_seconds: (session.duration_minutes || 0) * 60,
       race_score: myCumulative,
@@ -987,6 +1045,10 @@ export function mount(el, raceId, inviteToken = null){
 
   // ---- Cleanup ---------------------------------------------------------------
   return () => {
+    // If the race already ended but my own result hasn't saved yet (e.g. I navigated
+    // away during the finalize grace), save it now. Idempotent: the myResultSaved guard
+    // + the partial unique index turn any duplicate into a harmless no-op.
+    if(raceEnded && !myResultSaved) saveMyResult();
     for(const t of [engineTimer, netTimer, presenceTimer, paintTimer, phaseTimer]) if(t) clearInterval(t);
     if(finalizeTimer) clearTimeout(finalizeTimer);
     if(resultsTimer) clearTimeout(resultsTimer);
