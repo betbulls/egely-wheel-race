@@ -185,6 +185,7 @@ if(bleBar && !navigator.bluetooth){
 function statusText(s){
   if(s.status === 'connected') return 'Egely Wheel connected' + (s.deviceName ? ` · ${s.deviceName}` : '');
   if(s.status === 'connecting') return 'Connecting to Egely Wheel…';
+  if(s.status === 'reconnecting') return 'Reconnecting to Egely Wheel…' + (s.deviceName ? ` · ${s.deviceName}` : '');
   if(s.status === 'error') return s.errorMsg || 'Connection error';
   return 'Egely Wheel not connected';
 }
@@ -193,6 +194,7 @@ function statusText(s){
 function shortStatusText(s){
   if(s.status === 'connected') return 'Connected';
   if(s.status === 'connecting') return 'Connecting…';
+  if(s.status === 'reconnecting') return 'Reconnecting…';
   if(s.status === 'error') return 'Error';
   return 'Not connected';
 }
@@ -202,9 +204,14 @@ function shortStatusText(s){
 function updateBleButton(){
   const s = ble.getState();
   const a = auth.getState();
-  if(s.connected){ bleBtn.textContent = 'Disconnect'; bleBtn.dataset.mode = 'disconnect'; bleBtn.disabled = false; }
+  // While a reconnect burst is running, the button halts it — but keeps the
+  // remembered wheel (mode 'stop', not 'disconnect'), so it stays one-tap away.
+  if(s.status === 'reconnecting'){ bleBtn.textContent = 'Stop'; bleBtn.dataset.mode = 'stop'; bleBtn.disabled = false; }
+  else if(s.connected){ bleBtn.textContent = 'Disconnect'; bleBtn.dataset.mode = 'disconnect'; bleBtn.disabled = false; }
   else if(!a.user){ bleBtn.textContent = 'Log in to measure'; bleBtn.dataset.mode = 'login'; bleBtn.disabled = false; }
   else if(!a.subscriber){ bleBtn.textContent = 'Subscribe to measure'; bleBtn.dataset.mode = 'subscribe'; bleBtn.disabled = false; }
+  // A previously-granted wheel can come back without the chooser — one tap.
+  else if(s.canReconnect){ bleBtn.textContent = 'Reconnect'; bleBtn.dataset.mode = 'reconnect'; bleBtn.disabled = s.status === 'connecting'; }
   else { bleBtn.textContent = 'Connect'; bleBtn.dataset.mode = 'connect'; bleBtn.disabled = s.status === 'connecting'; }
 }
 
@@ -219,8 +226,10 @@ ble.subscribeStatus(s => {
 bleBtn.addEventListener('click', () => {
   const mode = bleBtn.dataset.mode;
   if(mode === 'disconnect') ble.disconnect();
+  else if(mode === 'stop') ble.stopReconnect();
   else if(mode === 'login') location.hash = '#/login';
   else if(mode === 'subscribe') location.hash = '#/subscribe';
+  else if(mode === 'reconnect') ble.reconnect();
   else ble.connect();
 });
 
