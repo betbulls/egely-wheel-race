@@ -6,6 +6,7 @@ import { computeStats, CATEGORIES, METRIC_HELP, icon, trendLabel, vitalityColor 
 import { drawTrio, drawVitalityChart } from './chart.js';
 import { flagUrl } from './countries.js';
 import { createAddToCalendar } from './calendar.js';
+import * as wakeLock from './wake-lock.js';
 
 // Robust clipboard copy — Clipboard API with a legacy execCommand fallback.
 async function copyText(text){
@@ -503,6 +504,10 @@ export function mount(el, sessionId, inviteToken = null){
 
   // Sample own wheel value at a fixed cadence, update self + broadcast.
   function sampleAndBroadcast(){
+    // Keep the screen awake only while actively measuring with a wheel (a screen
+    // sleep is the #1 cause of a mid-session BLE drop). Spectators and the
+    // out-of-window stretches never hold the lock; cleanup always releases it.
+    if(bleConnected && inWindow()) wakeLock.acquire(); else wakeLock.release();
     if(!bleConnected) return;            // viewers don't broadcast
     if(inWindow()){
       mySum += myLed; myCount++;
@@ -1260,6 +1265,7 @@ export function mount(el, sessionId, inviteToken = null){
   window.addEventListener('resize', render);
 
   return () => {
+    wakeLock.release();
     if(broadcastTimer) clearInterval(broadcastTimer);
     if(renderTimer) clearInterval(renderTimer);
     if(flushTimer) clearInterval(flushTimer);

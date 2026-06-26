@@ -29,6 +29,7 @@ import * as presence from './presence.js';
 import { flagUrl } from './countries.js';
 import { createAddToCalendar } from './calendar.js';
 import { computeStats, downsample } from './analytics.js';
+import * as wakeLock from './wake-lock.js';
 
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
@@ -643,6 +644,10 @@ export function mount(el, raceId, inviteToken = null){
 
   // ---- Sampling / scoring (canonical slots) ----------------------------------
   function sample(){
+    // Keep the screen awake while racing with a wheel — a sleep would drop BLE
+    // right when a gap costs slots. Held through lobby+active (the wheel-connected
+    // race window), released once the race ends or we leave. Spectators never hold.
+    if(bleConnected && phase() !== 'post' && !raceEnded) wakeLock.acquire(); else wakeLock.release();
     const raw = bleConnected ? myLed : 0;
     myEma = myEma == null ? raw : myEma * 0.7 + raw * 0.3;
     // Keep my OWN roster entry fresh in EVERY phase (lobby too) — the broadcast is
@@ -950,6 +955,8 @@ export function mount(el, raceId, inviteToken = null){
 
   function onRaceEnd(){
     if(raceEnded) return; raceEnded = true;
+    wakeLock.release();    // the scored window is over — stop holding the screen
+
     // Tail-drain: a short grace for the wheel's delayed final frame, then save. The
     // frame listener finishes it early; this timeout is the floor so saving can't hang.
     tailCounterAtEnd = lastCounter;
@@ -1084,6 +1091,7 @@ export function mount(el, raceId, inviteToken = null){
 
   // ---- Cleanup ---------------------------------------------------------------
   return () => {
+    wakeLock.release();
     // If the race already ended but my own result hasn't saved yet (e.g. I navigated
     // away during the finalize grace), save it now. Idempotent: the myResultSaved guard
     // + the partial unique index turn any duplicate into a harmless no-op.
