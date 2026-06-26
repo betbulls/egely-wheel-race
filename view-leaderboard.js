@@ -349,16 +349,72 @@ export function mount(el){
     if(u){ activeClose = openMiniProfile(u, profile || {}); }
   });
 
+  // PostgREST caps a single response at db-max-rows (1000). The leaderboard tables have
+  // grown past that (user_achievements is over 1000 rows), so an UNPAGINATED fetch silently
+  // returned only the first 1000 — roughly insertion order — dropping the NEWEST users'
+  // achievements → they computed to 0 XP and vanished from the ranking + the "on the journey"
+  // count. Page through by the unique id PK (a strict total order, so no row is skipped or
+  // duplicated across page boundaries) until a short page signals the end.
+  async function fetchAll(makeQuery){
+    const PAGE = 1000;
+    let from = 0, out = [];
+    for(;;){
+      const { data, error } = await makeQuery().order('id', { ascending: true }).range(from, from + PAGE - 1);
+      if(error) throw error;
+      out = out.concat(data || []);
+      if(!data || data.length < PAGE) break;
+      from += PAGE;
+    }
+    return out;
+  }
+
+  // Fast path: one aggregated RPC that returns ONE row per user (so it can never approach the
+  // 1000-row cap, no matter how many personas exist). The achievement catalog stays in the app
+  // (achievements.js) — the RPC only groups each user's raw achievements into a jsonb array, so
+  // XP is still computed client-side and the DB never duplicates the gamification logic. If the
+  // RPC isn't deployed yet (or errors), we fall back to the paginated raw fetch — so the SQL and
+  // the client deploy can land in ANY order without breaking the leaderboard.
   async function load(){
     body.innerHTML = '<div class="empty">Loading…</div>';
-    const [achR, sessResR, sessionsR] = await Promise.all([
-      supabase.from('user_achievements').select('user_id, achievement_id, unlocked_at'),
-      supabase.from('results').select('user_id, session_id, avg, peak, verified, kind').not('session_id', 'is', null),
-      supabase.from('sessions').select('id, created_by_user_id').eq('event_type', 'session'),
+    try {
+      let rows;
+      try { rows = await loadViaRpc(); }
+      catch(_){ rows = await loadViaPaging(); }
+      allRows = rows;
+      render();
+    } catch(e){
+      body.innerHTML = `<div class="empty">Could not load: ${esc(e && e.message ? e.message : String(e))}</div>`;
+    }
+  }
+
+  // Unified shape for both paths: { ach: [{user_id, achievement_id, unlocked_at}], counts: Map }.
+  async function loadViaRpc(){
+    const { data, error } = await supabase.rpc('leaderboard_data');
+    if(error) throw error;
+    if(!Array.isArray(data)) throw new Error('leaderboard_data: unexpected response');
+    const ach = [], counts = new Map();
+    for(const row of data){
+      const list = Array.isArray(row.achievements) ? row.achievements : [];
+      for(const a of list) if(a && a.id) ach.push({ user_id: row.user_id, achievement_id: a.id, unlocked_at: a.at });
+      counts.set(row.user_id, {
+        sessionCount: row.session_count || 0, raceCount: row.race_count || 0,
+        hostedCount: row.hosted_count || 0, verifiedCount: row.verified_count || 0,
+      });
+    }
+    return { ach, counts };
+  }
+
+  async function loadViaPaging(){
+    const [achRows, resRows, sessRows] = await Promise.all([
+      fetchAll(() => supabase.from('user_achievements').select('user_id, achievement_id, unlocked_at')),
+      fetchAll(() => supabase.from('results').select('user_id, verified, kind').not('session_id', 'is', null)),
+      fetchAll(() => supabase.from('sessions').select('id, created_by_user_id').eq('event_type', 'session')),
     ]);
-    if(achR.error){ body.innerHTML = `<div class="empty">Could not load: ${esc(achR.error.message)}</div>`; return; }
-    allRows = { ach: achR.data || [], sessRes: sessResR.data || [], sessions: sessionsR.data || [] };
-    render();
+    const counts = new Map();
+    const c = id => { let v = counts.get(id); if(!v){ v = { sessionCount: 0, raceCount: 0, hostedCount: 0, verifiedCount: 0 }; counts.set(id, v); } return v; };
+    for(const r of resRows){ const v = c(r.user_id); if(r.kind === 'race') v.raceCount++; else v.sessionCount++; if(r.verified) v.verifiedCount++; }
+    for(const s of sessRows){ if(s.created_by_user_id) c(s.created_by_user_id).hostedCount++; }
+    return { ach: achRows, counts };
   }
 
   async function render(){
@@ -389,16 +445,13 @@ export function mount(el){
       if(!start || ts >= start)     u.xpPeriod += xp;
       if(weekStart && ts >= weekStart) u.activeThisWeek = true;
     }
-    for(const r of allRows.sessRes){
-      const u = ensure(r.user_id);
-      if(r.kind === 'race') u.raceCount++;       // a race never counts as a session
-      else u.sessionCount++;
-      if(r.verified) u.verifiedCount++;          // verified share over session + race measurements
-    }
-    for(const s of allRows.sessions){
-      if(s.created_by_user_id){
-        ensure(s.created_by_user_id).hostedCount++;
-      }
+    // Session/race/hosted/verified counts come pre-aggregated per user (RPC or paging path).
+    for(const [id, c] of allRows.counts){
+      const u = ensure(id);
+      u.sessionCount = c.sessionCount;           // a race never counts as a session
+      u.raceCount = c.raceCount;
+      u.hostedCount = c.hostedCount;
+      u.verifiedCount = c.verifiedCount;         // verified share over session + race measurements
     }
 
     // Community heartbeat numbers — count users who've ever earned XP and
