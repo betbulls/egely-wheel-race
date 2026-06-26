@@ -1117,9 +1117,8 @@ export function mount(el, sessionId, inviteToken = null){
                  .filter(p => p.led != null);
     };
 
-    // Group curve: per-bucket average across the counted racers (null where nobody).
-    // It is also the source of truth for the big GROUP AVERAGE, so the number matches
-    // the blue line on the chart.
+    // Group curve (the blue line on the chart): per-bucket average LED across the
+    // counted racers (null where nobody measured). This drives the CHART LINE only.
     const maxLen = counted.reduce((m, r) => Math.max(m, r.curve.length), 0);
     const groupLeds = [];
     for(let i = 0; i < maxLen; i++){
@@ -1127,8 +1126,13 @@ export function mount(el, sessionId, inviteToken = null){
       for(const r of counted){ const v = r.curve[i]; if(v != null){ sum += v; n++; } }
       groupLeds.push(n ? sum / n : null);
     }
-    const groupReal = groupLeds.filter(v => v != null);
-    const groupAvg = groupReal.length ? groupReal.reduce((s, v) => s + v, 0) / groupReal.length : 0;
+    // GROUP AVERAGE = the mean of each racer's OWN average (the fair full-window figure
+    // each result row carries), so it matches the per-racer rows, the live Session-Pulse
+    // group avg, and the saved sessions.group_avg (maybeSaveGroup averages the same way).
+    // The old code averaged only the MEASURED buckets of the blue line — dropping the
+    // zero-filled idle/gap time — so a single racer averaging 1.3 over the window could
+    // show a 2.5 group number.
+    const groupAvg = counted.length ? counted.reduce((s, r) => s + (r.stats.avg || 0), 0) / counted.length : 0;
 
     const hostResult = counted.find(r => r.host);
     const pulseHist = {
