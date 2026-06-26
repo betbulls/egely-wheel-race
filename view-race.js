@@ -299,6 +299,7 @@ export function mount(el, raceId, inviteToken = null){
   // My canonical race state (Phase 5; Phase 6 reads these to finalize + save).
   let mySlots = null, myCumulative = 0, myFirstSlot = null, myVerified = true;
   let swingWin = [], swings = 0, wasSwing = false, cheatDetected = false;
+  let signalLost = false, disconnectStartMs = null;   // continuous-disconnect (signal-loss) latch
   // Phase 6: own-result save + held-tail drain (mirrors Solo/Room) + finalize.
   let myResultSaved = false, raceEnded = false;
   let frameFresh = false, holdRun = 0, lastCounter = null, tailCounterAtEnd = null, tailDrainDone = false;
@@ -318,6 +319,7 @@ export function mount(el, raceId, inviteToken = null){
   const RANKED_GRACE_SLOTS = 10;             // first valid tick within 5s → ranked
   const LIVE_STALE_MS = 4000, RECONNECT_MS = 12000;
   const CHEAT_WINDOW_MS = 2000, SWING_LIMIT = 7, MAX_SWINGS = 2;
+  const SIGNAL_GAP_MS = 10000;  // a continuous BLE loss this long during the race → unverified (10s: clears the reconnect-backoff window so a normal hiccup never false-flags)
 
   const zText = led => led < 6 ? '#c2415b' : led < 13 ? '#b8860b' : '#0f8a52';
   // Host identity is keyed on user id (robust). The name is only a fallback for
@@ -658,6 +660,18 @@ export function mount(el, raceId, inviteToken = null){
     me.live = { led: Math.round(myEma), ts: Date.now() };
     me.lastSeen = Date.now();
     if(phase() === 'active' && mySlots){
+      // Signal-loss fairness: a CONTINUOUS BLE gap ≥ SIGNAL_GAP_MS during the race
+      // marks the result unverified. Reset on any reconnect (short <6s drops never
+      // penalise). Only an actual racer (firstSlot set = connected at least once)
+      // can trip it — a pure spectator never does. The score already 0-fills the
+      // gap, so this only flips verified — you can't go offline holding a value and
+      // stay "verified".
+      if(myFirstSlot !== null){
+        if(!bleConnected){
+          if(disconnectStartMs === null) disconnectStartMs = Date.now();
+          else if(Date.now() - disconnectStartMs >= SIGNAL_GAP_MS){ signalLost = true; myVerified = false; }
+        } else disconnectStartMs = null;
+      }
       const slot = curSlot();
       if(slot >= 0 && slot < TOTAL_SLOTS){                 // out of range dropped
         if(bleConnected && myFirstSlot === null) myFirstSlot = slot;
@@ -702,6 +716,7 @@ export function mount(el, raceId, inviteToken = null){
 
   function onRaceStart(){
     // Drop practice scaffolding; the official window begins at slot 0.
+    signalLost = false; disconnectStartMs = null;   // lobby/practice drops never carry into the race
     mySlots = new Array(TOTAL_SLOTS); myCumulative = 0;
     myFirstSlot = (phase() === 'active' && bleConnected) ? Math.max(0, curSlot()) : null;
     // Reflect the reset on my own roster entry right away so my lane doesn't briefly

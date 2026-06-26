@@ -19,6 +19,10 @@ const FINALIZE_GRACE_MS = 1500;
 // one swing = one count. Two swings → "unverified". A single blip stays verified.
 // The de-spiked signal (ble.js) already removes the 24-rail glitches first.
 const CHEAT_WINDOW_MS = 2000, SWING_LIMIT = 7, MAX_SWINGS = 2; // cheat detection (same as rooms)
+const SIGNAL_GAP_MS = 10000;  // a continuous BLE loss this long during a measurement → unverified
+// 10s (not 6s) so a normal auto-reconnect — whose backoff can keep `connected` false
+// for ~6-8s even on a short outage — never falsely flags; a real sustained loss / a
+// "spin high then switch off" still crosses it.
 
 const racerId = name => name.trim().toLowerCase().replace(/\s+/g, '_');
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
@@ -32,6 +36,7 @@ export function mount(el){
   let liveHistory = [];       // {t, led} rolling buffer for the idle preview
   let curLed = 0, connected = false;
   let swingWin = [], swings = 0, wasSwing = false, cheatDetected = false;
+  let signalLost = false, gapStartMs = null;   // continuous-disconnect (signal-loss) latch
   let lastStats = null, saved = false;   // held until the user clicks Save
   let sampleTimer = null, uiTimer = null, unsubFrames = null, unsubStatus = null;
   let finalizeTimer = null;
@@ -177,7 +182,7 @@ export function mount(el){
         if(payload && payload.clientId && payload.clientId !== me.user.id) return;
         ch.send({ type: 'broadcast', event: 'history', payload: {
           clientId: me.user.id, sampleMs: SAMPLE_MS, samples: samples.slice(-400),
-          verified: !cheatDetected, t: Math.max(0, Date.now() - startMs),
+          verified: !cheatDetected && !signalLost, t: Math.max(0, Date.now() - startMs),
         }});
       });
       await new Promise(resolve => ch.subscribe(async (status) => {
@@ -198,7 +203,7 @@ export function mount(el){
     const peak = samples.length ? Math.max(...samples) : 0;
     const payload = {
       clientId: me.user.id, led: curLed, avg, peak,
-      verified: !cheatDetected, t: Math.max(0, Date.now() - startMs),
+      verified: !cheatDetected && !signalLost, t: Math.max(0, Date.now() - startMs),
     };
     for(const ch of liveChannels){
       ch.send({ type: 'broadcast', event: 'tick', payload });
@@ -217,7 +222,12 @@ export function mount(el){
   function updateVerify(){
     const v = $('sVerify');
     v.hidden = false;
-    if(cheatDetected){ v.className = 'solo-verify bad'; v.textContent = 'Unverified — irregular spinning detected'; }
+    // Signal loss is surfaced here — the one place that already explains WHY a
+    // reading is unverified (the irregular-spinning note). Everywhere else it just
+    // joins the normal "unverified" group.
+    if(signalLost){ v.className = 'solo-verify bad'; v.textContent = 'Unverified — signal lost'; }
+    else if(!connected){ v.className = 'solo-verify bad'; v.textContent = 'Signal lost — reconnecting…'; }
+    else if(cheatDetected){ v.className = 'solo-verify bad'; v.textContent = 'Unverified — irregular spinning detected'; }
     else { v.className = 'solo-verify good'; v.textContent = '✓ Looks genuine'; }
   }
 
@@ -226,6 +236,7 @@ export function mount(el){
     if(!connected){ setMsg('Connect your Egely Wheel (top right) first.', 'err'); return; }
     samples = []; swingWin = []; swings = 0; wasSwing = false; cheatDetected = false; finished = false; lastStats = null; saved = false;
     finalizing = false; lateHandled = false; holdRun = 0; frameFresh = false;
+    signalLost = false; gapStartMs = null;
     measuring = true; startMs = Date.now(); endMs = startMs + duration * 1000;
     $('sEval').hidden = true;
     $('sStart').textContent = 'Stop';
@@ -237,6 +248,15 @@ export function mount(el){
       // Track the trailing "hold" run: pushes with no fresh frame in between
       // just repeat the previous report — the finalize drain may overwrite them.
       if(frameFresh){ frameFresh = false; holdRun = 0; } else holdRun++;
+      // Signal-loss fairness: a CONTINUOUS BLE gap ≥ SIGNAL_GAP_MS during the
+      // measurement latches it unverified (you can't spin high, pull the dongle,
+      // and keep a "verified" inflated reading). Any reconnect resets the counter,
+      // so a normal sub-6s reconnect never penalises. The held samples are left
+      // untouched (data path unchanged) — only the verified flag flips.
+      if(!connected){
+        if(gapStartMs === null) gapStartMs = Date.now();
+        else if(Date.now() - gapStartMs >= SIGNAL_GAP_MS) signalLost = true;
+      } else gapStartMs = null;
     }, SAMPLE_MS);
     openLive();   // fire and forget; channels become ready within ~1s
     presence.setMeasuring(true);   // show me as "measuring" on the Live wall
@@ -288,7 +308,7 @@ export function mount(el){
         <span><b style="color:${zText(stats.avg)}">${stats.avg.toFixed(1)}</b> Avg</span>
         <span><b style="color:${zText(stats.peak)}">${stats.peak}</b> Peak</span>
         <span><b>${stats.steadiness}</b> Steady</span>
-        ${cheatDetected ? '<span class="warn">Not verified</span>' : '<span class="v-badge verified">✓ Verified</span>'}
+        ${(cheatDetected || signalLost) ? '<span class="warn">Not verified</span>' : '<span class="v-badge verified">✓ Verified</span>'}
       </div>
       <div class="field full" style="margin-top:16px">
         <label for="sComment">Comment (optional)</label>
@@ -316,7 +336,7 @@ export function mount(el){
       avg: Number(s.avg.toFixed(2)), peak: s.peak, steadiness: s.steadiness,
       zone_green: Number(s.zone.green.toFixed(1)), zone_yellow: Number(s.zone.yellow.toFixed(1)),
       zone_red: Number(s.zone.red.toFixed(1)), trend: Number(s.trendTotal.toFixed(2)),
-      green_streak: s.greenStreak, samples: s.n, is_host: false, verified: !cheatDetected,
+      green_streak: s.greenStreak, samples: s.n, is_host: false, verified: !cheatDetected && !signalLost,
       comment: comment || null, curve: samples.slice(),   // FULL measured series (250ms samples) — no 80-point downsample
     });
     if(error){ btn.disabled = false; $('sSaveMsg').className = 'form-msg err'; $('sSaveMsg').textContent = 'Error: ' + error.message; return; }

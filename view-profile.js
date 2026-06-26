@@ -219,7 +219,7 @@ export function mount(el){
           <span class="verify-mark"><span class="v-badge unverified">unverified</span></span>
           <div class="verify-body">
             <div class="verify-title">Unverified measurement</div>
-            <p>The value swung around too much to be a steady reading. It is still saved and counts toward your overall progress — it just does not earn the verification marks.</p>
+            <p>The reading was not steady — either the value swung around too much, or the wheel signal dropped for too long during the measurement. It is still saved and counts toward your overall progress — it just does not earn the verification marks.</p>
           </div>
         </div>
       </div>

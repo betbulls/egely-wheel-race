@@ -60,6 +60,7 @@ const RENDER_MS = 250;      // how often the board repaints
 // a swing however it ramps; two distinct swings → "unverified". The de-spiked
 // signal (ble.js) has already removed the 24-rail glitches.
 const CHEAT_WINDOW_MS = 2000, SWING_LIMIT = 7, MAX_SWINGS = 2;
+const SIGNAL_GAP_MS = 10000;  // a continuous BLE loss this long inside the official window → unverified (10s: clears the reconnect-backoff window so a normal hiccup never false-flags)
 
 // Country flag images (render on every OS, unlike flag emoji on Windows). The 2-letter
 // code rides on the broadcast tick (live) or comes from the racer's profile (results).
@@ -148,6 +149,7 @@ export function mount(el, sessionId, inviteToken = null){
 
   let swingWin = [], swings = 0, wasSwing = false;   // cheat detection: count of distinct swings
   let cheatDetected = false; // latched once enough swings are seen
+  let signalLost = false, gapStartMs = null;   // continuous-disconnect (signal-loss) latch
 
   // Tail drain (same fix as Solo): the wheel reports ~every 700ms, so its report
   // covering the FINAL stretch of the window arrives after endMs. Before saving
@@ -508,6 +510,19 @@ export function mount(el, sessionId, inviteToken = null){
     // sleep is the #1 cause of a mid-session BLE drop). Spectators and the
     // out-of-window stretches never hold the lock; cleanup always releases it.
     if(bleConnected && inWindow()) wakeLock.acquire(); else wakeLock.release();
+    // Signal-loss fairness: a CONTINUOUS BLE gap ≥ SIGNAL_GAP_MS inside the official
+    // window marks the result unverified. Reset on any reconnect, so a normal sub-6s
+    // reconnect never penalises. (A gap already zero-fills the average, so this only
+    // flips the verified flag — it changes no data.) Must sit ABOVE the early return.
+    // `mySamples.length > 0` = the user has actually connected + measured at least once
+    // this window — so a late-joiner's pre-connection idle never counts as a "gap"
+    // (mirrors race's `myFirstSlot !== null` gate). Spectators never reach here anyway.
+    if(inWindow() && mySamples.length > 0){
+      if(!bleConnected){
+        if(gapStartMs === null) gapStartMs = Date.now();
+        else if(Date.now() - gapStartMs >= SIGNAL_GAP_MS) signalLost = true;
+      } else gapStartMs = null;
+    }
     if(!bleConnected) return;            // viewers don't broadcast
     if(inWindow()){
       mySum += myLed; myCount++;
@@ -527,7 +542,7 @@ export function mount(el, sessionId, inviteToken = null){
     // current LED, so a real spinner still rises live; only the average is windowed.
     const slots = Math.max(myCount, Math.round((Math.min(Date.now(), endMs) - startMs) / BROADCAST_MS));
     const avg = slots > 0 ? mySum / slots : 0;
-    const verified = !cheatDetected;
+    const verified = !cheatDetected && !signalLost;
     const myCountry = auth.getState().country || null;
     const myAvatar = auth.getState().avatarUrl || null;
     upsertRacer(myName, { led: myLed, avg, count: myCount, peak: myPeak, host: isHostName(myName), verified, country: myCountry, avatar: myAvatar });
@@ -612,7 +627,7 @@ export function mount(el, sessionId, inviteToken = null){
       zone_yellow: Number(s.zone.yellow.toFixed(1)),
       zone_red: Number(s.zone.red.toFixed(1)),
       trend: Number(s.trendTotal.toFixed(2)), green_streak: s.greenStreak,
-      samples: mySamples.length, is_host: isHostName(myName), verified: !cheatDetected,
+      samples: mySamples.length, is_host: isHostName(myName), verified: !cheatDetected && !signalLost,
       curve: anchoredCurve(mySamples, mySampleTimes, durationMs, Math.max(1, Math.round(durationMs / 500))), duration_seconds: (session.duration_minutes || 0) * 60,   // FULL time-anchored series (one bucket per 500ms slot, null = unmeasured/late-join) — no 80-point cap
     }).then(({ error }) => { if(error) console.warn('result save error:', error.message); });
   }
