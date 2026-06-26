@@ -523,8 +523,13 @@ export function mount(el, sessionId, inviteToken = null){
         else if(Date.now() - gapStartMs >= SIGNAL_GAP_MS) signalLost = true;
       } else gapStartMs = null;
     }
-    if(!bleConnected) return;            // viewers don't broadcast
-    if(inWindow()){
+    // A measurer who has DROPPED keeps reporting — so the board flips to unverified
+    // and shows the lost signal LIVE, not only at save. A pure spectator who never
+    // connected stays silent (no row to update).
+    if(!bleConnected && mySamples.length === 0) return;
+    // Official sampling only while truly connected and in-window — a gap is left as a
+    // zero-filled slot (never a held value), so disconnecting can't inflate the result.
+    if(bleConnected && inWindow()){
       mySum += myLed; myCount++;
       myPeak = Math.max(myPeak, myLed);
       mySamples.push(myLed);
@@ -542,13 +547,17 @@ export function mount(el, sessionId, inviteToken = null){
     // current LED, so a real spinner still rises live; only the average is windowed.
     const slots = Math.max(myCount, Math.round((Math.min(Date.now(), endMs) - startMs) / BROADCAST_MS));
     const avg = slots > 0 ? mySum / slots : 0;
+    // While the wheel is dropped the live value reflects the loss (0, matching the
+    // official zero-fill) instead of freezing on the last held reading; `verified`
+    // already carries signalLost — together the board switches live, not only at save.
+    const liveLed = bleConnected ? myLed : 0;
     const verified = !cheatDetected && !signalLost;
     const myCountry = auth.getState().country || null;
     const myAvatar = auth.getState().avatarUrl || null;
-    upsertRacer(myName, { led: myLed, avg, count: myCount, peak: myPeak, host: isHostName(myName), verified, country: myCountry, avatar: myAvatar });
+    upsertRacer(myName, { led: liveLed, avg, count: myCount, peak: myPeak, host: isHostName(myName), verified, country: myCountry, avatar: myAvatar });
     if(channel){
       channel.send({ type: 'broadcast', event: 'tick',
-        payload: { name: myName, led: myLed, avg, count: myCount, peak: myPeak, verified, country: myCountry, avatar: myAvatar } });
+        payload: { name: myName, led: liveLed, avg, count: myCount, peak: myPeak, verified, country: myCountry, avatar: myAvatar } });
     }
   }
 
