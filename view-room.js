@@ -607,7 +607,7 @@ export function mount(el, sessionId, inviteToken = null){
       zone_red: Number(s.zone.red.toFixed(1)),
       trend: Number(s.trendTotal.toFixed(2)), green_streak: s.greenStreak,
       samples: mySamples.length, is_host: isHostName(myName), verified: !cheatDetected,
-      curve: anchoredCurve(mySamples, mySampleTimes, durationMs), duration_seconds: (session.duration_minutes || 0) * 60,
+      curve: anchoredCurve(mySamples, mySampleTimes, durationMs, Math.max(1, Math.round(durationMs / 500))), duration_seconds: (session.duration_minutes || 0) * 60,   // FULL time-anchored series (one bucket per 500ms slot, null = unmeasured/late-join) — no 80-point cap
     }).then(({ error }) => { if(error) console.warn('result save error:', error.message); });
   }
 

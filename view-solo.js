@@ -317,7 +317,7 @@ export function mount(el){
       zone_green: Number(s.zone.green.toFixed(1)), zone_yellow: Number(s.zone.yellow.toFixed(1)),
       zone_red: Number(s.zone.red.toFixed(1)), trend: Number(s.trendTotal.toFixed(2)),
       green_streak: s.greenStreak, samples: s.n, is_host: false, verified: !cheatDetected,
-      comment: comment || null, curve: downsample(samples, 80),
+      comment: comment || null, curve: samples.slice(),   // FULL measured series (250ms samples) — no 80-point downsample
     });
     if(error){ btn.disabled = false; $('sSaveMsg').className = 'form-msg err'; $('sSaveMsg').textContent = 'Error: ' + error.message; return; }
     saved = true;

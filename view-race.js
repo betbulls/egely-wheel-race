@@ -976,7 +976,7 @@ export function mount(el, raceId, inviteToken = null){
       zone_green: Number(s.zone.green.toFixed(1)), zone_yellow: Number(s.zone.yellow.toFixed(1)), zone_red: Number(s.zone.red.toFixed(1)),
       trend: Number(s.trendTotal.toFixed(2)), green_streak: s.greenStreak,
       samples: slots.filter(v => v > 0).length, is_host: isHostUid(myUid),
-      verified: myVerified, curve: downsample(slots, 80),
+      verified: myVerified, curve: slots.slice(),   // FULL per-slot series (500ms canonical slots, 0 = unmeasured) — no 80-point downsample
       duration_seconds: (session.duration_minutes || 0) * 60,
       race_score: myCumulative,
       race_normalized_score: Number((myCumulative / (24 * TOTAL_SLOTS)).toFixed(4)),

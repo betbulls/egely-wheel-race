@@ -90,7 +90,7 @@ export async function saveExperimentMeasurement({ userId, identity, experiment, 
     zone_green: Number(stats.zone.green.toFixed(1)), zone_yellow: Number(stats.zone.yellow.toFixed(1)),
     zone_red: Number(stats.zone.red.toFixed(1)), trend: Number(stats.trendTotal.toFixed(2)),
     green_streak: stats.greenStreak, samples: stats.n, is_host: false, verified,
-    comment: comment || null, curve: downsample(samples, 80),
+    comment: comment || null, curve: (samples || []).slice(),   // FULL measured series (250ms samples) — no 80-point downsample
     experiment_id: experiment.id, experiment_day: day.id,
   });
   return { error };
