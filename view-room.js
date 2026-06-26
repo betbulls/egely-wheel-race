@@ -109,7 +109,8 @@ function injectRoomStyles(){
   .res-card.expanded .re-show{display:none}
   .res-card.expanded .re-hide{display:inline}
   .res-card.expanded .re-car{transform:rotate(180deg)}
-  .res-expanded{display:none;margin-top:10px}
+  .res-card{flex-wrap:wrap}
+  .res-expanded{display:none;flex-basis:100%;width:100%;margin-top:10px}
   .res-card.expanded .res-expanded{display:block}
   .res-big-wrap{background:#fff;border:1px solid var(--ewr-border);border-radius:14px;box-shadow:var(--ewr-shadow-card);padding:14px;height:210px}
   .res-big-wrap canvas{display:block;width:100%;height:100%}
@@ -1156,7 +1157,6 @@ export function mount(el, sessionId, inviteToken = null){
           <canvas class="res-curve" id="${canvasId}"></canvas>
           ${zoneBar(r.stats.zone)}
           <div class="res-expand-row"><button type="button" class="res-expand" aria-label="Show full chart" aria-expanded="false"><span class="re-show">Chart</span><span class="re-hide">Hide</span><span class="re-car">▾</span></button></div>
-          <div class="res-expanded"><div class="res-big-wrap"><canvas id="${canvasId}-big"></canvas></div></div>
         </div>
         <div class="res-stats">
           <div class="rs"><div class="rs-val">${r.stats.avg.toFixed(1)}</div><div class="rs-lbl">Avg</div></div>
@@ -1164,6 +1164,7 @@ export function mount(el, sessionId, inviteToken = null){
           <div class="rs"><div class="rs-val">${r.stats.steadiness}</div><div class="rs-lbl">Steady</div></div>
           <div class="rs"><div class="rs-val rs-trend">${esc(trendLabel(r.stats.trendTotal))}</div><div class="rs-lbl">Trend</div></div>
         </div>
+        <div class="res-expanded"><div class="res-big-wrap"><canvas id="${canvasId}-big"></canvas></div></div>
       </div>`;
 
     // Leaderboard (group average + category winners + ranked racers) — only what counts.
