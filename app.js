@@ -20,6 +20,7 @@ import { mount as mountSubscribe } from './view-subscribe.js';
 import { mount as mountWelcome } from './view-welcome.js';
 import { mount as mountAdmin } from './view-admin.js';
 import { mount as mountHowToConnect } from './view-how-to-connect.js';
+import { mount as mountSpiritualMakers } from './view-spiritual-makers.js';
 import * as presence from './presence.js';
 import { supabase } from './db.js';
 
@@ -83,6 +84,7 @@ function router(){
   else if(path === '/profile') setView(mountProfile);
   else if(path === '/admin') setView(mountAdmin);
   else if(path === '/how-to-connect') setView(mountHowToConnect);
+  else if(path === '/spiritual-makers') setView(mountSpiritualMakers);
   else if(path === '/clients') setView(mountClients, param);
   else if(path === '/leaderboard') setView(mountLeaderboard);
   else if(path === '/connect') setView(mountConnect, param);
