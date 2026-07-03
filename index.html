@@ -1339,7 +1339,7 @@
   }
 </style>
 <!-- EWR Live light redesign layer — loads last so it wins the cascade. Remove this line to revert. -->
-<link rel="stylesheet" href="ewr-redesign.css?v=20260627">
+<link rel="stylesheet" href="ewr-redesign.css?v=20260703">
 </head>
 <body>
 
@@ -1391,6 +1391,19 @@
     <span class="fab-label">Race</span>
   </a>
 </div>
+
+<!-- Vitality Pack conversion pill — shown instead of the FAB to visitors and
+     non-subscribers. Cart permalink: lands on Shopify checkout with the pack in the cart. -->
+<a class="vpack-fab" id="vpackFab" hidden
+   href="https://egelywheel.com/cart/56459929780610:1?utm_source=ewr-live&utm_medium=fab&utm_campaign=vitality-pack"
+   aria-label="Get the Vitality Pack — 1 year of EWR Live included free">
+  <img src="https://cdn.shopify.com/s/files/1/0946/2382/6306/files/VitalityPack-EgelyWheel2.jpg?v=1777371759" alt="" loading="lazy" onerror="this.style.display='none'">
+  <span class="vp-txt">
+    <strong>Get the Vitality Pack</strong>
+    <small>1 year of EWR Live — free</small>
+  </span>
+  <span class="vp-tag">FREE YEAR</span>
+</a>
 
 <script type="module" src="app.js"></script>
 

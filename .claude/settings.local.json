@@ -42,7 +42,12 @@
       "Bash(rm /tmp/vr3.mjs)",
       "Bash(cp \"C:/Users/User/Documents/GitHub/egely-wheel-race/presence.js\" /tmp/pr.mjs)",
       "Bash(node --check /tmp/pr.mjs)",
-      "Bash(rm /tmp/pr.mjs)"
+      "Bash(rm /tmp/pr.mjs)",
+      "mcp__f4d5007b-023f-47c1-8b48-7dd5718656a4__get-product",
+      "mcp__f4d5007b-023f-47c1-8b48-7dd5718656a4__update-product",
+      "mcp__f4d5007b-023f-47c1-8b48-7dd5718656a4__graphql_mutation",
+      "PowerShell(\\(Get-Content \"C:\\\\Users\\\\User\\\\Documents\\\\GitHub\\\\egely-wheel-race\\\\ewr-redesign.css\" | Measure-Object -Line\\).Lines)",
+      "PowerShell(Test-Path \"C:\\\\Users\\\\User\\\\Documents\\\\GitHub\\\\egely-wheel-race\\\\.claude\\\\launch.json\"; try{\\(Get-Command python -ErrorAction Stop\\).Source}catch{'no python'})"
     ]
   }
 }

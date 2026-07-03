@@ -420,10 +420,16 @@ if(fab && fabMenu){
   document.addEventListener('keydown', (e) => {
     if(e.key === 'Escape') closeFabMenu();
   });
-  // Only show the FAB to logged-in users — measurement requires login anyway.
+  // FAB only for logged-in subscribers (they can measure). Everyone else —
+  // anonymous visitors and logged-in non-subscribers — gets the Vitality Pack
+  // conversion pill instead: a Shopify cart permalink that lands on checkout
+  // with the pack (and its free EWR year) already in the cart.
+  const vpackFab = document.getElementById('vpackFab');
   auth.subscribeAuth(a => {
-    fab.hidden = !a.user;
-    if(!a.user) closeFabMenu();
+    const canMeasure = !!a.user && a.subscriber;
+    fab.hidden = !(a.accessReady && canMeasure);
+    if(fab.hidden) closeFabMenu();
+    if(vpackFab) vpackFab.hidden = !(a.accessReady && !canMeasure);
   });
 }
 

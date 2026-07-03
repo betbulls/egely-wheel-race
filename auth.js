@@ -4,6 +4,7 @@ import { supabase } from './db.js';
 
 let user = null;
 let subscriber = false;   // active subscriber?
+let ready = false;        // access state resolved (anon confirmed, or subscriber flag fetched)
 let profile = null;       // row from public.profiles
 const listeners = new Set();
 
@@ -12,6 +13,7 @@ function state(){
     user,
     email: user?.email || null,
     subscriber,
+    accessReady: ready,
     profile,
     displayName: profile?.display_name || (user?.email ? user.email.split('@')[0] : null),
     avatarUrl: profile?.avatar_url || null,
@@ -98,9 +100,12 @@ async function maybeDetectCountry(){
 
 function applyUser(u){
   user = u;
+  // Anon is resolved immediately; a logged-in user's access is only known once
+  // the subscriber flag is fetched below (prevents a wrong FAB/upsell flash).
+  ready = !u;
   emit();
   // Defer Supabase calls OUTSIDE the auth callback (avoids the auth-lock deadlock).
-  setTimeout(async () => { await refreshSubscriber(); await refreshProfile(); emit(); maybeDetectCountry(); }, 0);
+  setTimeout(async () => { await refreshSubscriber(); await refreshProfile(); ready = true; emit(); maybeDetectCountry(); }, 0);
 }
 
 supabase.auth.getSession().then(({ data }) => applyUser(data.session?.user || null));
