@@ -47,7 +47,9 @@
       "mcp__f4d5007b-023f-47c1-8b48-7dd5718656a4__update-product",
       "mcp__f4d5007b-023f-47c1-8b48-7dd5718656a4__graphql_mutation",
       "PowerShell(\\(Get-Content \"C:\\\\Users\\\\User\\\\Documents\\\\GitHub\\\\egely-wheel-race\\\\ewr-redesign.css\" | Measure-Object -Line\\).Lines)",
-      "PowerShell(Test-Path \"C:\\\\Users\\\\User\\\\Documents\\\\GitHub\\\\egely-wheel-race\\\\.claude\\\\launch.json\"; try{\\(Get-Command python -ErrorAction Stop\\).Source}catch{'no python'})"
+      "PowerShell(Test-Path \"C:\\\\Users\\\\User\\\\Documents\\\\GitHub\\\\egely-wheel-race\\\\.claude\\\\launch.json\"; try{\\(Get-Command python -ErrorAction Stop\\).Source}catch{'no python'})",
+      "PowerShell($j = Get-Content -Raw \"C:\\\\Users\\\\User\\\\.claude\\\\projects\\\\C--Users-User-Documents-GitHub-egely-wheel-race\\\\01d12725-ab13-47f6-a1e7-9d865aa2a659\\\\tool-results\\\\toolu_01S8uMMJEsngnr4cczjoB8vW.txt\" | ConvertFrom-Json; $out = \"C:\\\\Users\\\\User\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-User-Documents-GitHub-egely-wheel-race\\\\01d12725-ab13-47f6-a1e7-9d865aa2a659\\\\scratchpad\"; foreach\\($p in $j.data.shop.shopPolicies\\){ $p.body | Out-File -Encoding utf8 \\(Join-Path $out \\($p.type + \".html\"\\)\\); \"{0}  {1} chars\" -f $p.type, $p.body.Length })",
+      "PowerShell($src = \"C:\\\\Users\\\\User\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-User-Documents-GitHub-egely-wheel-race\\\\01d12725-ab13-47f6-a1e7-9d865aa2a659\\\\scratchpad\\\\PRIVACY_POLICY.html\"; $dst = \"C:\\\\Users\\\\User\\\\Desktop\\\\ewr-policies\\\\3-PRIVACY-POLICY-FINAL.html\"; $txt = [IO.File]::ReadAllText\\($src\\).TrimStart\\([char]0xFEFF\\); [IO.File]::WriteAllText\\($dst, $txt, \\(New-Object System.Text.UTF8Encoding\\($false\\)\\)\\); \"written: \" + \\(Get-Item $dst\\).Length + \" bytes\"; Get-ChildItem \"C:\\\\Users\\\\User\\\\Desktop\\\\ewr-policies\" | Select-Object Name, Length)"
     ]
   }
 }
