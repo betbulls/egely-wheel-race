@@ -30,6 +30,7 @@ import { flagUrl } from './countries.js';
 import { createAddToCalendar } from './calendar.js';
 import { computeStats, downsample } from './analytics.js';
 import * as wakeLock from './wake-lock.js';
+import { mountVoiceDock } from './voice.js';
 
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
@@ -336,8 +337,9 @@ export function mount(el, raceId, inviteToken = null){
   const curSlot = () => Math.floor((Date.now() - startMs) / SLOT_MS);
   const progressOf = cum => TOTAL_SLOTS ? Math.max(0, Math.min(1, (cum || 0) / (24 * TOTAL_SLOTS))) : 0;
 
-  el.innerHTML = `<div class="rl-wrap"><div class="rl-head" id="rlHead"><div class="rl-title">Loading…</div></div><div id="rlBody"></div></div>`;
+  el.innerHTML = `<div class="rl-wrap"><div class="rl-head" id="rlHead"><div class="rl-title">Loading…</div></div><div class="voice-dock" id="voiceDock" hidden></div><div id="rlBody"></div></div>`;
   const $ = id => el.querySelector('#' + id);
+  let voiceDock = null, voiceLive = false;   // Live Voice: dock UI + my "I am speaking" presence flag
 
   // ---- Load + access gate ----------------------------------------------------
   (async () => {
@@ -367,6 +369,17 @@ export function mount(el, raceId, inviteToken = null){
       const { data: hp } = await supabase.from('profiles').select('avatar_url, display_name').eq('id', session.created_by_user_id).maybeSingle();
       if(hp){ hostAvatar = hp.avatar_url || null; hostName = hp.display_name || null; }
     }
+
+    // ---- Live Voice dock — the maker-host commentates the lobby + the race.
+    if(Date.now() <= endMs){
+      const canHost = isHostUser && !!auth.getState().approvedMaker;
+      voiceDock = mountVoiceDock($('voiceDock'), {
+        sessionId: raceId, mode: 'race', canHost,
+        hostName: hostName || session.created_by || 'The host',
+        onVoiceFlag: v => { voiceLive = v; trackPresence(); },
+      });
+    }
+
     renderHead();
     enter();
   })();
@@ -612,7 +625,7 @@ export function mount(el, raceId, inviteToken = null){
       id: myId, clientId: myClientId, name: myName, uid: myUid,
       avatar: auth.getState().avatarUrl || null, country: auth.getState().country || null,
       wheel: bleConnected, slot: curSlot(), cum: myCumulative, live: Math.round(myEma),
-      verified: myVerified, firstSlot: myFirstSlot, ts: Date.now(),
+      verified: myVerified, firstSlot: myFirstSlot, ts: Date.now(), voice: voiceLive,
     }).catch(() => {});
   }
 
@@ -620,9 +633,11 @@ export function mount(el, raceId, inviteToken = null){
   function syncPresence(){
     const state = channel ? channel.presenceState() : {};
     const seen = new Set();
+    let hostVoiceOn = false;
     for(const metas of Object.values(state)){
       const m = metas[metas.length - 1];
       if(!m || !m.id) continue;
+      if(m.voice && isHostUid(m.uid)) hostVoiceOn = true;
       seen.add(m.id);
       ensureEntry(m);
       // Seed race state from the snapshot (broadcast keeps it fresh afterwards). Marked
@@ -630,6 +645,7 @@ export function mount(el, raceId, inviteToken = null){
       if(phase() !== 'pre') acceptRacerState(m, true);
       else { const r = roster.get(m.id); if(r){ r.lastSeen = Date.now(); } }
     }
+    if(voiceDock) voiceDock.setListenAvailable(hostVoiceOn);
     // Drop people who left — but KEEP anyone still broadcasting (a lobby-tick / race-tick
     // within the reconnect window) or holding a live score, mirroring how the session room
     // keeps its data-producing racers. Without this, a bot known only from broadcasts (its
@@ -1106,6 +1122,7 @@ export function mount(el, raceId, inviteToken = null){
 
   // ---- Cleanup ---------------------------------------------------------------
   return () => {
+    if(voiceDock) voiceDock.destroy();
     wakeLock.release();
     // If the race already ended but my own result hasn't saved yet (e.g. I navigated
     // away during the finalize grace), save it now. Idempotent: the myResultSaved guard

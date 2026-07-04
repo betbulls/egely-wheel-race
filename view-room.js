@@ -7,6 +7,7 @@ import { drawTrio, drawVitalityChart } from './chart.js';
 import { flagUrl } from './countries.js';
 import { createAddToCalendar } from './calendar.js';
 import * as wakeLock from './wake-lock.js';
+import { mountVoiceDock } from './voice.js';
 
 // Robust clipboard copy — Clipboard API with a legacy execCommand fallback.
 async function copyText(text){
@@ -180,6 +181,7 @@ export function mount(el, sessionId, inviteToken = null){
       <div class="room-sub" id="roomSub"></div>
       <div class="room-actions" id="roomActions"></div>
       <p class="room-practice-note" id="roomPracticeNote" hidden>This room is open for practice now — official results are recorded once the session begins.</p>
+      <div class="voice-dock" id="voiceDock" hidden></div>
     </div>
 
     <div class="panel name-gate" id="nameGate" hidden>
@@ -240,6 +242,7 @@ export function mount(el, sessionId, inviteToken = null){
 
   const $ = id => el.querySelector('#' + id);
   let hostHandle = null, hostIsMaker = false;   // approved-maker host → racer card links to their invite page
+  let voiceDock = null, voiceLive = false;      // Live Voice: dock UI + my "I am speaking" presence flag
 
   // ---- Load session ---------------------------------------------------------
   (async () => {
@@ -305,6 +308,18 @@ export function mount(el, sessionId, inviteToken = null){
       if(isInvite && isHostUser && session.invite_token && actionsEl){
         actionsEl.appendChild(makeCopyButton('Copy invite link', location.origin + location.pathname + '#/join/' + session.invite_token));
       }
+    }
+
+    // ---- Live Voice dock (maker-hosted audio guidance). Host side needs the
+    // approved-maker flag on MY auth state; listeners get the invite once the
+    // host's presence carries voice:true. Finished sessions have no live voice.
+    if(Date.now() <= endMs){
+      const canHost = isHostUser && !!auth.getState().approvedMaker;
+      voiceDock = mountVoiceDock($('voiceDock'), {
+        sessionId, mode: 'session', canHost,
+        hostName: session.created_by || 'The host',
+        onVoiceFlag: v => { voiceLive = v; trackPresence(); },
+      });
     }
 
     if(Date.now() > endMs){ renderResults(); resultsShown = true; }   // build once; a later resize must not wipe an expanded chart
@@ -455,17 +470,20 @@ export function mount(el, sessionId, inviteToken = null){
 
   function trackPresence(){
     if(!channel) return;
-    channel.track({ name: myName, ble: bleConnected, country: auth.getState().country || null, avatar: auth.getState().avatarUrl || null })
+    channel.track({ name: myName, ble: bleConnected, country: auth.getState().country || null, avatar: auth.getState().avatarUrl || null, voice: voiceLive })
       .catch(() => {});   // best-effort; the roster also works off broadcasts
   }
 
   function syncPresence(){
     present.clear();
+    let hostVoiceOn = false;
     const state = channel ? channel.presenceState() : {};
     for(const metas of Object.values(state)){
       const m = metas[metas.length - 1];   // latest track wins per key
       if(m && m.name) present.set(m.name, { ble: !!m.ble, country: m.country || null, avatar: m.avatar || null });
+      if(m && m.voice && isHostName(m.name)) hostVoiceOn = true;
     }
+    if(voiceDock) voiceDock.setListenAvailable(hostVoiceOn);
     // Presence-only participants join the roster; entries that never produced
     // wheel data leave it when their presence drops (broadcasters stay).
     for(const [name, p] of present){
@@ -1293,6 +1311,7 @@ export function mount(el, sessionId, inviteToken = null){
   window.addEventListener('resize', render);
 
   return () => {
+    if(voiceDock) voiceDock.destroy();
     wakeLock.release();
     if(broadcastTimer) clearInterval(broadcastTimer);
     if(renderTimer) clearInterval(renderTimer);
