@@ -89,7 +89,19 @@ function createVoice(sessionId){
     }
     const u = TOKEN_URL + '?role=' + role + '&room=' + encodeURIComponent(sessionId)
       + '&name=' + encodeURIComponent(name || '');
-    const r = await fetch(u, { headers });
+    let r = await fetch(u, { headers });
+    // Host + 401 → the stored JWT is bad even though it looked alive. Force a
+    // refresh once and retry — this heals a rotted silent-refresh chain without
+    // making the maker re-log-in mid-session.
+    if(!r.ok && r.status === 401 && role === 'host'){
+      try{
+        const rr = await supabase.auth.refreshSession();
+        const jwt2 = rr?.data?.session?.access_token;
+        if(jwt2){
+          r = await fetch(u, { headers: { Authorization: 'Bearer ' + jwt2 } });
+        }
+      }catch(_){}
+    }
     const j = await r.json().catch(() => ({}));
     if(!r.ok) throw new Error(j.error || ('voice service error (' + r.status + ')'));
     return j;
