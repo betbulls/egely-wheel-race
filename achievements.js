@@ -178,7 +178,6 @@ export const ACHIEVEMENTS = [
   ...[
     [300,  T.bronze, '⏱️', '5-Minute Measurement',  '5 minutes'],
     [600,  T.silver, '🔥', '10-Minute Measurement', '10 minutes'],
-    [1200, T.gold,   '👑', '20-Minute Measurement', '20 minutes'],
   ].map(([sec, tier, icon, title, label]) => ({
     id: 'endurance-' + sec, category: 'endurance', tier, icon, title,
     description: `Complete a ${label} measurement.`,
@@ -188,6 +187,25 @@ export const ACHIEVEMENTS = [
       return { current: hit ? 1 : 0, target: 1, unlockedAt: hit ? firstAt(d.resultsAsc, pred) : null };
     }
   })),
+  // Gold tier: measurements are capped at 10 minutes, so a single 20-minute
+  // measurement is impossible — the crown is earned by ACCUMULATING 20 minutes
+  // of measurement within one (local) day. The id stays `endurance-1200` so
+  // anyone who unlocked the old single-measurement version keeps their badge.
+  { id: 'endurance-1200', category: 'endurance', tier: T.gold, icon: '👑',
+    title: '20-Minute Day', description: 'Measure 20 minutes in total within a single day.',
+    progress: d => {
+      const sums = new Map();
+      let best = 0, unlockedAt = null;
+      for(const r of d.resultsAsc){
+        const day = new Date(r.created_at).toLocaleDateString('en-CA');
+        const s = (sums.get(day) || 0) + (r.duration_seconds || 0);
+        sums.set(day, s);
+        if(s > best) best = s;
+        if(!unlockedAt && s >= 1200) unlockedAt = r.created_at;
+      }
+      return { current: Math.min(Math.floor(best / 60), 20), target: 20, unlockedAt };
+    }
+  },
 
   // Social & Community
   { id: 'joined-5', category: 'social', tier: T.bronze, icon: '🎈',
