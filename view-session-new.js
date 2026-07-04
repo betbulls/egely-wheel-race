@@ -1,5 +1,6 @@
 import { supabase } from './db.js';
 import * as auth from './auth.js';
+import { durationPicker, startPicker, summaryBar, MAX_EVENT_MINUTES } from './time-controls.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
@@ -67,29 +68,12 @@ export function mount(el, mode = 'session'){
             <input type="text" id="fName" placeholder="${cfg.namePh}" required maxlength="80">
           </div>
           <div class="field full">
-            <div class="sn-when">
-              <div class="field">
-                <label for="fDate">Date</label>
-                <input type="date" id="fDate" required>
-              </div>
-              <div class="field">
-                <label for="fTime">Start time</label>
-                <input type="time" id="fTime" required>
-              </div>
-              <div class="field">
-                <label for="fDuration">Duration (minutes)</label>
-                <input type="number" id="fDuration" min="1" max="240" value="10" required>
-              </div>
-            </div>
+            <label>When should it start?</label>
+            <div id="tcWhen"></div>
           </div>
           <div class="field full">
-            <label class="sn-option">
-              <input type="checkbox" id="fVerified">
-              <span class="sn-option-main">
-                <span class="sn-option-title">${cfg.verTitle}</span>
-                <span class="sn-option-sub">${cfg.verSub}</span>
-              </span>
-            </label>
+            <label>Duration</label>
+            <div id="tcDur"></div>
           </div>
           <div class="field full">
             <label class="sn-access-label">Who can join?</label>
@@ -111,8 +95,18 @@ export function mount(el, mode = 'session'){
               </label>
             </div>
           </div>
+          <div class="field full">
+            <label class="sn-option">
+              <input type="checkbox" id="fVerified">
+              <span class="sn-option-main">
+                <span class="sn-option-title">${cfg.verTitle}</span>
+                <span class="sn-option-sub">${cfg.verSub}</span>
+              </span>
+            </label>
+          </div>
         </div>
         <div class="sn-howto">${cfg.howto}</div>
+        <div id="tcSummary"></div>
         <div class="organizer-note" id="organizerNote"></div>
         <div class="form-actions">
           <button type="submit" id="btnCreate">${cfg.submit}</button>
@@ -123,7 +117,24 @@ export function mount(el, mode = 'session'){
   `;
 
   const $ = id => el.querySelector('#' + id);
-  $('fDate').value = new Date().toISOString().slice(0, 10);
+
+  // Shared time controls — races default to a quick 1-minute heat "in 5 min",
+  // sessions to a 5-minute practice "in 15 min". Everything is capped at 10 min.
+  const durOptions = isRace
+    ? [{ label: '1 min', value: 1 }, { label: '2 min', value: 2 }, { label: '3 min', value: 3 }, { label: '5 min', value: 5 }, { label: '10 min', value: 10 }]
+    : [{ label: '1 min', value: 1 }, { label: '2 min', value: 2 }, { label: '5 min', value: 5 }, { label: '10 min', value: 10 }];
+  const when = startPicker($('tcWhen'), { mode: isRace ? 'race' : 'session', onChange: refreshSummary });
+  const dur = durationPicker($('tcDur'), {
+    options: durOptions,
+    value: isRace ? 1 : 5,
+    custom: { min: 1, max: MAX_EVENT_MINUTES, step: 1, format: v => v + ' min' },
+    onChange: refreshSummary,
+  });
+  const sum = summaryBar($('tcSummary'), isRace ? 'race' : 'session');
+  function refreshSummary(){
+    sum.update({ start: when.get(), durationLabel: dur.get() + '-minute' });
+  }
+  refreshSummary();
 
   const unsubAuth = auth.subscribeAuth(a => {
     const note = $('organizerNote');
@@ -149,17 +160,24 @@ export function mount(el, mode = 'session'){
     const a = auth.getState();
     if(!a.user){ setFormMsg(cfg.loginMsg, 'err'); return; }
     const name = $('fName').value.trim();
-    const date = $('fDate').value;
-    const time = $('fTime').value;
-    const duration = parseInt($('fDuration').value, 10);
-
-    if(!name || !date || !time || !duration){
-      setFormMsg('Please fill in every field.', 'err');
+    if(!name){
+      setFormMsg(`Please name your ${cfg.noun}.`, 'err');
       return;
     }
-    const start = new Date(`${date}T${time}`);
-    if(isNaN(start.getTime())){
-      setFormMsg('Invalid date or time.', 'err');
+    const start = when.get().date;
+    if(!start){
+      setFormMsg('Please choose a start date and time.', 'err');
+      return;
+    }
+    // Small grace so "In 5 min" can never lose a race against the clock;
+    // scheduled picks in the past are rejected.
+    if(start.getTime() < Date.now() - 15000){
+      setFormMsg('Start time must be in the future.', 'err');
+      return;
+    }
+    const duration = dur.get();
+    if(!Number.isInteger(duration) || duration < 1 || duration > MAX_EVENT_MINUTES){
+      setFormMsg('Measurements can be up to 10 minutes long.', 'err');
       return;
     }
 

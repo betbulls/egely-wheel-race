@@ -869,6 +869,7 @@ input[type=file]{color:var(--ewr-text-muted)}
 .solo-state.done{background:rgba(0,51,255,0.10);color:#0033ff}
 
 .solo-controls .field-dur{flex:0 0 140px;min-width:110px}
+.solo-durfield{margin-top:14px}
 #sStart{background:var(--ewr-accent-strong);color:#fff;border-radius:var(--ewr-radius-pill);
   min-height:46px;padding:0 28px;font-weight:700;font-size:13px;letter-spacing:0.05em;text-transform:uppercase}
 #sStart:hover:not(:disabled){background:var(--ewr-accent-hover)}

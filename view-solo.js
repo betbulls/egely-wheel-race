@@ -5,6 +5,7 @@ import * as wakeLock from './wake-lock.js';
 import * as presence from './presence.js';
 import { computeStats, vitalityLevel, downsample } from './analytics.js';
 import { drawVitalitySeries } from './chart.js';
+import { durationPicker, fmtSeconds, MAX_SOLO_SECONDS } from './time-controls.js';
 
 const SAMPLE_MS = 250;        // how often the curve is sampled while measuring
 const LIVE_WINDOW_MS = 60000; // idle live-preview window
@@ -58,8 +59,12 @@ export function mount(el){
       </div>
       <div class="solo-controls">
         <div class="field"><label for="sLabel">Measurement name</label><input id="sLabel" maxlength="60" placeholder="e.g. Morning practice"></div>
-        <div class="field field-dur"><label for="sDur">Duration (seconds)</label><input id="sDur" type="number" min="5" max="600" value="60"></div>
         <button id="sStart">Start measurement</button>
+      </div>
+      <div class="field solo-durfield">
+        <label>Duration</label>
+        <div id="sDurPick"></div>
+        <input id="sDur" type="hidden" value="60">
       </div>
       <div class="solo-msg" id="sMsg"></div>
     </div>
@@ -89,6 +94,19 @@ export function mount(el){
   `;
 
   const $ = id => el.querySelector('#' + id);
+
+  // Duration presets (pill control) — writes into the hidden #sDur input so the
+  // measurement engine below stays untouched. Capped at 10 minutes (600s).
+  const soloDur = durationPicker($('sDurPick'), {
+    options: [
+      { label: '30 sec', value: 30 }, { label: '1 min', value: 60 },
+      { label: '2 min', value: 120 }, { label: '5 min', value: 300 },
+      { label: '10 min', value: 600 },
+    ],
+    value: 60,
+    custom: { min: 10, max: MAX_SOLO_SECONDS, step: 10, format: fmtSeconds },
+    onChange: v => { $('sDur').value = String(v); },
+  });
 
   // 0-24 status bar (always reflects the current value).
   const bar = $('sBar');
@@ -241,6 +259,7 @@ export function mount(el){
     $('sEval').hidden = true;
     $('sStart').textContent = 'Stop';
     $('sDur').disabled = true;
+    soloDur.setDisabled(true);
     setMsg('Measuring…', '');
     updateVerify();
     sampleTimer = setInterval(() => {
@@ -287,6 +306,7 @@ export function mount(el){
     $('sStart').disabled = false;
     $('sStart').textContent = 'Start measurement';
     $('sDur').disabled = false;
+    soloDur.setDisabled(false);
     $('sTime').textContent = '–';
     $('sVerify').hidden = true;
     setMsg('', '');

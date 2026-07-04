@@ -19,6 +19,7 @@
 // Self-contained scoped <style> (.mys-*) — no index.html / ewr-redesign.css edits.
 import * as auth from './auth.js';
 import { supabase } from './db.js';
+import { durationPicker, startPicker, summaryBar, MAX_EVENT_MINUTES } from './time-controls.js';
 
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
 const pad2 = n => String(n).padStart(2, '0');
@@ -446,7 +447,6 @@ export function mount(el, eventType = 'session'){
       loadSessions();
       return;
     }
-    const p = localParts(s.scheduled_start);
     const mode = s.access_mode || 'public';
     const r = modalRoot();
     r.innerHTML = `
@@ -460,19 +460,13 @@ export function mount(el, eventType = 'session'){
             <label for="mysName">${isRace ? 'Race' : 'Session'} name</label>
             <input type="text" id="mysName" maxlength="80" value="${esc(s.name || '')}">
           </div>
-          <div class="mys-row2">
-            <div class="mys-field">
-              <label for="mysDate">Date</label>
-              <input type="date" id="mysDate" value="${p.date}">
-            </div>
-            <div class="mys-field">
-              <label for="mysTime">Start time</label>
-              <input type="time" id="mysTime" value="${p.time}">
-            </div>
+          <div class="mys-field">
+            <label>When should it start?</label>
+            <div id="mysWhen"></div>
           </div>
           <div class="mys-field">
-            <label for="mysDur">Duration (minutes)</label>
-            <input type="number" id="mysDur" min="1" max="240" value="${Number(s.duration_minutes) || 10}">
+            <label>Duration</label>
+            <div id="mysDurPick"></div>
           </div>
           <label class="mys-check">
             <input type="checkbox" id="mysVerified" ${s.verified_only ? 'checked' : ''}>
@@ -493,6 +487,7 @@ export function mount(el, eventType = 'session'){
             </div>
           </div>
         </div>
+        <div id="mysSummary"></div>
         <div class="mys-msg" id="mysEditMsg"></div>
         <div class="mys-modal-actions">
           <button type="button" class="mys-btn ghost" data-close>Cancel</button>
@@ -502,10 +497,33 @@ export function mount(el, eventType = 'session'){
     </div>`;
     bindModalDismiss();
     const q = sel => r.querySelector(sel);
-    q('#mysSave').addEventListener('click', () => saveEdit(id));
+
+    // Shared time controls (same components as the create form) — the stored
+    // start pre-fills the Schedule tab; legacy durations >10 min are capped.
+    const durOptions = isRace
+      ? [{ label: '1 min', value: 1 }, { label: '2 min', value: 2 }, { label: '3 min', value: 3 }, { label: '5 min', value: 5 }, { label: '10 min', value: 10 }]
+      : [{ label: '1 min', value: 1 }, { label: '2 min', value: 2 }, { label: '5 min', value: 5 }, { label: '10 min', value: 10 }];
+    const when = startPicker(q('#mysWhen'), {
+      mode: isRace ? 'race' : 'session',
+      initial: new Date(s.scheduled_start),
+      onChange: refresh,
+    });
+    const dur = durationPicker(q('#mysDurPick'), {
+      options: durOptions,
+      value: Math.min(MAX_EVENT_MINUTES, Number(s.duration_minutes) || (isRace ? 1 : 5)),
+      custom: { min: 1, max: MAX_EVENT_MINUTES, step: 1, format: v => v + ' min' },
+      onChange: refresh,
+    });
+    const sum = summaryBar(q('#mysSummary'), isRace ? 'race' : 'session');
+    function refresh(){
+      sum.update({ start: when.get(), durationLabel: dur.get() + '-minute' });
+    }
+    refresh();
+
+    q('#mysSave').addEventListener('click', () => saveEdit(id, { when, dur }));
   }
 
-  async function saveEdit(id){
+  async function saveEdit(id, ctl){
     const r = modalRoot();
     const q = sel => r.querySelector(sel);
     const msg = q('#mysEditMsg');
@@ -516,16 +534,17 @@ export function mount(el, eventType = 'session'){
     if(stateOf(s, Date.now()) !== 'upcoming'){ setMsg(`This ${noun} has already started and can no longer be changed.`, 'err'); return; }
 
     const name = q('#mysName').value.trim();
-    const date = q('#mysDate').value;
-    const time = q('#mysTime').value;
-    const duration = parseInt(q('#mysDur').value, 10);
     const verified = q('#mysVerified').checked;
 
-    if(!name || !date || !time || !duration){ setMsg('Please fill in every field.', 'err'); return; }
-    if(duration < 1 || duration > 240){ setMsg('Duration must be between 1 and 240 minutes.', 'err'); return; }
-    const start = new Date(`${date}T${time}`);
-    if(isNaN(start.getTime())){ setMsg('Invalid date or time.', 'err'); return; }
-    if(start.getTime() <= Date.now()){ setMsg('Start time must be in the future.', 'err'); return; }
+    if(!name){ setMsg(`Please name your ${noun}.`, 'err'); return; }
+    const start = ctl.when.get().date;
+    if(!start){ setMsg('Please choose a start date and time.', 'err'); return; }
+    // Small grace so "In 5 min" can never lose a race against the clock.
+    if(start.getTime() < Date.now() - 15000){ setMsg('Start time must be in the future.', 'err'); return; }
+    const duration = ctl.dur.get();
+    if(!Number.isInteger(duration) || duration < 1 || duration > MAX_EVENT_MINUTES){
+      setMsg('Measurements can be up to 10 minutes long.', 'err'); return;
+    }
 
     const accessMode = (q('input[name="mysAccess"]:checked') || {}).value || 'public';
     const payload = {
