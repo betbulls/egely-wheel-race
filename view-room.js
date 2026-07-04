@@ -243,6 +243,7 @@ export function mount(el, sessionId, inviteToken = null){
   const $ = id => el.querySelector('#' + id);
   let hostHandle = null, hostIsMaker = false;   // approved-maker host → racer card links to their invite page
   let voiceDock = null, voiceLive = false;      // Live Voice: dock UI + my "I am speaking" presence flag
+  let unsubVoiceAuth = null;
 
   // ---- Load session ---------------------------------------------------------
   (async () => {
@@ -314,11 +315,23 @@ export function mount(el, sessionId, inviteToken = null){
     // approved-maker flag on MY auth state; listeners get the invite once the
     // host's presence carries voice:true. Finished sessions have no live voice.
     if(Date.now() <= endMs){
-      const canHost = isHostUser && !!auth.getState().approvedMaker;
-      voiceDock = mountVoiceDock($('voiceDock'), {
-        sessionId, mode: 'session', canHost,
+      const dockOpts = ch => ({
+        sessionId, mode: 'session', canHost: ch,
         hostName: session.created_by || 'The host',
         onVoiceFlag: v => { voiceLive = v; trackPresence(); },
+      });
+      let dockCanHost = isHostUser && !!auth.getState().approvedMaker;
+      voiceDock = mountVoiceDock($('voiceDock'), dockOpts(dockCanHost));
+      // The maker flag settles asynchronously after boot — rebuild the dock if
+      // the host's rights arrive (or vanish) later, so the Go live card never
+      // depends on load-order luck.
+      unsubVoiceAuth = auth.subscribeAuth(a => {
+        const meNow = a.user?.id || null;
+        const ch = !!(meNow && session.created_by_user_id && meNow === session.created_by_user_id) && !!a.approvedMaker;
+        if(ch === dockCanHost || Date.now() > endMs || !voiceDock) return;
+        dockCanHost = ch;
+        voiceDock.destroy();
+        voiceDock = mountVoiceDock($('voiceDock'), dockOpts(ch));
       });
     }
 
@@ -1311,6 +1324,7 @@ export function mount(el, sessionId, inviteToken = null){
   window.addEventListener('resize', render);
 
   return () => {
+    if(unsubVoiceAuth) unsubVoiceAuth();
     if(voiceDock) voiceDock.destroy();
     wakeLock.release();
     if(broadcastTimer) clearInterval(broadcastTimer);

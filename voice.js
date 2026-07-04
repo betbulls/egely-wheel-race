@@ -73,8 +73,17 @@ function createVoice(sessionId){
   async function fetchToken(role, name){
     const headers = {};
     if(role === 'host'){
-      const { data } = await supabase.auth.getSession();
-      const jwt = data?.session?.access_token;
+      // The stored access token can be stale (1h expiry) — a stale JWT made the
+      // server reject the real host. Refresh proactively when it's about to lapse.
+      let { data } = await supabase.auth.getSession();
+      let sess = data?.session || null;
+      if(sess && sess.expires_at && (sess.expires_at * 1000 - Date.now()) < 120000){
+        try{
+          const r = await supabase.auth.refreshSession();
+          if(r?.data?.session) sess = r.data.session;
+        }catch(_){}
+      }
+      const jwt = sess?.access_token;
       if(!jwt) throw new Error('Please log in again.');
       headers.Authorization = 'Bearer ' + jwt;
     }

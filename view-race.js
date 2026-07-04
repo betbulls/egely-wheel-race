@@ -340,6 +340,7 @@ export function mount(el, raceId, inviteToken = null){
   el.innerHTML = `<div class="rl-wrap"><div class="rl-head" id="rlHead"><div class="rl-title">Loading…</div></div><div class="voice-dock" id="voiceDock" hidden></div><div id="rlBody"></div></div>`;
   const $ = id => el.querySelector('#' + id);
   let voiceDock = null, voiceLive = false;   // Live Voice: dock UI + my "I am speaking" presence flag
+  let unsubVoiceAuth = null;
 
   // ---- Load + access gate ----------------------------------------------------
   (async () => {
@@ -372,11 +373,21 @@ export function mount(el, raceId, inviteToken = null){
 
     // ---- Live Voice dock — the maker-host commentates the lobby + the race.
     if(Date.now() <= endMs){
-      const canHost = isHostUser && !!auth.getState().approvedMaker;
-      voiceDock = mountVoiceDock($('voiceDock'), {
-        sessionId: raceId, mode: 'race', canHost,
+      const dockOpts = ch => ({
+        sessionId: raceId, mode: 'race', canHost: ch,
         hostName: hostName || session.created_by || 'The host',
         onVoiceFlag: v => { voiceLive = v; trackPresence(); },
+      });
+      let dockCanHost = isHostUser && !!auth.getState().approvedMaker;
+      voiceDock = mountVoiceDock($('voiceDock'), dockOpts(dockCanHost));
+      // Rebuild if the maker flag settles after boot (see view-room note).
+      unsubVoiceAuth = auth.subscribeAuth(a => {
+        const meNow = a.user?.id || null;
+        const ch = !!(meNow && session.created_by_user_id && meNow === session.created_by_user_id) && !!a.approvedMaker;
+        if(ch === dockCanHost || Date.now() > endMs || !voiceDock) return;
+        dockCanHost = ch;
+        voiceDock.destroy();
+        voiceDock = mountVoiceDock($('voiceDock'), dockOpts(ch));
       });
     }
 
@@ -1122,6 +1133,7 @@ export function mount(el, raceId, inviteToken = null){
 
   // ---- Cleanup ---------------------------------------------------------------
   return () => {
+    if(unsubVoiceAuth) unsubVoiceAuth();
     if(voiceDock) voiceDock.destroy();
     wakeLock.release();
     // If the race already ended but my own result hasn't saved yet (e.g. I navigated
