@@ -13,10 +13,10 @@
 import { supabase } from './db.js';
 
 const TOKEN_URL = 'https://lhyychkrcrndjptptkii.supabase.co/functions/v1/livekit-token';
+const REC_URL = 'https://lhyychkrcrndjptptkii.supabase.co/functions/v1/voice-rec';
 
-// F2 flips this on when server-side recording (Egress) actually runs. Until
-// then the recording-phase copy stays hidden — we never claim REC falsely.
-const REC_ENABLED = false;
+// F2: server-side recording (LiveKit Egress → Supabase Storage) is live.
+const REC_ENABLED = true;
 // Recording model (agreed with Csaba, 2026-07-05): the recording belongs to
 // the SESSION, not to the maker's connection — it follows the OFFICIAL window
 // plus a 5-minute post-roll for the closing words / award ceremony.
@@ -31,6 +31,23 @@ let lkPromise = null;
 const loadLk = () => (lkPromise ||= import('https://esm.sh/livekit-client@2'));
 
 const MIC_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"/><path d="M12 18v3"/></svg>';
+
+// Fresh access token for host-authenticated calls (voice token + recording
+// control). Proactively refreshes a JWT that is about to lapse; null when
+// there is no session.
+async function authJwt(){
+  try{
+    let { data } = await supabase.auth.getSession();
+    let sess = data?.session || null;
+    if(sess && sess.expires_at && (sess.expires_at * 1000 - Date.now()) < 120000){
+      try{
+        const r = await supabase.auth.refreshSession();
+        if(r?.data?.session) sess = r.data.session;
+      }catch(_){}
+    }
+    return sess?.access_token || null;
+  }catch(_){ return null; }
+}
 
 // ---------------------------------------------------------------------------
 // Core connection object (no DOM) — one per view instance.
@@ -88,17 +105,7 @@ function createVoice(sessionId){
   async function fetchToken(role, name){
     const headers = {};
     if(role === 'host'){
-      // The stored access token can be stale (1h expiry) — a stale JWT made the
-      // server reject the real host. Refresh proactively when it's about to lapse.
-      let { data } = await supabase.auth.getSession();
-      let sess = data?.session || null;
-      if(sess && sess.expires_at && (sess.expires_at * 1000 - Date.now()) < 120000){
-        try{
-          const r = await supabase.auth.refreshSession();
-          if(r?.data?.session) sess = r.data.session;
-        }catch(_){}
-      }
-      const jwt = sess?.access_token;
+      const jwt = await authJwt();
       if(!jwt) throw new Error('Please log in again.');
       headers.Authorization = 'Bearer ' + jwt;
     }
@@ -293,6 +300,40 @@ export function mountVoiceDock(el, opts){
     return 'The recording has ended — going live now is live-only.';
   }
 
+  // ---- Recording engine (host only) — the session-owned model, enforced by a
+  // 1s controller: START once the maker is live inside the official window (or
+  // post-roll); STOP when the post-roll deadline passes. End during the window
+  // never touches the recording; End in the post-roll stops it (see click
+  // handler). Server calls are idempotent; 409 means already recorded/closed.
+  const recState = { started: false, stopped: false, busy: false };
+  async function recCall(action){
+    if(recState.busy) return;
+    recState.busy = true;
+    try{
+      const jwt = await authJwt();
+      if(!jwt) return;
+      const r = await fetch(REC_URL + '?action=' + action + '&room=' + encodeURIComponent(o.sessionId), {
+        method: 'POST', headers: { Authorization: 'Bearer ' + jwt },
+      });
+      const j = await r.json().catch(() => ({}));
+      if(r.ok || r.status === 409){
+        if(action === 'start'){ recState.started = true; if(j.closed) recState.stopped = true; }
+        if(action === 'stop') recState.stopped = true;
+      }
+    }catch(_){ /* transient — the controller retries on the next tick */ }
+    finally{ recState.busy = false; }
+  }
+  let recCtl = null;
+  if(REC_ENABLED && o.canHost && o.schedule){
+    recCtl = setInterval(() => {
+      const p = recPhase();
+      const st = voice.state;
+      const liveish = st === 'live' || st === 'muted' || st === 'reconnecting';
+      if(!recState.started && liveish && (p === 'rec' || p === 'post')) recCall('start');
+      if(recState.started && !recState.stopped && p === 'off') recCall('stop');
+    }, 1000);
+  }
+
   function render(){
     if(destroyed) return;
     const st = voice.state;
@@ -369,7 +410,12 @@ export function mountVoiceDock(el, opts){
     const q = sel => el.querySelector(sel);
     q('[data-golive]')?.addEventListener('click', () => voice.goLive(auth_name()));
     q('[data-mute]')?.addEventListener('click', () => voice.setMuted(!voice.muted));
-    q('[data-end]')?.addEventListener('click', () => voice.stop());
+    q('[data-end]')?.addEventListener('click', () => {
+      // In the post-roll, End also closes the recording — that is the maker's
+      // "I am done" gesture. During the window it only drops the mic.
+      if(REC_ENABLED && recState.started && !recState.stopped && recPhase() === 'post') recCall('stop');
+      voice.stop();
+    });
     q('[data-listen]')?.addEventListener('click', () => voice.listen(auth_name()));
     q('[data-unlock]')?.addEventListener('click', () => voice.unlockAudio());
     q('[data-leave]')?.addEventListener('click', () => voice.stop());
@@ -411,6 +457,9 @@ export function mountVoiceDock(el, opts){
     destroy(){
       destroyed = true;
       if(tickTimer) clearInterval(tickTimer);
+      if(recCtl) clearInterval(recCtl);
+      // NOTE: destroy() does NOT stop the recording — it belongs to the session,
+      // not to this page view. The post-roll deadline / finalize path closes it.
       voice.stop();
       el.innerHTML = '';
       el.hidden = true;
