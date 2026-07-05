@@ -30,7 +30,7 @@ import { flagUrl } from './countries.js';
 import { createAddToCalendar } from './calendar.js';
 import { computeStats, downsample } from './analytics.js';
 import * as wakeLock from './wake-lock.js';
-import { mountVoiceDock } from './voice.js';
+import { mountVoiceDock, REC_POSTROLL_MS } from './voice.js';
 
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
@@ -373,7 +373,8 @@ export function mount(el, raceId, inviteToken = null){
     }
 
     // ---- Live Voice dock — the maker-host commentates the lobby + the race.
-    if(Date.now() <= endMs){
+    // Mounted through the post-roll too (closing words are part of the window).
+    if(Date.now() <= endMs + REC_POSTROLL_MS){
       const dockOpts = ch => ({
         sessionId: raceId, mode: 'race', canHost: ch,
         hostName: hostName || session.created_by || 'The host',
@@ -388,7 +389,7 @@ export function mount(el, raceId, inviteToken = null){
       unsubVoiceAuth = auth.subscribeAuth(a => {
         const meNow = a.user?.id || null;
         const ch = !!(meNow && session.created_by_user_id && meNow === session.created_by_user_id) && !!a.approvedMaker;
-        if(ch === dockCanHost || Date.now() > endMs || !voiceDock) return;
+        if(ch === dockCanHost || Date.now() > endMs + REC_POSTROLL_MS || !voiceDock) return;
         dockCanHost = ch;
         voiceDock.destroy();
         voiceDock = mountVoiceDock($('voiceDock'), dockOpts(ch));

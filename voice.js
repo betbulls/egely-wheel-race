@@ -410,6 +410,12 @@ export function mountVoiceDock(el, opts){
           <span class="vd-txt"><b>Connecting…</b><small>Allow the microphone when asked.</small></span></div>`;
       } else {
         const m = voice.muted;
+        // Mute-only during the recorded window (Csaba, 2026-07-05): the maker
+        // can pause with Mute but cannot drop the voice mid-window — the
+        // recording spans the whole session. End returns in the post-roll
+        // (that is the "I am done" gesture that closes the recording).
+        const pAtRender = recPhase();
+        const canEnd = !(REC_ENABLED && pAtRender === 'rec');
         el.innerHTML = `
           <div class="vd vd-live">
             <span class="vd-ring vd-on" data-ring>${ringInner(false)}</span>
@@ -418,9 +424,10 @@ export function mountVoiceDock(el, opts){
               <small data-recline>${esc(hostRecLine())}</small>
             </span>
             <button type="button" class="vd-btn ghost" data-mute>${m ? 'Unmute' : 'Mute'}</button>
-            <button type="button" class="vd-btn ghost danger" data-end>End</button>
+            ${canEnd ? '<button type="button" class="vd-btn ghost danger" data-end>End</button>' : ''}
           </div>`;
         tickTimer = setInterval(() => {
+          if(recPhase() !== pAtRender){ render(); return; }   // End (dis)appears with the phase
           const t = el.querySelector('[data-el]');
           if(t) t.textContent = fmtElapsed();
           const rl = el.querySelector('[data-recline]');

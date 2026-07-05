@@ -7,7 +7,7 @@ import { drawTrio, drawVitalityChart } from './chart.js';
 import { flagUrl } from './countries.js';
 import { createAddToCalendar } from './calendar.js';
 import * as wakeLock from './wake-lock.js';
-import { mountVoiceDock } from './voice.js';
+import { mountVoiceDock, REC_POSTROLL_MS } from './voice.js';
 
 // Robust clipboard copy — Clipboard API with a legacy execCommand fallback.
 async function copyText(text){
@@ -315,8 +315,10 @@ export function mount(el, sessionId, inviteToken = null){
 
     // ---- Live Voice dock (maker-hosted audio guidance). Host side needs the
     // approved-maker flag on MY auth state; listeners get the invite once the
-    // host's presence carries voice:true. Finished sessions have no live voice.
-    if(Date.now() <= endMs){
+    // host's presence carries voice:true. The dock lives through the post-roll
+    // too — the closing minute is part of the voice window (a host reloading
+    // mid-post-roll must still be able to End the recording).
+    if(Date.now() <= endMs + REC_POSTROLL_MS){
       const dockOpts = ch => ({
         sessionId, mode: 'session', canHost: ch,
         hostName: session.created_by || 'The host',
@@ -333,7 +335,7 @@ export function mount(el, sessionId, inviteToken = null){
       unsubVoiceAuth = auth.subscribeAuth(a => {
         const meNow = a.user?.id || null;
         const ch = !!(meNow && session.created_by_user_id && meNow === session.created_by_user_id) && !!a.approvedMaker;
-        if(ch === dockCanHost || Date.now() > endMs || !voiceDock) return;
+        if(ch === dockCanHost || Date.now() > endMs + REC_POSTROLL_MS || !voiceDock) return;
         dockCanHost = ch;
         voiceDock.destroy();
         voiceDock = mountVoiceDock($('voiceDock'), dockOpts(ch));
