@@ -33,6 +33,8 @@ let lkPromise = null;
 const loadLk = () => (lkPromise ||= import('https://esm.sh/livekit-client@2'));
 
 const MIC_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"/><path d="M12 18v3"/></svg>';
+const PLAY_SVG = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.4v13.2c0 .8.9 1.3 1.6.9l10.2-6.6c.6-.4.6-1.4 0-1.8L9.6 4.5c-.7-.4-1.6.1-1.6.9z"/></svg>';
+const PAUSE_SVG = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6.5" y="5" width="4" height="14" rx="1.3"/><rect x="13.5" y="5" width="4" height="14" rx="1.3"/></svg>';
 
 // Fresh access token for host-authenticated calls (voice token + recording
 // control). Proactively refreshes a JWT that is about to lapse; null when
@@ -535,6 +537,198 @@ export function mountVoiceDock(el, opts){
       voice.stop();
       el.innerHTML = '';
       el.hidden = true;
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// LISTEN AGAIN — the recording player card on finished session/race results.
+// mountVoicePlayer(el, { sessionId, mode, hostName, hostAvatar }) -> { destroy() }
+// Public data path (no auth): `sync` says whether a ready recording exists —
+// and heals a live/processing row whose egress already finished — then `play`
+// fetches a fresh signed URL only when the user actually presses play (so the
+// 1-hour URL never sits stale in an open tab). The card hides itself when the
+// session has no recording.
+// ---------------------------------------------------------------------------
+export function mountVoicePlayer(el, opts){
+  const o = Object.assign({ mode: 'session', hostName: 'The host', hostAvatar: null }, opts);
+  if(!el) return { destroy(){} };
+  let destroyed = false, audio = null, pollTimer = null, polls = 0;
+  let serverDur = null, fetchingUrl = false;
+  let seenExisting = false;   // a sync already confirmed the recording exists
+  let pendingSeek = 0;        // fraction dragged before the audio was fetched
+
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  const noun = o.mode === 'race' ? 'race' : 'session';
+  const title = o.mode === 'race' ? 'Race commentary' : 'Voice guidance';
+  const fmt = t => {
+    t = Math.max(0, Math.round(t || 0));
+    const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = String(t % 60).padStart(2, '0');
+    return h ? h + ':' + String(m).padStart(2, '0') + ':' + s : m + ':' + s;
+  };
+  const ringHtml = () => '<span class="vd-ring vp-ring">' + (o.hostAvatar
+    ? '<img src="' + esc(o.hostAvatar) + '" alt="" onerror="this.remove()">'
+    : '<span class="vd-mic">' + MIC_SVG + '</span>') + '</span>';
+
+  async function recGet(action){
+    const r = await fetch(REC_URL + '?action=' + action + '&room=' + encodeURIComponent(o.sessionId));
+    const j = await r.json().catch(() => ({}));
+    return { ok: r.ok, status: r.status, body: j };
+  }
+  function hide(){
+    if(pollTimer){ clearTimeout(pollTimer); pollTimer = null; }
+    el.hidden = true; el.innerHTML = '';
+  }
+
+  function knownDur(){
+    if(audio && isFinite(audio.duration) && audio.duration > 0) return audio.duration;
+    return serverDur || 0;
+  }
+  function paintTime(){
+    const t = el.querySelector('[data-time]'); if(!t) return;
+    const dur = knownDur();
+    const cur = audio ? audio.currentTime : 0;
+    t.textContent = dur ? fmt(cur) + ' / ' + fmt(dur) : fmt(cur);
+    const seek = el.querySelector('[data-seek]');
+    if(seek && dur){
+      seek.disabled = false;
+      if(!seek.matches(':active')) seek.value = Math.round((cur / dur) * 1000);
+      seek.style.setProperty('--vp-fill', ((cur / dur) * 100).toFixed(2) + '%');
+    }
+  }
+  function setPlayIcon(playing){
+    const b = el.querySelector('[data-play]'); if(!b) return;
+    b.innerHTML = playing ? PAUSE_SVG : PLAY_SVG;
+    b.setAttribute('aria-label', playing ? 'Pause recording' : 'Play recording');
+  }
+  function showErr(msg){
+    const e2 = el.querySelector('[data-err]'); if(!e2) return;
+    e2.hidden = false; e2.textContent = msg;
+  }
+
+  function bindAudio(url){
+    audio = new Audio(url);
+    audio.preload = 'auto';
+    // A drag made before the first Play must not be thrown away: apply it as
+    // soon as the media can seek.
+    audio.addEventListener('loadedmetadata', () => {
+      if(pendingSeek > 0){
+        const d = knownDur();
+        if(d){ try{ audio.currentTime = pendingSeek * d; }catch(_){} }
+        pendingSeek = 0;
+      }
+    });
+    audio.addEventListener('timeupdate', paintTime);
+    audio.addEventListener('durationchange', paintTime);
+    audio.addEventListener('ended', () => { setPlayIcon(false); paintTime(); });
+    audio.addEventListener('play', () => setPlayIcon(true));
+    audio.addEventListener('pause', () => setPlayIcon(false));
+    audio.addEventListener('error', () => { setPlayIcon(false); showErr('Could not load the recording — reload the page and try again.'); });
+  }
+
+  async function onPlayClick(){
+    // A fresh attempt clears any stale error line (e.g. the autoplay-policy
+    // "tap again" hint after the retry succeeded).
+    const errEl = el.querySelector('[data-err]');
+    if(errEl){ errEl.hidden = true; errEl.textContent = ''; }
+    if(!audio){
+      if(fetchingUrl) return;
+      fetchingUrl = true;
+      const btn = el.querySelector('[data-play]');
+      if(btn) btn.disabled = true;
+      try{
+        const r = await recGet('play').catch(() => null);
+        if(destroyed) return;
+        if(!r || !r.ok || !r.body.url){ showErr((r && r.body.error) || 'The recording is not available right now.'); return; }
+        bindAudio(r.body.url);
+        await audio.play().catch(() => showErr('Tap play again to start the audio.'));
+      } finally {
+        fetchingUrl = false;
+        const b2 = el.querySelector('[data-play]');
+        if(b2) b2.disabled = false;
+      }
+      return;
+    }
+    if(audio.paused) audio.play().catch(() => {});
+    else audio.pause();
+  }
+
+  function renderReady(){
+    if(destroyed) return;
+    el.hidden = false;
+    el.innerHTML = `
+      <div class="vp-card">
+        ${ringHtml()}
+        <div class="vp-main">
+          <div class="vp-head"><b>${title} · Listen again</b><span class="voice-chip">🎙 Recorded live</span></div>
+          <small>${esc(o.hostName)} guided this ${noun} by voice${serverDur ? ' · ' + fmt(serverDur) : ''}.</small>
+          <div class="vp-ctl">
+            <button type="button" class="vp-play" data-play aria-label="Play recording">${PLAY_SVG}</button>
+            <input type="range" class="vp-seek" data-seek min="0" max="1000" value="0" step="1" disabled aria-label="Seek in the recording">
+            <span class="vp-time" data-time>${serverDur ? '0:00 / ' + fmt(serverDur) : '0:00'}</span>
+          </div>
+          <small class="vp-err" data-err hidden></small>
+        </div>
+      </div>`;
+    el.querySelector('[data-play]').addEventListener('click', onPlayClick);
+    const seek = el.querySelector('[data-seek]');
+    if(serverDur) seek.disabled = false;
+    seek.addEventListener('input', () => {
+      const dur = knownDur(); if(!dur) return;
+      const frac = Number(seek.value) / 1000;
+      seek.style.setProperty('--vp-fill', (frac * 100).toFixed(2) + '%');
+      if(audio) audio.currentTime = frac * dur;
+      else pendingSeek = frac;   // no audio yet — honored on the first Play
+    });
+  }
+
+  // The session just closed: the egress is still wrapping up. Show a calm
+  // "on its way" card and re-check quietly; give up after ~6 minutes.
+  function renderPreparing(){
+    if(destroyed) return;
+    el.hidden = false;
+    el.innerHTML = `
+      <div class="vp-card">
+        ${ringHtml()}
+        <div class="vp-main">
+          <div class="vp-head"><b>${title}</b><span class="voice-chip">🎙 Recording</span></div>
+          <small>The voice recording is being prepared — it appears here shortly after the ${noun} closes.</small>
+        </div>
+      </div>`;
+  }
+
+  async function check(){
+    // The slot leaving the DOM (route change while an await was in flight)
+    // must end the poll chain — an orphaned player must never keep polling.
+    if(destroyed || !el.isConnected){ hide(); return; }
+    const r = await recGet('sync').catch(() => null);
+    if(destroyed || !el.isConnected){ hide(); return; }
+    if(r && r.ok && r.body.status === 'ready'){
+      serverDur = r.body.duration || null;
+      renderReady();
+      return;
+    }
+    const stillCooking = !!(r && r.ok && (r.body.status === 'live' || r.body.status === 'processing'));
+    // Once a sync confirmed the recording exists, a network blip / transient
+    // 5xx mid-poll must not hide it for good — keep waiting within the cap.
+    const transient = seenExisting && (!r || (!r.ok && r.status !== 404));
+    if(stillCooking || transient){
+      if(stillCooking) seenExisting = true;
+      if(!el.querySelector('.vp-card')) renderPreparing();
+      if(++polls < 18) pollTimer = setTimeout(check, 20000);
+      else hide();
+      return;
+    }
+    hide();   // no recording / failed / gone
+  }
+  check();
+
+  return {
+    destroy(){
+      destroyed = true;
+      if(pollTimer) clearTimeout(pollTimer);
+      if(audio){ try{ audio.pause(); }catch(_){} audio.src = ''; audio = null; }
+      el.innerHTML = ''; el.hidden = true;
     },
   };
 }

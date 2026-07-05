@@ -1775,7 +1775,7 @@ a.xp-topic:hover{border-color:var(--ewr-accent)}
   letter-spacing:.05em;text-transform:uppercase;border:none;cursor:pointer;
   background:var(--ewr-accent-strong);color:#fff;border-radius:999px;padding:11px 20px;
   transition:background .15s ease}
-.vd-btn:hover{background:var(--ewr-dark)}
+.vd-btn:hover:not([disabled]){background:var(--ewr-dark)}   /* beats brand.css button:hover:not(:disabled) */
 .vd-btn.ghost{background:#fff;color:var(--ewr-text);border:1.5px solid var(--ewr-border);padding:10px 16px}
 .vd-btn.ghost:hover{background:#f2f0fc;color:var(--ewr-text);border-color:#c9bcf2}
 .vd-btn.ghost.danger{color:#c2415b;border-color:#efcdd5}
@@ -2022,3 +2022,59 @@ a.xp-topic:hover{border-color:var(--ewr-accent)}
   .nav{order:-1;flex:0 0 auto}
   .brand{order:0;flex:1 1 auto;justify-content:center;padding-right:42px}
 }
+
+/* ============================================================
+   VOICE PLAYER + CHIPS (Live Voice F2) — the "Listen again"
+   card on finished session/race results + gold recording chips
+   on the past lists. Shares the voice dock's visual language
+   (same cyan→violet tint family; the ring is the maker's face).
+   ============================================================ */
+.vp-card{display:flex;align-items:flex-start;gap:14px;margin:0 0 18px;
+  background:linear-gradient(135deg,rgba(55,219,255,.06),rgba(82,48,218,.08));
+  border:1px solid rgba(82,48,218,.22);border-radius:16px;padding:14px 16px}
+.vp-card .vp-ring{width:46px;height:46px}
+.vp-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.vp-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.vp-head b{font-family:'Montserrat','Inter',sans-serif;font-size:14.5px;font-weight:600;color:var(--ewr-text)}
+.vp-main small{font-size:12.5px;color:var(--ewr-text-muted);line-height:1.4}
+.vp-ctl{display:flex;align-items:center;gap:12px;margin-top:8px}
+.vp-play{flex:none;width:40px;height:40px;padding:0;margin:0;box-sizing:border-box;
+  border-radius:50%;border:none;cursor:pointer;
+  background:var(--ewr-accent-strong);color:#fff;display:flex;align-items:center;justify-content:center;
+  transition:background .15s ease,transform .1s ease}
+.vp-play:hover:not([disabled]){background:var(--ewr-dark)}   /* :not() lifts it over brand.css button:hover:not(:disabled) */
+.vp-play:active{transform:scale(.94)}
+.vp-play:focus-visible{outline:2px solid var(--ewr-accent);outline-offset:2px}
+.vp-play svg{width:16px;height:16px;display:block}
+.vp-play[disabled]{opacity:.55;cursor:default}
+input.vp-seek{-webkit-appearance:none;appearance:none;flex:1;min-width:70px;height:6px;width:auto;
+  padding:0;border:none;border-radius:999px;
+  background:linear-gradient(to right,var(--ewr-accent) var(--vp-fill,0%),#e2ddf7 var(--vp-fill,0%));
+  outline:none;cursor:pointer;margin:0}
+/* The global input:focus restyle must not wipe the progress fill mid-seek. */
+input.vp-seek:focus{padding:0;border:none;box-shadow:none;
+  background:linear-gradient(to right,var(--ewr-accent) var(--vp-fill,0%),#e2ddf7 var(--vp-fill,0%))}
+.vp-seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;
+  background:var(--ewr-accent-strong);border:2px solid #fff;box-shadow:0 1px 4px rgba(1,22,36,.35)}
+.vp-seek::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:var(--ewr-accent-strong);
+  border:2px solid #fff;box-shadow:0 1px 4px rgba(1,22,36,.35)}
+.vp-seek:focus-visible{outline:2px solid var(--ewr-accent);outline-offset:3px}
+.vp-seek[disabled]{opacity:.5;cursor:default}
+.vp-time{flex:none;font-size:12px;color:var(--ewr-text-muted);font-variant-numeric:tabular-nums}
+.vp-err{color:#c2415b !important}
+@media (max-width:600px){
+  .vp-card{padding:12px 14px;gap:12px}
+  .vp-ctl{gap:10px}
+}
+
+/* Gold "has a recording" chip — same family as the dock's ● REC pill. */
+.voice-chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;
+  letter-spacing:.03em;color:#9a7400;background:rgba(245,183,0,.14);
+  border:1px solid rgba(245,183,0,.38);border-radius:999px;padding:2px 9px;
+  white-space:nowrap;vertical-align:middle}
+.voice-chip.mini{font-size:10px;padding:1px 7px}
+.session-meta .voice-chip,.mys-title .voice-chip{margin-left:6px}
+.me-title-row .voice-chip{flex-shrink:0}
+
+/* Live dock polish: a touch more presence while the maker is actually live. */
+.vd.vd-live{border-color:rgba(82,48,218,.32);box-shadow:0 8px 22px -12px rgba(82,48,218,.35)}

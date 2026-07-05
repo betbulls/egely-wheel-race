@@ -30,7 +30,7 @@ import { flagUrl } from './countries.js';
 import { createAddToCalendar } from './calendar.js';
 import { computeStats, downsample } from './analytics.js';
 import * as wakeLock from './wake-lock.js';
-import { mountVoiceDock, REC_POSTROLL_MS } from './voice.js';
+import { mountVoiceDock, mountVoicePlayer, REC_POSTROLL_MS } from './voice.js';
 
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
@@ -340,6 +340,7 @@ export function mount(el, raceId, inviteToken = null){
   el.innerHTML = `<div class="rl-wrap"><div class="rl-head" id="rlHead"><div class="rl-title">Loading…</div></div><div class="voice-dock" id="voiceDock" hidden></div><div id="rlBody"></div></div>`;
   const $ = id => el.querySelector('#' + id);
   let voiceDock = null, voiceLive = false;   // Live Voice: dock UI + my "I am speaking" presence flag
+  let voicePlayer = null;                    // "Listen again" card on the results screen
   let recLive = false;                       // host only: server-confirmed "recording is running"
   let unsubVoiceAuth = null;
 
@@ -1130,6 +1131,7 @@ export function mount(el, raceId, inviteToken = null){
       <div class="rr-results">
         ${ranked.length ? `<div class="rr-podium">${podium}</div>` : '<div class="rl-finished"><b>No official finishers</b><span>No ranked measurements were recorded for this race.</span></div>'}
         <div class="rr-summary">${ranked.length} finisher${ranked.length === 1 ? '' : 's'} · ${dur} min${session.verified_only ? ' · verified only' : ''}</div>
+        <div id="rrVoice" hidden></div>
         ${yourResult}
         ${awards}
         ${ranked.length ? `<h3 class="rr-sec">Full standings</h3><div class="rr-standings">${ranked.map(standRow).join('')}</div>` : ''}
@@ -1137,6 +1139,17 @@ export function mount(el, raceId, inviteToken = null){
           <div class="rr-standings">${unranked.map(r => `<div class="rr-srow unr${mine(r) ? ' me' : ''}"><div class="rr-srank dash">–</div>${av(r)}<div class="rr-sname">${nm(r)}${cc(r)}${r.verified === false ? '<span class="rr-vrf bad">Unverified</span>' : ''}</div><div class="rr-sscore"><b>${r.race_score || 0}</b><span>avg ${avgOf(r).toFixed(1)}</span></div></div>`).join('')}</div>` : ''}
         <p class="rl-meta" style="margin-top:18px"><a href="#/my-races" class="link">← Back to races</a></p>
       </div>`;
+    // "Listen again" — the commentary player; hides itself when the race has no
+    // ready recording. renderResults can re-run (finalize retry), so destroy first.
+    const vslot = body.querySelector('#rrVoice');
+    if(vslot){
+      if(voicePlayer) voicePlayer.destroy();
+      voicePlayer = mountVoicePlayer(vslot, {
+        sessionId: raceId, mode: 'race',
+        hostName: hostName || session.created_by || 'The host',
+        hostAvatar: hostAvatar,
+      });
+    }
   }
 
   function paint(){ if(view === 'lobby') paintLobby(); else if(view === 'race') paintRace(); }
@@ -1145,6 +1158,7 @@ export function mount(el, raceId, inviteToken = null){
   return () => {
     if(unsubVoiceAuth) unsubVoiceAuth();
     if(voiceDock) voiceDock.destroy();
+    if(voicePlayer) voicePlayer.destroy();
     wakeLock.release();
     // If the race already ended but my own result hasn't saved yet (e.g. I navigated
     // away during the finalize grace), save it now. Idempotent: the myResultSaved guard

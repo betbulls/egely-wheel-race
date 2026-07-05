@@ -7,7 +7,7 @@ import { drawTrio, drawVitalityChart } from './chart.js';
 import { flagUrl } from './countries.js';
 import { createAddToCalendar } from './calendar.js';
 import * as wakeLock from './wake-lock.js';
-import { mountVoiceDock, REC_POSTROLL_MS } from './voice.js';
+import { mountVoiceDock, mountVoicePlayer, REC_POSTROLL_MS } from './voice.js';
 
 // Robust clipboard copy — Clipboard API with a legacy execCommand fallback.
 async function copyText(text){
@@ -244,6 +244,7 @@ export function mount(el, sessionId, inviteToken = null){
   let hostHandle = null, hostIsMaker = false;   // approved-maker host → racer card links to their invite page
   let hostAvatarUrl = null;                     // maker photo → the voice dock's breathing ring
   let voiceDock = null, voiceLive = false;      // Live Voice: dock UI + my "I am speaking" presence flag
+  let voicePlayer = null;                       // "Listen again" card on the results screen
   let recLive = false;                          // host only: server-confirmed "recording is running"
   let unsubVoiceAuth = null;
 
@@ -871,7 +872,10 @@ export function mount(el, sessionId, inviteToken = null){
     // The session ended while we are IN the room: finalize (tail drain + saves
     // need a moment to land for everyone), then swap to the final results in
     // place — nobody should have to leave and dig through past sessions.
-    if(phase() === 'post' && !resultsShown){
+    // `session &&`: a resize firing before the session row loads must not run
+    // this branch with endMs=0 (phase() reads 'post') — it would poison
+    // resultsShown and the live room could never flip to results.
+    if(session && phase() === 'post' && !resultsShown){
       maybeSaveGroup();
       maybeSaveMyResult();
       renderGroup();   // time card flips to "Finished"
@@ -1182,9 +1186,11 @@ export function mount(el, sessionId, inviteToken = null){
     const myExcluded = !!(myRow && !counted.includes(myRow));
 
     if(counted.length === 0 && !myRow){
-      body.innerHTML = verifiedOnly
+      // Even a measurement-less session can hold a voice recording (listeners only).
+      body.innerHTML = '<div id="resVoice" hidden></div>' + (verifiedOnly
         ? '<div class="empty">No verified measurements were recorded for this session.</div>'
-        : '<div class="empty">No measurements were recorded for this session.</div>';
+        : '<div class="empty">No measurements were recorded for this session.</div>');
+      mountResVoice(body);
       return;
     }
 
@@ -1322,6 +1328,7 @@ export function mount(el, sessionId, inviteToken = null){
 
     body.innerHTML = `
       ${pulsePanel}
+      <div id="resVoice" hidden></div>
       ${emptyNote}
       ${leaderboardHtml}
       ${mineHtml}
@@ -1367,6 +1374,21 @@ export function mount(el, sessionId, inviteToken = null){
     });
 
     drawTrio(body.querySelector('#spChartRes'), pulseHist, { durationMs });
+    mountResVoice(body);
+  }
+
+  // "Listen again" — the recording player card on the results screen. The card
+  // hides itself when the session has no ready recording, so mounting is safe
+  // on every finished session.
+  function mountResVoice(body){
+    const slot = body.querySelector('#resVoice');
+    if(!slot) return;
+    if(voicePlayer) voicePlayer.destroy();
+    voicePlayer = mountVoicePlayer(slot, {
+      sessionId, mode: 'session',
+      hostName: session.created_by || 'The host',
+      hostAvatar: hostAvatarUrl,
+    });
   }
 
   window.addEventListener('resize', render);
@@ -1374,6 +1396,7 @@ export function mount(el, sessionId, inviteToken = null){
   return () => {
     if(unsubVoiceAuth) unsubVoiceAuth();
     if(voiceDock) voiceDock.destroy();
+    if(voicePlayer) voicePlayer.destroy();
     wakeLock.release();
     if(broadcastTimer) clearInterval(broadcastTimer);
     if(renderTimer) clearInterval(renderTimer);

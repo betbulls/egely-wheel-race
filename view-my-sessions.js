@@ -176,6 +176,7 @@ export function mount(el, eventType = 'session'){
   let sessions = [];
   const haveResults = new Set();         // session ids that already have a saved result
   const raceData = new Map();            // race id → { count, winner, participated, myRank } (race mode)
+  const recReady = new Map();            // session id → ready voice recording ({ duration_seconds })
   const roomCounts = new Map();          // sessionId -> people currently in the practice room
   const roomChannels = new Map();        // sessionId -> presence channel (observer, never tracks)
   const modalRoot = () => el.querySelector('#mysModalRoot');
@@ -239,12 +240,19 @@ export function mount(el, eventType = 'session'){
     // Which sessions already have a saved official result — those can never be deleted.
     haveResults.clear();
     raceData.clear();
+    recReady.clear();
     const ids = sessions.map(s => s.id);
     if(ids.length){
       // ONE bulk query (no per-card N+1). Race mode also pulls ranking fields to
       // build winner / own-result / racer-count maps.
       const sel = isRace ? 'session_id, user_id, racer_name, final_rank' : 'session_id';
-      const { data: res } = await supabase.from('results').select(sel).in('session_id', ids);
+      // Results + voice-recording chips in parallel (both key off the same ids;
+      // the recordings query degrades silently to "no chips" without the policy).
+      const [{ data: res }, { data: recs }] = await Promise.all([
+        supabase.from('results').select(sel).in('session_id', ids),
+        supabase.from('session_recordings').select('session_id, duration_seconds').eq('status', 'ready').in('session_id', ids),
+      ]);
+      for(const r of (recs || [])) recReady.set(r.session_id, r);
       for(const r of (res || [])){ if(r.session_id != null) haveResults.add(r.session_id); }
       if(isRace){
         const byRace = new Map();
@@ -296,6 +304,10 @@ export function mount(el, eventType = 'session'){
     const st = stateOf(s, now);
     const id = s.id;
     const verified = s.verified_only ? '<span class="mys-verified">✓ Verified</span>' : '';
+    const rec = st === 'finished' ? recReady.get(id) : null;
+    const voice = rec
+      ? `<span class="voice-chip" title="Voice recording — open View results to listen">🎙 Voice${rec.duration_seconds ? ' · ' + Math.max(1, Math.round(rec.duration_seconds / 60)) + ' min' : ''}</span>`
+      : '';
     const mode = s.access_mode || 'public';
     const access = mode === 'invite' ? '<span class="mys-access invite">Invite link</span>'
       : mode === 'followers' ? '<span class="mys-access followers">Followers only</span>' : '';
@@ -328,7 +340,7 @@ export function mount(el, eventType = 'session'){
     return `
     <div class="mys-card ${st}" data-id="${id}" data-state="${st}">
       <div class="mys-main">
-        <div class="mys-title">${esc(s.name || ('Untitled ' + noun))}${verified}${access}</div>
+        <div class="mys-title">${esc(s.name || ('Untitled ' + noun))}${verified}${access}${voice}</div>
         <div class="mys-meta">${esc(fmtWhen(s.scheduled_start))} · ${s.duration_minutes} min</div>
         ${roomCount}
         ${(isRace && st === 'finished') ? raceResultStrip(raceData.get(id)) : ''}

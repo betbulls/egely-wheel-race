@@ -72,6 +72,7 @@ export function mount(el, eventType = 'session'){
   let resultsBySession = new Map();
   let winnerBySession = new Map();       // race id -> winner racer_name (final_rank=1)
   let organizersById = new Map();        // user_id -> { display_name, avatar_url }
+  let recBySession = new Map();          // session id -> ready voice recording ({ duration_seconds })
   if(isRace && !document.getElementById('sessRaceWinStyle')){
     const st = document.createElement('style'); st.id = 'sessRaceWinStyle';
     st.textContent = `.sess-racewin{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:#011624;margin-top:5px}.sess-racewin b{font-weight:700}.sess-racewin svg{flex-shrink:0}.sess-racewin.muted{color:#99a2a7;font-weight:400}`;
@@ -101,11 +102,23 @@ export function mount(el, eventType = 'session'){
 
     const organizerIds = [...new Set(sessions.map(s => s.created_by_user_id).filter(Boolean))];
     organizersById = new Map();
-    if(organizerIds.length){
-      const { data: profs } = await supabase
-        .from('profiles').select('id, display_name, avatar_url, approved_maker, practitioner_handle').in('id', organizerIds);
-      for(const p of (profs || [])) organizersById.set(p.id, p);
-    }
+    // Voice chips: which finished sessions hold a ready recording (ONE batch
+    // query; degrades silently to "no chips" if the read policy is absent).
+    // Fetched in parallel with the organizer profiles — both only depend on
+    // `sessions`, so neither should delay the first paint behind the other.
+    recBySession = new Map();
+    const nowMs = Date.now();
+    const recIds = sessions.filter(s => sessionState(s, nowMs) === 'finished').map(s => s.id);
+    const [profQ, recQ] = await Promise.all([
+      organizerIds.length
+        ? supabase.from('profiles').select('id, display_name, avatar_url, approved_maker, practitioner_handle').in('id', organizerIds)
+        : Promise.resolve({ data: [] }),
+      recIds.length
+        ? supabase.from('session_recordings').select('session_id, duration_seconds').eq('status', 'ready').in('session_id', recIds)
+        : Promise.resolve({ data: [] }),
+    ]);
+    for(const p of (profQ.data || [])) organizersById.set(p.id, p);
+    for(const r of (recQ.data || [])) recBySession.set(r.session_id, r);
     renderSessions();
   }
 
@@ -213,10 +226,15 @@ export function mount(el, eventType = 'session'){
     // Past: compact "Hosted by X" meta. Upcoming/live: the host is a focal trust
     // anchor — you're entering someone's room — so give them a prominent strip.
     const isPract = !!(prof && prof.approved_maker);
+    // Finished + ready voice recording → gold chip (the player lives on the results page).
+    const rec = base === 'finished' ? recBySession.get(s.id) : null;
+    const voiceChip = rec
+      ? `<span class="voice-chip" title="Voice recording — open the results to listen">🎙 ${isRace ? 'Race commentary' : 'Voice session'}${rec.duration_seconds ? ' · ' + Math.max(1, Math.round(rec.duration_seconds / 60)) + ' min' : ''}</span>`
+      : '';
     const nameRow = `<div class="session-name">${esc(s.name || 'Untitled session')}${s.verified_only ? '<span class="sess-verified">✓ Verified</span>' : ''}${accessBadgeHtml(s.access_mode)}</div>`;
     const leftHtml = base === 'finished'
       ? `${nameRow}
-        <div class="session-meta">Hosted by <span class="session-organizer">${avatarHtml(prof && prof.avatar_url, organizerName)}<span class="organizer-name">${esc(organizerName)}</span></span> · ${esc(formatStart(s.scheduled_start))} · ${s.duration_minutes} min</div>${raceWin}`
+        <div class="session-meta">Hosted by <span class="session-organizer">${avatarHtml(prof && prof.avatar_url, organizerName)}<span class="organizer-name">${esc(organizerName)}</span></span> · ${esc(formatStart(s.scheduled_start))} · ${s.duration_minutes} min ${voiceChip}</div>${raceWin}`
       : `${nameRow}
         <div class="sess-host">
           <span class="sess-host-av">${avatarHtml(prof && prof.avatar_url, organizerName)}</span>
