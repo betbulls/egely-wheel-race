@@ -155,10 +155,16 @@ export function mountCurveReplay(o){
     });
   }
 
-  // The hero is visible from mount, pre-filled with the end-of-measurement
-  // readout (paint(durationMs) below). Revealing it on the first play used to
-  // shift the chart and the just-clicked controls down mid-interaction.
-  o.heroEl.hidden = false;
+  // The hero stays hidden until the first play/seek (a frozen end-of-
+  // measurement value before any playback read as a bug — Csaba). It sits
+  // BELOW the transport bar, so revealing it never moves the button or the
+  // slider the user is interacting with.
+  let heroShown = false;
+  function showHero(){
+    if(heroShown) return;
+    heroShown = true;
+    o.heroEl.hidden = false;
+  }
 
   // ---- Per-frame render --------------------------------------------------
   let lastT = durationMs;
@@ -215,8 +221,9 @@ export function mountCurveReplay(o){
     },
   });
 
-  toggleBtn.addEventListener('click', () => clock.toggle());
+  toggleBtn.addEventListener('click', () => { showHero(); clock.toggle(); });
   seekEl.addEventListener('input', () => {
+    showHero();
     clock.seek((Number(seekEl.value) / 1000) * durationMs);
   });
   speedBtn.addEventListener('click', () => {

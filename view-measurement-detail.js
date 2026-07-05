@@ -203,9 +203,9 @@ export function mount(el, id){
         <div class="eval-meaning">${esc(lvl.meaning)}</div>
 
         ${Array.isArray(r.curve) && r.curve.length > 1
-          ? `<div class="rp-hero" id="dReplayHero" hidden></div>
-             <div class="solo-chart-wrap" style="margin-top:16px"><canvas id="dChart"></canvas></div>
-             <div class="rp-bar" id="dReplayBar"></div>`
+          ? `<div class="solo-chart-wrap" style="margin-top:16px"><canvas id="dChart"></canvas></div>
+             <div class="rp-bar" id="dReplayBar"></div>
+             <div class="rp-hero" id="dReplayHero" hidden></div>`
           : '<p class="d-meta" style="margin-top:16px">No curve stored for this measurement.</p>'}
 
         <div class="res-stats" style="justify-content:flex-start;margin-top:18px;gap:22px">
