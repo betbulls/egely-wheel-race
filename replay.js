@@ -31,6 +31,58 @@ const fmt = ms => {
 };
 
 // ---------------------------------------------------------------------------
+// Shared transport bar (round play/pause + seek + time + speed cycle) used by
+// the curve replay (R1) and the race replay (R2). Classes come from the
+// global player language in ewr-redesign.css (.vp-play/.vp-seek/.vp-time/
+// .rp-speed).
+// ---------------------------------------------------------------------------
+const SPEED_STEPS = [1, 2, 4];
+function mountTransport(barEl, opts){
+  const durationMs = Math.max(1, (opts.durationSeconds || 60) * 1000);
+  // Arrow keys on the seek slider should move ~1 second of event time, not
+  // 1/1000 of the recording (60ms on a 1-minute solo would be useless).
+  const seekStep = Math.max(1, Math.round(1000 / (opts.durationSeconds || 60)));
+  barEl.innerHTML = `
+    <button type="button" class="vp-play rp-play" data-rp-toggle aria-label="Play the replay">${PLAY_SVG}</button>
+    <input type="range" class="vp-seek" data-rp-seek min="0" max="1000" value="1000" step="${seekStep}" aria-label="Seek in the replay">
+    <span class="vp-time" data-rp-time></span>
+    <button type="button" class="rp-speed" data-rp-speed aria-label="Playback speed: 1×">1×</button>`;
+  const toggleBtn = barEl.querySelector('[data-rp-toggle]');
+  const seekEl = barEl.querySelector('[data-rp-seek]');
+  const timeEl = barEl.querySelector('[data-rp-time]');
+  const speedBtn = barEl.querySelector('[data-rp-speed]');
+  toggleBtn.addEventListener('click', () => opts.onToggle());
+  seekEl.addEventListener('input', () => {
+    // The ~1s step grid rarely divides 1000 evenly, so the drag maxes out one
+    // partial step short of the end — snap the topmost sliver to the true end,
+    // otherwise the replay could never reach "done" by dragging.
+    const v = Number(seekEl.value);
+    const frac = (1000 - v < seekStep) ? 1 : v / 1000;
+    opts.onSeek(frac * durationMs);
+  });
+  let speed = 1;
+  speedBtn.addEventListener('click', () => {
+    speed = SPEED_STEPS[(SPEED_STEPS.indexOf(speed) + 1) % SPEED_STEPS.length];
+    speedBtn.textContent = speed + '×';
+    speedBtn.setAttribute('aria-label', 'Playback speed: ' + speed + '×');
+    opts.onSpeed(speed);
+  });
+  return {
+    paint(t){
+      timeEl.textContent = fmt(t) + ' / ' + fmt(durationMs);
+      const frac = durationMs ? t / durationMs : 0;
+      if(!seekEl.matches(':active')) seekEl.value = Math.round(frac * 1000);
+      seekEl.style.setProperty('--vp-fill', (frac * 100).toFixed(2) + '%');
+      seekEl.setAttribute('aria-valuetext', fmt(t) + ' of ' + fmt(durationMs));
+    },
+    setPlaying(playing, done){
+      toggleBtn.innerHTML = playing ? PAUSE_SVG : PLAY_SVG;
+      toggleBtn.setAttribute('aria-label', playing ? 'Pause the replay' : (done ? 'Replay again' : 'Play the replay'));
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // The shared replay timeline. Wall-clock rAF mapped into event time; speed is
 // a multiplier. onFrame(tMs) fires on every animation frame while playing and
 // once per seek; onState fires on play/pause/end/speed transitions.
@@ -119,11 +171,7 @@ export function mountCurveReplay(o){
       pre.push({ sum, cnt, peak });
     } }
 
-  const SPEEDS = [1, 2, 4];
   let destroyed = false;
-  // Arrow keys on the seek slider should move ~1 second of event time, not
-  // 1/1000 of the recording (60ms on a 1-minute solo would be useless).
-  const seekStep = Math.max(1, Math.round(1000 / (o.durationSeconds || 60)));
 
   // ---- Static UI --------------------------------------------------------
   o.heroEl.innerHTML = `
@@ -139,13 +187,14 @@ export function mountCurveReplay(o){
   const bar = o.heroEl.querySelector('[data-rp-bar]');
   for(let i = 1; i <= 24; i++){ const c = document.createElement('div'); c.className = 'led-cell'; bar.appendChild(c); }
 
-  o.barEl.innerHTML = `
-    <button type="button" class="vp-play rp-play" data-rp-toggle aria-label="Replay this measurement">${PLAY_SVG}</button>
-    <input type="range" class="vp-seek" data-rp-seek min="0" max="1000" value="1000" step="${seekStep}" aria-label="Seek in the replay">
-    <span class="vp-time" data-rp-time></span>
-    <button type="button" class="rp-speed" data-rp-speed aria-label="Playback speed: 1×">1×</button>`;
-  const q = sel => o.barEl.querySelector(sel);
-  const toggleBtn = q('[data-rp-toggle]'), seekEl = q('[data-rp-seek]'), timeEl = q('[data-rp-time]'), speedBtn = q('[data-rp-speed]');
+  // Shared transport (play/pause + seek + time + speed). The callbacks close
+  // over `clock`, created below — they only ever run after mount completes.
+  const transport = mountTransport(o.barEl, {
+    durationSeconds: o.durationSeconds || 60,
+    onToggle: () => { showHero(); clock.toggle(); },
+    onSeek: ms => { showHero(); clock.seek(ms); },
+    onSpeed: x => clock.setSpeed(x),
+  });
 
   function updateBar(led){
     const lit = led == null ? 0 : led;
@@ -204,34 +253,19 @@ export function mountCurveReplay(o){
     o.heroEl.querySelector('[data-rp-left]').textContent = fmt(durationMs - t);
     updateBar(cur);
 
-    // Transport row.
-    timeEl.textContent = fmt(t) + ' / ' + fmt(durationMs);
-    const frac = durationMs ? t / durationMs : 0;
-    if(!seekEl.matches(':active')) seekEl.value = Math.round(frac * 1000);
-    seekEl.style.setProperty('--vp-fill', (frac * 100).toFixed(2) + '%');
-    seekEl.setAttribute('aria-valuetext', fmt(t) + ' of ' + fmt(durationMs));
+    transport.paint(t);
   }
 
   const clock = createReplayClock({
     durationMs,
     onFrame: paint,
     onState: s => {
-      toggleBtn.innerHTML = s.playing ? PAUSE_SVG : PLAY_SVG;
-      toggleBtn.setAttribute('aria-label', s.playing ? 'Pause the replay' : (s.done ? 'Replay again' : 'Play the replay'));
+      transport.setPlaying(s.playing, s.done);
+      // Playback ran to the end (or the slider was dragged there): fold the
+      // live readout away — back to the entry look, the full curve alone
+      // (Csaba). A mid-way pause keeps it up for reading the values.
+      if(s.done && !s.playing && heroShown){ heroShown = false; o.heroEl.hidden = true; }
     },
-  });
-
-  toggleBtn.addEventListener('click', () => { showHero(); clock.toggle(); });
-  seekEl.addEventListener('input', () => {
-    showHero();
-    clock.seek((Number(seekEl.value) / 1000) * durationMs);
-  });
-  speedBtn.addEventListener('click', () => {
-    const cur = clock.state().speed;
-    const next = SPEEDS[(SPEEDS.indexOf(cur) + 1) % SPEEDS.length];
-    clock.setSpeed(next);
-    speedBtn.textContent = next + '×';
-    speedBtn.setAttribute('aria-label', 'Playback speed: ' + next + '×');
   });
 
   // Idle state: the full curve, exactly like the static detail chart was.
@@ -243,6 +277,302 @@ export function mountCurveReplay(o){
     destroy(){
       destroyed = true;
       clock.destroy();
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// RACE REPLAY (R2) — re-runs a finished race from the saved per-slot curves:
+// the pucks move on the live view's relative track (the leader rides the
+// clock, everyone else trails by score ratio — the exact live formula), rank
+// badges swap, scores count up, the clock counts down; the maker's recorded
+// commentary plays in sync when the race has a ready recording.
+//
+// Lane markup/classes come from the live race (view-race.js injectRaceStyles:
+// .rr-lane/.rr-track/.rr-puck/…), the transport from the shared player
+// language. Data arrives lazily via callbacks, so the results page stays
+// light until the user actually presses Replay:
+//
+// mountRaceReplay(el, {
+//   durationMs, totalSlots, raceStartMs,
+//   loadLanes: async () => [{ id, name, puckHtml, flagHtml, isHost, mine,
+//                             curve, raceScore, finalRank, firstSlot, verified }],
+//   loadAudio: async () => ({ url, duration, recStartMs } | null),
+//   onAudioTakeover: () => {},   // the replay now owns the commentary audio
+// }) -> { destroy() }
+// ---------------------------------------------------------------------------
+export function mountRaceReplay(el, o){
+  const SLOT_MS = 500, SPREAD = 1.5, GRACE_SLOTS = 10;   // = the live view's constants
+  const N = Math.max(1, o.totalSlots || 1);
+  const durationMs = Math.max(1, o.durationMs || N * SLOT_MS);
+  const reduce = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  let destroyed = false, built = false, loading = false;
+  let clock = null, transport = null, audio = null, offsetMs = 0;
+  let playing = false, speed = 1, lastPaintT = -1, lastK = -1;
+  let lanes = [];
+
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+  // ---- Entry card: nothing heavy is fetched until this button is pressed.
+  function intro(){
+    el.innerHTML = `
+      <div class="rrp-intro">
+        <button type="button" class="vp-play" data-rrp-go aria-label="Replay the race">${PLAY_SVG}</button>
+        <div class="rrp-intro-txt">
+          <b>Race replay</b>
+          <small data-rrp-sub aria-live="polite">Watch the race run again — every move, every overtake.</small>
+        </div>
+      </div>`;
+    el.querySelector('[data-rrp-go]').addEventListener('click', start);
+  }
+
+  async function start(){
+    if(loading || built || destroyed) return;
+    loading = true;
+    const sub = el.querySelector('[data-rrp-sub]');
+    const btn = el.querySelector('[data-rrp-go]');
+    if(sub) sub.textContent = 'Loading the replay…';
+    if(btn) btn.disabled = true;
+    let laneRows = [], audioInfo = null, failed = false;
+    try{
+      [laneRows, audioInfo] = await Promise.all([
+        o.loadLanes(),
+        o.loadAudio ? o.loadAudio().catch(() => null) : Promise.resolve(null),
+      ]);
+    }catch(_){ failed = true; }
+    loading = false;
+    if(destroyed || !el.isConnected) return;
+    lanes = failed ? [] : (laneRows || []).map(prep);
+    if(!lanes.length || !lanes.some(p => p.cum[N - 1] > 0)){
+      // A fetch hiccup is not "no data" — invite a retry instead of lying.
+      if(sub) sub.textContent = failed
+        ? 'Could not load the replay — tap play to try again.'
+        : 'No replayable measurement data was saved for this race.';
+      if(btn) btn.disabled = false;
+      return;
+    }
+    build(audioInfo);
+  }
+
+  // Cumulative score per slot (prefix sums, padded/truncated to N slots).
+  function prep(r){
+    const curve = Array.isArray(r.curve) ? r.curve : [];
+    const cum = new Array(N);
+    let s = 0;
+    for(let i = 0; i < N; i++){ const v = curve[i]; if(v != null) s += v; cum[i] = s; }
+    return { ...r, curve, cum, ranked: r.firstSlot != null && r.firstSlot <= GRACE_SLOTS };
+  }
+
+  function laneHtml(p){
+    return `
+      <div class="rr-lane ${p.mine ? 'me' : ''} ${p.ranked ? '' : 'unranked'}" data-rank="">
+        <div class="rr-rank dash">–</div>
+        <div class="rr-info">
+          <div class="rr-name-row"><span class="rr-name">${esc(p.name)}</span>${p.flagHtml || ''}${p.isHost ? '<span class="rr-tag host">Host</span>' : ''}${p.mine ? '<span class="rr-tag you">You</span>' : ''}${p.ranked ? '' : '<span class="rr-tag unranked">Late · Unranked</span>'}${p.verified === false ? '<span class="rr-vrf bad">Unverified</span>' : ''}</div>
+          <div class="rr-track"><span class="rr-finish"></span><span class="rr-puck"><span class="rr-tail"></span>${p.puckHtml || ('<span class="rr-puck-init">' + esc((p.name || '?').charAt(0).toUpperCase()) + '</span>')}</span></div>
+        </div>
+        <div class="rr-nums"><div class="rr-live-wrap"><div class="rr-livev">0</div><div class="rr-live-lbl">Live</div></div><div class="rr-score">SCORE 0</div></div>
+      </div>`;
+  }
+
+  function build(audioInfo){
+    built = true;
+    // Lane order mirrors the live lock: host, you, then name — never reshuffles.
+    lanes.sort((a, b) => {
+      if(!!a.isHost !== !!b.isHost) return a.isHost ? -1 : 1;
+      if(!!a.mine !== !!b.mine) return a.mine ? -1 : 1;
+      return (a.name || '').localeCompare(b.name || '');
+    });
+    el.innerHTML = `
+      <div class="rrp-wrap">
+        <div class="rr-bar">
+          <span class="rr-live-pill"><span class="d"></span>REPLAY</span>
+          <span class="rr-clock" data-rrp-clock>--:--</span>
+        </div>
+        <div class="rr-list">${lanes.map(laneHtml).join('')}</div>
+        <div class="rp-bar" data-rrp-bar></div>
+      </div>`;
+    const laneEls = [...el.querySelectorAll('.rr-lane')];
+    lanes.forEach((p, i) => { p.el = laneEls[i]; });
+
+    const barEl = el.querySelector('[data-rrp-bar]');
+    transport = mountTransport(barEl, {
+      durationSeconds: Math.round(durationMs / 1000),
+      onToggle: () => clock.toggle(),
+      onSeek: ms => clock.seek(ms),
+      onSpeed: x => clock.setSpeed(x),
+    });
+
+    // Wall-clock alignment: the storage filename carries the recording's
+    // exact start ms. Unknown (legacy) → assume the recording began with the
+    // race. A recording that STARTS AFTER the race window (the host announced
+    // the winners in the post-roll) can never sound inside the replay — skip
+    // the takeover entirely so the Listen-again card stays in charge.
+    if(audioInfo && audioInfo.url){
+      const off = (audioInfo.recStartMs != null && o.raceStartMs) ? (audioInfo.recStartMs - o.raceStartMs) : 0;
+      if(off < durationMs){
+        audio = new Audio(audioInfo.url);
+        audio.preload = 'auto';
+        offsetMs = off;
+        // If the commentary starts by ANY route, a stale "Enable commentary"
+        // CTA must not stay in the bar contradicting the audible state.
+        audio.addEventListener('play', () => {
+          const fx = el.querySelector('[data-rrp-audiofix]');
+          if(fx) fx.remove();
+        });
+        const chip = document.createElement('span');
+        chip.className = 'voice-chip';
+        chip.textContent = '🎙 Commentary';
+        barEl.appendChild(chip);
+        if(o.onAudioTakeover){ try{ o.onAudioTakeover(); }catch(_){} }
+      }
+    }
+
+    clock = createReplayClock({ durationMs, onFrame, onState });
+    clock.play();   // the user already pressed Replay — run from the top
+
+    // Keyboard flow: the intro button just vanished with the innerHTML swap —
+    // land focus on the transport toggle, the logical next control.
+    const tb = el.querySelector('[data-rp-toggle]');
+    if(tb) tb.focus();
+  }
+
+  function onState(s){
+    playing = s.playing; speed = s.speed;
+    if(transport) transport.setPlaying(s.playing, s.done);
+    if(audio){
+      audio.playbackRate = speed;
+      if(!s.playing && !audio.paused) audio.pause();
+    }
+    if(s.done && !s.playing) paintFinal();
+  }
+
+  function onFrame(t){
+    if(transport) transport.paint(t);
+    paintLanes(t, false);
+    syncAudio(t);
+  }
+
+  function syncAudio(t){
+    if(!audio || destroyed) return;
+    const desired = (t - offsetMs) / 1000;
+    const over = isFinite(audio.duration) && audio.duration > 0 && desired > audio.duration;
+    if(!playing || t >= durationMs || desired < 0 || over){
+      if(!audio.paused) audio.pause();
+      return;
+    }
+    // Snap on drift (seek, hidden-tab hold, buffering) — ~⅓s tolerance.
+    if(Math.abs((audio.currentTime || 0) - desired) > 0.35){
+      try{ audio.currentTime = Math.max(0, desired); }catch(_){}
+    }
+    if(audio.paused) audio.play().catch(() => showAudioHint());
+  }
+
+  // Autoplay policy ate the commentary (the URL fetch consumed the gesture):
+  // offer a one-tap enable instead of failing silently.
+  function showAudioHint(){
+    if(destroyed || el.querySelector('[data-rrp-audiofix]')) return;
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'rp-speed'; b.setAttribute('data-rrp-audiofix', '');
+    b.textContent = '🎙 Enable commentary';
+    b.addEventListener('click', () => {
+      // Sound and picture stay together: a paused/finished replay resumes,
+      // so syncAudio keeps governing the commentary it just enabled.
+      if(clock && !playing) clock.play();
+      if(audio) audio.play().catch(() => {});
+      b.remove();
+    });
+    const bar = el.querySelector('[data-rrp-bar]');
+    if(bar) bar.appendChild(b);
+  }
+
+  function paintLanes(t, force){
+    if(destroyed || !built) return;
+    const k = t >= durationMs ? N - 1 : Math.max(0, Math.min(N - 1, Math.floor(t / SLOT_MS)));
+    // The lanes repaint on slot changes (500ms event time) — the CSS puck
+    // transition smooths between ticks, exactly like the live 300ms paint.
+    if(!force && k === lastK && (t - lastPaintT) < 250 && t < durationMs) return;
+    lastPaintT = t; lastK = k;
+
+    const rankedNow = lanes.filter(p => p.ranked).slice().sort((a, b) => b.cum[k] - a.cum[k]);
+    const rankOf = new Map(rankedNow.map((p, i) => [p, i + 1]));
+    const leader = (rankedNow.length && rankedNow[0].cum[k] > 0) ? rankedNow[0] : null;
+    const leaderScore = leader ? leader.cum[k] : 0;
+    const leaderPos = 8 + Math.max(0, Math.min(1, t / durationMs)) * 88;
+
+    for(const p of lanes){
+      const row = p.el; if(!row) continue;
+      const score = p.cum[k];
+      const lv = p.curve[k] || 0;
+      const isLeader = p === leader;
+      const rank = p.ranked ? (rankOf.get(p) || null) : null;
+
+      const rankEl = row.querySelector('.rr-rank');
+      const newRank = rank != null ? String(rank) : '–';
+      if(rank != null){ rankEl.textContent = newRank; rankEl.classList.remove('dash'); }
+      else { rankEl.textContent = '–'; rankEl.classList.add('dash'); }
+      if(!reduce && rank != null && row.dataset.rank && row.dataset.rank !== newRank){
+        rankEl.classList.remove('bump'); void rankEl.offsetWidth; rankEl.classList.add('bump');
+      }
+      row.dataset.rank = newRank;
+
+      row.classList.toggle('leader', isLeader);
+      row.classList.toggle('moving', playing && lv > 0);
+
+      const puck = row.querySelector('.rr-puck');
+      const pos = !(score > 0) ? 0
+        : Math.max(0, Math.min(96, leaderPos * Math.pow(leaderScore > 0 ? score / leaderScore : 0, SPREAD)));
+      if(puck) puck.style.left = pos.toFixed(1) + '%';
+
+      const liveEl = row.querySelector('.rr-livev');
+      if(liveEl){ liveEl.textContent = lv; liveEl.style.color = lv > 0 ? zText(lv) : '#99a2a7'; }
+      const scoreEl = row.querySelector('.rr-score');
+      if(scoreEl){
+        if(isLeader) scoreEl.innerHTML = `SCORE ${score} · <span style="color:#b8860b">LEADER</span>`;
+        else if(rank != null && leaderScore > 0){ const gap = leaderScore - score; scoreEl.textContent = `SCORE ${score}${gap > 0 ? ` · ${gap} behind` : ''}`; }
+        else scoreEl.textContent = `SCORE ${score}`;
+      }
+    }
+
+    const clockEl = el.querySelector('[data-rrp-clock]');
+    if(clockEl){
+      const left = Math.max(0, durationMs - t);
+      clockEl.textContent = fmt(left) + ' left';
+      clockEl.classList.toggle('final10', left <= 10000 && left > 0);
+    }
+  }
+
+  // The race is over: snap badges/scores to the OFFICIAL results — the DB
+  // finalize can differ from a curve re-simulation on exact ties or on rows
+  // it excluded, and the official numbers are the truth.
+  function paintFinal(){
+    if(destroyed || !built) return;
+    for(const p of lanes){
+      const row = p.el; if(!row) continue;
+      const rankEl = row.querySelector('.rr-rank');
+      if(p.finalRank != null){ rankEl.textContent = p.finalRank; rankEl.classList.remove('dash'); }
+      else { rankEl.textContent = '–'; rankEl.classList.add('dash'); }
+      row.dataset.rank = p.finalRank != null ? String(p.finalRank) : '–';
+      row.classList.toggle('leader', p.finalRank === 1);
+      row.classList.remove('moving');
+      const scoreEl = row.querySelector('.rr-score');
+      if(scoreEl){
+        if(p.finalRank === 1) scoreEl.innerHTML = `SCORE ${p.raceScore || 0} · <span style="color:#b8860b">WINNER</span>`;
+        else scoreEl.textContent = 'SCORE ' + (p.raceScore || 0);
+      }
+    }
+    const clockEl = el.querySelector('[data-rrp-clock]');
+    if(clockEl){ clockEl.textContent = 'Race finished'; clockEl.classList.remove('final10'); }
+  }
+
+  intro();
+
+  return {
+    destroy(){
+      destroyed = true;
+      if(clock) clock.destroy();
+      if(audio){ try{ audio.pause(); }catch(_){} audio.src = ''; audio = null; }
+      el.innerHTML = '';
     },
   };
 }

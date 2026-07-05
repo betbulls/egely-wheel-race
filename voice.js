@@ -542,6 +542,33 @@ export function mountVoiceDock(el, opts){
 }
 
 // ---------------------------------------------------------------------------
+// Recording playback info for the RACE/SESSION REPLAY (replay.js): a fresh
+// signed URL + the recording's wall-clock start, parsed from the storage
+// filename (sessions/<id>/voice-<startMs>.mp4 — the voice-rec fn names files
+// with the exact egress-start millisecond). Returns null when the session has
+// no ready recording. The replay computes: audioTime = (replayT - (recStartMs
+// - eventStartMs)) / 1000.
+// ---------------------------------------------------------------------------
+export async function fetchRecordingPlayback(sessionId){
+  try{
+    const g = async action => {
+      const r = await fetch(REC_URL + '?action=' + action + '&room=' + encodeURIComponent(sessionId));
+      return { ok: r.ok, body: await r.json().catch(() => ({})) };
+    };
+    const s = await g('sync');
+    if(!s.ok || s.body.status !== 'ready') return null;
+    const p = await g('play');
+    if(!p.ok || !p.body.url) return null;
+    const m = String(p.body.url).match(/\/voice-(\d+)\.[a-z0-9]+/i);
+    return {
+      url: p.body.url,
+      duration: p.body.duration || s.body.duration || null,
+      recStartMs: m ? Number(m[1]) : null,   // null → caller falls back to offset 0
+    };
+  }catch(_){ return null; }
+}
+
+// ---------------------------------------------------------------------------
 // LISTEN AGAIN — the recording player card on finished session/race results.
 // mountVoicePlayer(el, { sessionId, mode, hostName, hostAvatar }) -> { destroy() }
 // Public data path (no auth): `sync` says whether a ready recording exists —

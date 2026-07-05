@@ -30,7 +30,8 @@ import { flagUrl } from './countries.js';
 import { createAddToCalendar } from './calendar.js';
 import { computeStats, downsample } from './analytics.js';
 import * as wakeLock from './wake-lock.js';
-import { mountVoiceDock, mountVoicePlayer, REC_POSTROLL_MS } from './voice.js';
+import { mountVoiceDock, mountVoicePlayer, fetchRecordingPlayback, REC_POSTROLL_MS } from './voice.js';
+import { mountRaceReplay } from './replay.js';
 
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
@@ -264,6 +265,14 @@ function injectRaceStyles(){
   .rr-sscore{text-align:right;white-space:nowrap}
   .rr-sscore b{font-family:'Montserrat',sans-serif;font-size:15px;color:#011624}
   .rr-sscore span{display:block;font-size:11px;color:#99a2a7}
+  /* ── RACE REPLAY (R2) ── */
+  .rrp-intro{display:flex;align-items:center;gap:14px;background:rgba(82,48,218,.06);
+    border:1px solid rgba(82,48,218,.2);border-radius:14px;padding:14px 16px;margin:2px 0 16px}
+  .rrp-intro-txt b{font-family:'Montserrat',sans-serif;font-size:14.5px;color:#011624;display:block}
+  .rrp-intro-txt small{font-size:12.5px;color:#67737c}
+  .rrp-wrap{margin:2px 0 18px}
+  .rrp-wrap .rr-list{margin-top:10px}
+  .rrp-wrap .rp-bar{margin-top:14px;flex-wrap:wrap}
   @media (prefers-reduced-motion: reduce){
     .rr-puck{transition:none}.rr-lane.moving .rr-tail{opacity:0}.rr-rank.bump{animation:none}.rr-vrf.flash{animation:none}
     .rl-pill.practicing .d,.rl-pill.reconnecting .d,.rr-bar .rr-live-pill .d{animation:none}
@@ -341,6 +350,7 @@ export function mount(el, raceId, inviteToken = null){
   const $ = id => el.querySelector('#' + id);
   let voiceDock = null, voiceLive = false;   // Live Voice: dock UI + my "I am speaking" presence flag
   let voicePlayer = null;                    // "Listen again" card on the results screen
+  let racePlayback = null;                   // race replay (R2) on the results screen
   let recLive = false;                       // host only: server-confirmed "recording is running"
   let unsubVoiceAuth = null;
 
@@ -1132,6 +1142,7 @@ export function mount(el, raceId, inviteToken = null){
         ${ranked.length ? `<div class="rr-podium">${podium}</div>` : '<div class="rl-finished"><b>No official finishers</b><span>No ranked measurements were recorded for this race.</span></div>'}
         <div class="rr-summary">${ranked.length} finisher${ranked.length === 1 ? '' : 's'} · ${dur} min${session.verified_only ? ' · verified only' : ''}</div>
         <div id="rrVoice" hidden></div>
+        <div id="rrReplay"></div>
         ${yourResult}
         ${awards}
         ${ranked.length ? `<h3 class="rr-sec">Full standings</h3><div class="rr-standings">${ranked.map(standRow).join('')}</div>` : ''}
@@ -1150,6 +1161,39 @@ export function mount(el, raceId, inviteToken = null){
         hostAvatar: hostAvatar,
       });
     }
+    // Race replay (R2) — re-runs the race from the saved curves, with the
+    // commentary synced when a recording exists. Curves load lazily on the
+    // user's Replay press (they are heavy: duration×120 ints per racer, and
+    // renderResults can re-run on the finalize retry). Destroy-before-remount,
+    // like the voice player above.
+    const rpslot = body.querySelector('#rrReplay');
+    if(rpslot && all.length){
+      if(racePlayback) racePlayback.destroy();
+      racePlayback = mountRaceReplay(rpslot, {
+        durationMs, totalSlots, raceStartMs: startMs,
+        loadLanes: async () => {
+          const { data: cRows } = await supabase.from('results')
+            .select('user_id, racer_name, curve, race_score, final_rank, first_slot, is_host, verified')
+            .eq('session_id', Number(raceId)).eq('kind', 'race');
+          return (cRows || []).map(r => {
+            const p = prof.get(r.user_id) || {};
+            return {
+              id: r.user_id || r.racer_name,
+              name: r.racer_name || 'Racer',
+              puckHtml: p.avatar_url ? `<img class="rr-puck-av" src="${esc(p.avatar_url)}" alt="">` : '',
+              flagHtml: cc(r),
+              isHost: !!r.is_host, mine: mine(r),
+              curve: r.curve, raceScore: r.race_score || 0,
+              finalRank: r.final_rank, firstSlot: r.first_slot, verified: r.verified,
+            };
+          });
+        },
+        loadAudio: () => fetchRecordingPlayback(Number(raceId)),
+        // The replay owns the commentary from here — drop the standalone
+        // Listen-again card so two audios can never fight.
+        onAudioTakeover: () => { if(voicePlayer){ voicePlayer.destroy(); voicePlayer = null; } },
+      });
+    }
   }
 
   function paint(){ if(view === 'lobby') paintLobby(); else if(view === 'race') paintRace(); }
@@ -1159,6 +1203,7 @@ export function mount(el, raceId, inviteToken = null){
     if(unsubVoiceAuth) unsubVoiceAuth();
     if(voiceDock) voiceDock.destroy();
     if(voicePlayer) voicePlayer.destroy();
+    if(racePlayback) racePlayback.destroy();
     wakeLock.release();
     // If the race already ended but my own result hasn't saved yet (e.g. I navigated
     // away during the finalize grace), save it now. Idempotent: the myResultSaved guard
