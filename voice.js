@@ -305,8 +305,8 @@ export function mountVoiceDock(el, opts){
         : 'Starting the recording…';
     }
     if(p === 'rec') return 'Recording — everything said during the ' + noun + ' is kept, even if you pause.';
-    if(p === 'post') return 'Closing words — still recording · ' + postLeft() + ' left (End stops it).';
-    return 'Recording finished — you are live, off the record.';
+    if(p === 'post') return 'Closing words · ' + postLeft() + ' left — then the voice closes.';
+    return 'The voice window has closed.';
   }
   // The idle card's helper line — the maker always knows what recording would do.
   function hostIdleLine(){
@@ -353,11 +353,15 @@ export function mountVoiceDock(el, opts){
       const liveish = st === 'live' || st === 'muted' || st === 'reconnecting';
       if(!recState.started && liveish && (p === 'rec' || p === 'post')) recCall('start');
       if(recState.started && !recState.stopped && p === 'off') recCall('stop');
+      // Post-roll over → the voice itself closes too (Csaba's rule: after the
+      // closing minute the maker speaks in the NEXT session, not this one).
+      if(p === 'off' && (liveish || st === 'connecting')){ voice.stop(); return; }
       // The idle card has no tick of its own — keep its countdown/phase line
       // moving too (the live card updates via its own 1s timer).
       if(st === 'idle' || st === 'ended'){
         const sm = el.querySelector('.vd-idle .vd-txt small');
         if(sm){ const line = hostIdleLine(); if(sm.textContent !== line) sm.textContent = line; }
+        if(p === 'off') render();   // hides the dock for good
       }
     }, 1000);
   }
@@ -367,6 +371,9 @@ export function mountVoiceDock(el, opts){
   if(REC_ENABLED && !o.canHost && o.schedule){
     dockRefresh = setInterval(() => {
       const st = voice.state;
+      // Window closed + the maker's track is gone → leave quietly; the dock
+      // hides itself (no invite will return for this session).
+      if(recPhase() === 'off' && st === 'waiting'){ voice.stop(); return; }
       if(st === 'listening' || st === 'waiting') render();
     }, 10000);
   }
@@ -378,6 +385,11 @@ export function mountVoiceDock(el, opts){
 
     // Nothing to show: not a host, and the maker is not (yet) live.
     if(!o.canHost && !listenAvailable && !['listening', 'waiting', 'tap', 'connecting', 'reconnecting'].includes(st)){
+      el.hidden = true; el.innerHTML = ''; return;
+    }
+    // The voice window is CLOSED (post-roll over): no more going live — the
+    // next word belongs to the next session. Hide the dock once idle.
+    if(o.canHost && recPhase() === 'off' && (st === 'idle' || st === 'ended' || st === 'error')){
       el.hidden = true; el.innerHTML = ''; return;
     }
     el.hidden = false;
