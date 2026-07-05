@@ -57,7 +57,8 @@
       "Bash(node -e ' *)",
       "Bash(grep -n -E \"\\(^|[{;}[:space:]]\\)main[[:space:],{]\" /c/Users/User/Documents/GitHub/egely-wheel-race/index.html)",
       "mcp__claude-in-chrome__javascript_tool",
-      "Bash(echo \"---exit:$?---\")"
+      "Bash(echo \"---exit:$?---\")",
+      "PowerShell(Copy-Item \"C:\\\\Users\\\\User\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-User-Documents-GitHub-egely-wheel-race\\\\061e70ca-deac-4e43-a441-9031fb9ab645\\\\scratchpad\\\\sm-liquid-block.html\" \"C:\\\\Users\\\\User\\\\Documents\\\\GitHub\\\\egely-wheel-race\\\\_sm-block-preview.html\")"
     ]
   }
 }
