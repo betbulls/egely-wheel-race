@@ -144,6 +144,45 @@ function raceMedia(){
   </div>`;
 }
 
+// Replay geometry: ONE baked series drives the ghost curve (the finished
+// measurement), the progress line that re-draws it, the playhead dot, the
+// clock and the progress fill — so the static frame (= reduced-motion
+// fallback) and the animation always agree.
+const RP_W = 160, RP_H = 96, RP_VMAX = 18, RP_PAD = 8;
+const rpY = v => RP_H - (v / RP_VMAX) * (RP_H - 2 * RP_PAD) - RP_PAD;
+const RP_SERIES = [4, 6, 9, 8, 11, 13, 12, 14, 11, 9, 12, 15, 16, 14, 12, 13, 15, 17, 16, 15, 13, 14];
+const rpPts = k => RP_SERIES.slice(0, k + 1)
+  .map((v, i) => `${(i * (RP_W / (RP_SERIES.length - 1))).toFixed(1)},${rpY(v).toFixed(1)}`).join(' ');
+const RP_INIT_K = 13;   // static frame: replay ~60% done
+const rpClock = frac => { const s = Math.round(frac * 60); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+// The playhead is an HTML overlay dot (like .sw-avg), NOT an SVG circle: the
+// chart SVG stretches with preserveAspectRatio="none", which would squash a
+// circle into an ellipse. left% is clamped so the dot never clips at the edges.
+const rpDotLeft = frac => Math.max(3, Math.min(97, frac * 100)).toFixed(1);
+
+function replayMedia(){
+  const n = RP_SERIES.length, k = RP_INIT_K, v = RP_SERIES[k];
+  const frac = k / (n - 1);
+  return `<div class="svc-screen sw-replay">
+    <div class="svc-screen-bar"><span class="svc-tag"><i></i>Replay</span><span class="sw-rp-time" data-fx="rp-time">${rpClock(frac)} / 1:00</span></div>
+    <div class="sw-chart" style="height:96px">
+      <div class="sw-zones"><span class="z-hi"></span><span class="z-mid"></span><span class="z-lo"></span></div>
+      <div class="sw-grid"></div>
+      <svg class="sw-svg" viewBox="0 0 ${RP_W} ${RP_H}" preserveAspectRatio="none" aria-hidden="true">
+        <polyline class="sw-rp-ghost" points="${rpPts(n - 1)}"/>
+        <polyline class="sw-rp-line" data-fx="rp-line" points="${rpPts(k)}"/>
+      </svg>
+      <span class="sw-rp-dot" data-fx="rp-head" style="left:${rpDotLeft(frac)}%;top:${(rpY(v) / RP_H * 100).toFixed(1)}%;background:${soloZCol(v)}"></span>
+    </div>
+    <div class="sw-rp-bar">
+      <span class="sw-rp-btn"><i></i><i></i></span>
+      <span class="sw-rp-track"><span class="sw-rp-fill" data-fx="rp-fill" style="width:${(frac * 100).toFixed(1)}%"></span></span>
+      <span class="sw-rp-spd">2×</span>
+      <span class="sw-rp-voice">🎙 Voice</span>
+    </div>
+  </div>`;
+}
+
 function expMedia(){
   const nodes = Array.from({ length: 7 }, (_, i) => {
     const st = i < 2 ? 'done' : (i === 2 ? 'cur' : '');
@@ -401,6 +440,35 @@ function startLandingFx(root){
     }, cardOf('.svc-race'));
   }
 
+  // Replay — the finished ghost curve re-draws itself in time: progress line,
+  // gliding zone-coloured playhead, ticking clock and progress fill. At the
+  // end it holds for a beat, then plays again (that is the point, after all).
+  const rpLine = root.querySelector('[data-fx="rp-line"]');
+  if(rpLine){
+    const rpHead = root.querySelector('[data-fx="rp-head"]');
+    const rpFill = root.querySelector('[data-fx="rp-fill"]');
+    const rpTime = root.querySelector('[data-fx="rp-time"]');
+    const n = RP_SERIES.length;
+    let k = RP_INIT_K, hold = 0;
+    const paintRp = () => {
+      const v = RP_SERIES[k], frac = k / (n - 1);
+      rpLine.setAttribute('points', rpPts(k));
+      if(rpHead){
+        rpHead.style.left = rpDotLeft(frac) + '%';
+        rpHead.style.top = (rpY(v) / RP_H * 100).toFixed(1) + '%';
+        rpHead.style.background = soloZCol(v);
+      }
+      if(rpFill) rpFill.style.width = (frac * 100).toFixed(1) + '%';
+      if(rpTime) rpTime.textContent = `${rpClock(frac)} / 1:00`;
+    };
+    every(320, () => {
+      if(hold){ hold--; if(!hold){ k = 0; paintRp(); } return; }
+      k++;
+      if(k > n - 1){ k = n - 1; hold = 5; return; }
+      paintRp();
+    }, cardOf('.svc-replay'));
+  }
+
   return () => { timers.forEach(clearInterval); if(io) io.disconnect(); };
 }
 
@@ -443,7 +511,7 @@ function publicLandingHtml(){
         mod: 'solo', eyebrow: 'Solo',
         h: 'Measure your vitality, live',
         lead: 'Watch your reading move in real time on a calm, zone-aware chart — then save every measurement to follow your vitality over days and weeks.',
-        points: ['See your vitality change moment by moment', 'Every measurement saved to your history', 'Personal trends, peaks and steadiness'],
+        points: ['See your vitality change moment by moment', 'Every measurement saved — and replayable any time', 'Personal trends, peaks and steadiness'],
         ctas: [{ cls: 'svc-go', href: '#/login', label: 'Start measuring' }, { cls: 'svc-ghost', href: '#/how-to-connect', label: 'How to connect' }],
         media: soloMedia(),
       })}
@@ -458,8 +526,8 @@ function publicLandingHtml(){
       ${svcCard({
         mod: 'sess', eyebrow: 'Live Sessions',
         h: 'Practice together, in real time',
-        lead: 'Join a live room and measure alongside others. Host, group and your own line move together as one shared, official session.',
-        points: ['See everyone’s energy move live', 'Host or join official group measurements', 'Verified results and a saved group average'],
+        lead: 'Join a live room and measure alongside others — with the host’s live voice guiding the group. Host, group and your own line move together as one shared, official session.',
+        points: ['See everyone’s energy move live', 'Live voice guidance from Spiritual Maker hosts', 'Verified results, a group average — and a session replay'],
         ctas: [{ cls: 'svc-go', href: '#/sessions', label: 'Explore sessions' }, { cls: 'svc-ghost', href: '#/login', label: 'Join free' }],
         media: sessionMedia(),
       })}
@@ -467,12 +535,20 @@ function publicLandingHtml(){
         mod: 'race', alt: true, eyebrow: 'Race',
         h: 'Turn a measurement into a race',
         lead: 'Invite friends, enter the lobby, and race together. Your live vitality drives your racer forward — while the measured score decides the official result.',
-        points: ['Race from different phones or computers', 'Public, invite-only and follower races', 'Live positions, a verified result, saved to your history'],
+        points: ['Race from different phones or computers', 'Public, invite-only and follower races', 'Live positions, verified results — and a full replay afterwards'],
         ctas: [{ cls: 'svc-go', href: '#/races', label: 'Explore races' }, { cls: 'svc-ghost', href: '#/login', label: 'Create a race' }],
         media: raceMedia(),
       })}
       ${svcCard({
-        mod: 'exp', eyebrow: 'Experiments',
+        mod: 'replay', eyebrow: 'Replay',
+        h: 'Relive any measurement',
+        lead: 'Every finished measurement, session and race can be played back in time — the curves redraw, the values tick like they did live, and when a Spiritual Maker hosted with their voice, the recording plays back perfectly in sync.',
+        points: ['Re-run races move by move — commentary included on voice-hosted races', 'Sessions come alive again — group pulse, every curve, the host’s voice when they went live', 'Pause, scrub and speed up at 1×, 2× or 4×'],
+        ctas: [{ cls: 'svc-go', href: '#/races', label: 'Watch a replay' }, { cls: 'svc-ghost', href: '#/sessions', label: 'Browse sessions' }],
+        media: replayMedia(),
+      })}
+      ${svcCard({
+        mod: 'exp', alt: true, eyebrow: 'Experiments',
         h: 'Guided, day-by-day practice',
         lead: 'Follow structured experiments that build a habit. Finish each day with a measurement and a short reflection, and watch your progress fill in.',
         points: ['Multi-day guided programmes', 'A measurement to close every day', 'Track completion and growth over time'],
@@ -480,7 +556,7 @@ function publicLandingHtml(){
         media: expMedia(),
       })}
       ${svcCard({
-        mod: 'members', alt: true, eyebrow: 'Members',
+        mod: 'members', eyebrow: 'Members',
         h: 'Build your circle. Share your energy.',
         lead: 'Share your connect link to gather members, watch their readings arrive live, and share your own measurements back with the people you trust.',
         points: ['Gather followers with your connect link', 'See your members’ live measurements and results', 'Share your own readings with people you choose'],
@@ -488,7 +564,7 @@ function publicLandingHtml(){
         media: membersMedia(),
       })}
       ${svcCard({
-        mod: 'levels', eyebrow: 'Levels & Badges',
+        mod: 'levels', alt: true, eyebrow: 'Levels & Badges',
         h: 'Level up your practice',
         lead: 'Every saved measurement earns XP. Climb from Explorer to Luminary and unlock badges for streaks, milestones and breakthroughs along the way.',
         points: ['Earn XP from every measurement', 'Climb 6 levels — Explorer to Luminary', 'Unlock 50+ badges across 11 categories'],
@@ -504,7 +580,7 @@ function publicLandingHtml(){
         <ul class="ph-list">
           <li>Watch the Live community</li>
           <li>Explore sessions, races and the ranking</li>
-          <li>Watch live races and explore results</li>
+          <li>Watch live races — and replay finished ones move by move</li>
           <li>Build your profile and join in</li>
         </ul>
       </div>
@@ -557,7 +633,7 @@ function publicLandingHtml(){
 
     <div class="ph-practice">
       <h2 class="ph-section-h" style="margin:0 0 8px">Friendly competition. Meaningful progress.</h2>
-      <p>Race for the moment, then keep the result as part of your longer journey — every run feeds your measurements, achievements and progress over time.</p>
+      <p>Race for the moment, then keep the result — and its replay — as part of your longer journey. Every run feeds your measurements, achievements and progress over time.</p>
     </div>
   </div>`;
 }

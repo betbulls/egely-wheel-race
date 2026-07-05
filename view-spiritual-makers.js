@@ -20,6 +20,7 @@ const I = {
   inf: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a3 3 0 1 0 0 6c2.2 0 3.3-2.2 6-2.2S15.8 15 18 15a3 3 0 1 0 0-6c-2.2 0-3.3 2.2-6 2.2S8.2 9 6 9z"/></svg>`,
   bag: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8h12l-1 11H7L6 8z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></svg>`,
   user: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.5" r="3.4"/><path d="M5.5 19a6.5 6.5 0 0 1 13 0"/></svg>`,
+  mic: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"/><path d="M12 18v3"/></svg>`,
   spark: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z"/></svg>`,
   check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`,
   ext: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8"/></svg>`,
@@ -47,7 +48,7 @@ function styles(){
   .sm-cta-row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
 
   /* ============ benefit strip ============ */
-  .sm-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0 6px;padding:16px 20px;border-radius:16px;
+  .sm-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin:22px 0 6px;padding:16px 20px;border-radius:16px;
     background:linear-gradient(180deg,rgba(82,48,218,.06),rgba(55,219,255,.05));border:1px solid rgba(82,48,218,.12)}
   .sm-strip-i{display:flex;align-items:center;gap:11px}
   .sm-strip-ic{width:34px;height:34px;border-radius:10px;flex-shrink:0;display:flex;align-items:center;justify-content:center;
@@ -56,12 +57,12 @@ function styles(){
   .sm-strip-t{font-size:13px;font-weight:700;color:var(--ewr-text);line-height:1.25}
 
   /* ============ feature bands ============ */
-  .sm-band{display:grid;grid-template-columns:1fr 1.05fr;gap:36px;align-items:center;margin:18px 0;padding:30px 32px;border-radius:22px}
+  .sm-band{display:grid;grid-template-columns:1fr 1.05fr;gap:36px;align-items:center;margin:34px 0;padding:30px 32px;border-radius:22px}
   .sm-band.card{background:var(--ewr-surface);border:1px solid var(--ewr-border);box-shadow:var(--ewr-shadow-card)}
   .sm-band.tint{background:linear-gradient(180deg,rgba(82,48,218,.085),rgba(55,219,255,.06));border:1px solid rgba(82,48,218,.14)}
   .sm-band.alt .sm-band-media{order:-1}
   .sm-band-text,.sm-band-media{min-width:0}
-  .sm-band h2{font-family:'Montserrat',sans-serif;font-weight:600;font-size:25px;line-height:1.16;letter-spacing:-0.3px;color:var(--ewr-text);margin:9px 0 10px}
+  .sm-band h2{font-family:'Montserrat',sans-serif;font-weight:700;font-size:25px;line-height:1.16;letter-spacing:-0.3px;color:var(--ewr-text);margin:9px 0 10px}
   .sm-band p{color:var(--ewr-text-muted);font-size:15px;line-height:1.6;margin:0 0 12px}
   .sm-fine{font-size:12px;color:var(--ewr-text-soft);line-height:1.5}
 
@@ -87,7 +88,7 @@ function styles(){
   .sm-earn-v b{color:var(--ewr-accent-strong)}
   .sm-earn-item.earn .sm-earn-v b{color:#0f8a52}
   /* filler brand image between bands */
-  .sm-feature-img{margin:18px 0;border-radius:22px;overflow:hidden;background:#fff;border:1px solid var(--ewr-border);box-shadow:var(--ewr-shadow-card)}
+  .sm-feature-img{margin:34px 0;border-radius:22px;overflow:hidden;background:#fff;border:1px solid var(--ewr-border);box-shadow:var(--ewr-shadow-card)}
   .sm-feature-img img{display:block;width:100%;height:auto}
 
   /* ============ navy demo panel ============ */
@@ -176,6 +177,35 @@ function styles(){
   .sm-pass-inf path{fill:none;stroke:var(--acc);stroke-width:2.4;stroke-linecap:round;stroke-dasharray:96;stroke-dashoffset:96;animation:smInf 5s ease-in-out infinite}
   @keyframes smInf{0%,46%{stroke-dashoffset:96}82%,100%{stroke-dashoffset:0}}
 
+  /* ---- Live Voice demo (breathing mic ring + waveform + replay pill) ---- */
+  .sm-va-rec{display:inline-flex;align-items:center;font-size:9.5px;font-weight:800;letter-spacing:.08em;color:#9a7400;
+    background:linear-gradient(135deg,#ffe9a8,#f5c451);border-radius:999px;padding:3px 9px}
+  .sm-va-host{display:flex;align-items:center;gap:12px;background:#0c2230;border:1px solid #1c3140;border-radius:14px;padding:14px}
+  .sm-va-ring{width:46px;height:46px;border-radius:50%;flex-shrink:0;padding:3px;box-sizing:border-box;
+    background:linear-gradient(135deg,#37dbff,#5230da);animation:smVaBreath 2.6s ease-in-out infinite}
+  .sm-va-ring i{display:flex;width:100%;height:100%;border-radius:50%;background:#0a1c29;align-items:center;justify-content:center;color:#9be7ff}
+  .sm-va-ring svg{width:19px;height:19px}
+  @keyframes smVaBreath{0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(55,219,255,.35)}50%{transform:scale(1.07);box-shadow:0 0 0 9px rgba(55,219,255,0)}}
+  .sm-va-nm{font-size:13px;font-weight:700;color:#eaf0f3}
+  .sm-va-sub{font-size:10.5px;color:#9fb3bf}
+  .sm-wave{margin-left:auto;display:flex;align-items:center;gap:3px;height:26px;flex-shrink:0}
+  .sm-wave i{width:3.5px;border-radius:2px;background:linear-gradient(180deg,#37dbff,#5230da);animation:smWave 1.15s ease-in-out infinite}
+  .sm-wave i:nth-child(1){height:35%}
+  .sm-wave i:nth-child(2){animation-delay:.12s;height:55%}
+  .sm-wave i:nth-child(3){animation-delay:.24s;height:80%}
+  .sm-wave i:nth-child(4){animation-delay:.36s;height:60%}
+  .sm-wave i:nth-child(5){animation-delay:.48s;height:85%}
+  .sm-wave i:nth-child(6){animation-delay:.6s;height:45%}
+  .sm-wave i:nth-child(7){animation-delay:.72s;height:65%}
+  @keyframes smWave{0%,100%{transform:scaleY(.45)}50%{transform:scaleY(1)}}
+  .sm-va-replay{margin-top:12px;display:flex;align-items:center;gap:10px;background:#0c2230;border:1px solid rgba(255,214,107,.4);
+    border-radius:12px;padding:10px 12px;animation:smVaReplay 7s ease-in-out infinite}
+  .sm-va-play{width:24px;height:24px;border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,#ffe9a8,#f5c451);
+    display:flex;align-items:center;justify-content:center;color:#5b4300;font-size:9px}
+  .sm-va-rt b{display:block;font-size:11.5px;font-weight:700;color:#ffd66b}
+  .sm-va-rt span{font-size:10px;color:#9fb3bf;line-height:1.35}
+  @keyframes smVaReplay{0%,42%{opacity:0;transform:translateY(8px)}56%,100%{opacity:1;transform:none}}
+
   /* ============ summary + closing ============ */
   .sm-sum{background:var(--ewr-surface);border:1px solid var(--ewr-border);border-radius:18px;padding:24px 28px;box-shadow:var(--ewr-shadow-card);display:grid;grid-template-columns:1fr 1fr;gap:12px 26px}
   .sm-sum li{list-style:none;display:flex;align-items:flex-start;gap:11px;font-size:14.5px;color:var(--ewr-text);line-height:1.4}
@@ -213,6 +243,7 @@ function styles(){
     .sm-lw-maker{top:6%;opacity:1}.sm-lw-visit,.sm-lw-coupon{opacity:1}
     .sm-rung.r3{background:rgba(47,208,122,.14);border-color:rgba(47,208,122,.55)}.sm-rung.r3 .sm-rung-v{color:#fff}
     .sm-pcard-badge,.sm-pass-badge{opacity:1;transform:none}.sm-pass-state{opacity:1}.sm-pass-inf path{stroke-dashoffset:0}
+    .sm-va-replay{opacity:1;transform:none}
   }
 
   /* ============ responsive ============ */
@@ -268,6 +299,7 @@ function pageHtml(){
     <div class="sm-strip">
       <div class="sm-strip-i"><span class="sm-strip-ic">${I.eye}</span><span class="sm-strip-t">Live wall visibility</span></div>
       <div class="sm-strip-i"><span class="sm-strip-ic">${I.link}</span><span class="sm-strip-t">Affiliate tools</span></div>
+      <div class="sm-strip-i"><span class="sm-strip-ic">${I.mic}</span><span class="sm-strip-t">Live voice hosting</span></div>
       <div class="sm-strip-i"><span class="sm-strip-ic">${I.badge}</span><span class="sm-strip-t">Recognizable status</span></div>
       <div class="sm-strip-i"><span class="sm-strip-ic">${I.inf}</span><span class="sm-strip-t">Lifetime access</span></div>
     </div>
@@ -290,7 +322,7 @@ function pageHtml(){
               <span class="sm-lw-face"><img src="assets/sm-maker-man.jpg" alt=""></span>
               <div class="sm-lw-id">
                 <div class="sm-lw-nm">Spiritual Maker <span class="sm-lw-bdg">${I.spark} Verified</span></div>
-                <div class="sm-lw-sub">Featured on Live</div>
+                <div class="sm-lw-sub">Your public maker profile</div>
               </div>
               <span class="sm-lw-visit"><span class="vav">+</span><span class="vtx">connected</span></span>
             </div>
@@ -305,7 +337,7 @@ function pageHtml(){
         <span class="sm-eyebrow">Recommend &amp; earn</span>
         <h2>Give your audience a reason to begin</h2>
         <p>Your public maker page can carry your personal affiliate link and a $50 customer coupon. Your audience saves — and you earn a commission on every eligible sale.</p>
-        <p class="sm-fine">Tiers: Advocate $50 · Pro $70 · Ambassador $100 per eligible sale. Your audience uses your $50 coupon; you earn the commission. Subject to the programme terms.</p>
+        <p class="sm-fine">Your audience uses your $50 coupon; you earn the commission — Advocate, Pro or Ambassador tier, per eligible sale. Subject to the programme terms.</p>
         <div class="sm-earn-pair">
           <div class="sm-earn-item coupon"><span class="sm-earn-ic">${I.link}</span><div><div class="sm-earn-k">Your audience saves</div><div class="sm-earn-v"><b>$50</b> coupon</div></div></div>
           <div class="sm-earn-item earn"><span class="sm-earn-ic">${I.spark}</span><div><div class="sm-earn-k">You earn</div><div class="sm-earn-v">up to <b>$100</b>/sale</div></div></div>
@@ -347,11 +379,34 @@ function pageHtml(){
 
     <div class="sm-feature-img"><img src="assets/sm-maker-man.jpg" alt="A Spiritual Maker"></div>
 
+    <section class="sm-band card">
+      <div class="sm-band-text">
+        <span class="sm-eyebrow">Live voice</span>
+        <h2>Guide them live — with your voice</h2>
+        <p>Go live with your voice inside your own sessions and races — guide the group through the measurement, or commentate the race as it unfolds. Everything you say during the official window is recorded with the session and becomes a replayable guided practice your followers can return to any time.</p>
+        <p class="sm-fine">Voice hosting is a Spiritual Maker feature. Listeners simply press play — right in the browser.</p>
+      </div>
+      <div class="sm-band-media">
+        <div class="sm-screen sm-anim in-view" aria-hidden="true">
+          <div class="sm-screen-bar"><span class="sm-tag"><i></i>Live voice</span><span class="sm-va-rec">● REC</span></div>
+          <div class="sm-va-host">
+            <span class="sm-va-ring"><i>${I.mic}</i></span>
+            <div><div class="sm-va-nm">Your voice, live</div><div class="sm-va-sub">Guiding your session</div></div>
+            <span class="sm-wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+          </div>
+          <div class="sm-va-replay">
+            <span class="sm-va-play">▶</span>
+            <div class="sm-va-rt"><b>Listen again · Replay</b><span>Your words stay with the session — followers can relive it any time</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section class="sm-band tint alt">
       <div class="sm-band-text">
         <span class="sm-eyebrow">Included for life</span>
         <h2>EWR Live access, included for life</h2>
-        <p>Approved Spiritual Makers receive lifetime access to EWR Live measurement features, so they can keep measuring, hosting sessions and supporting their community.</p>
+        <p>Approved Spiritual Makers receive lifetime access to EWR Live measurement features, so they can keep measuring, hosting voice-guided sessions and supporting their community.</p>
         <p class="sm-fine">Lifetime access to the EWR Live software — not a free physical Egely Wheel.</p>
       </div>
       <div class="sm-band-media">
@@ -372,13 +427,15 @@ function pageHtml(){
       <li>${I.check}<span>A public Spiritual Maker profile</span></li>
       <li>${I.check}<span>$50 customer coupon and affiliate tools</span></li>
       <li>${I.check}<span>Up to $100 commission per eligible sale</span></li>
+      <li>${I.check}<span>Live voice hosting in your sessions &amp; races</span></li>
+      <li>${I.check}<span>Recordings your followers can replay any time</span></li>
       <li>${I.check}<span>Recognizable Spiritual Maker status</span></li>
       <li>${I.check}<span>Lifetime EWR Live software access</span></li>
     </ul>
 
     <section class="sm-close">
       <h2>Bring your practice into the EWR Live community</h2>
-      <p>Create a visible presence, support the people who connect with you, and grow through an established Egely Wheel partner programme.</p>
+      <p>Host with your live voice, be seen on the Live wall, and earn a commission on every eligible sale to your audience — joining the programme is free.</p>
       <div class="sm-close-cta">
         <a class="sm-go" href="${AFFILIATE}" target="_blank" rel="noopener">Become a Spiritual Maker ${I.ext}</a>
         <a class="sm-ghost" href="#/profile">Already a Spiritual Maker? Open your profile</a>

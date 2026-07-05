@@ -573,6 +573,7 @@ input[type=file]{color:var(--ewr-text-muted)}
 .svc-card.svc-maker{--acc:#cf7bff;--acc2:#7a2bd0;--accSoft:rgba(207,123,255,.2);--accTint:rgba(207,123,255,.14)}
 .svc-card.svc-members{--acc:#4aa3ff;--acc2:#2f6fd0;--accSoft:rgba(74,163,255,.2);--accTint:rgba(74,163,255,.13)}
 .svc-card.svc-levels{--acc:#ffae4d;--acc2:#e0852a;--accSoft:rgba(255,174,77,.2);--accTint:rgba(255,174,77,.14)}
+.svc-card.svc-replay{--acc:#ff9fbe;--acc2:#c0407a;--accSoft:rgba(255,159,190,.2);--accTint:rgba(255,159,190,.14)}
 .svc-text{position:relative;z-index:1;min-width:0}
 .svc-media{position:relative;z-index:1;min-width:0}
 .svc-card.svc-alt .svc-media{order:-1}
@@ -748,13 +749,33 @@ input[type=file]{color:var(--ewr-text-muted)}
 .sw-badge.pop{animation:swPop .5s ease}
 @keyframes swPop{0%{transform:scale(.6)}60%{transform:scale(1.15)}100%{transform:scale(1)}}
 
+/* ---- Replay player (the ghost curve re-draws itself in time) ------------- */
+.sw-rp-time{font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;color:var(--acc);font-variant-numeric:tabular-nums}
+.sw-rp-ghost{fill:none;stroke:rgba(255,255,255,.17);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.sw-rp-line{fill:none;stroke:var(--acc);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;
+  filter:drop-shadow(0 0 4px var(--accSoft))}
+.sw-rp-dot{position:absolute;width:9px;height:9px;border-radius:50%;border:1.5px solid #fff;
+  transform:translate(-50%,-50%);box-shadow:0 0 6px rgba(0,0,0,.4);pointer-events:none;
+  transition:left .3s linear,top .3s linear}
+.sw-rp-bar{display:flex;align-items:center;gap:10px;margin-top:12px}
+.sw-rp-btn{width:26px;height:26px;border-radius:50%;flex:none;
+  background:linear-gradient(135deg,var(--acc),var(--acc2));
+  display:inline-flex;align-items:center;justify-content:center;gap:2.5px}
+.sw-rp-btn i{width:2.5px;height:9px;border-radius:1px;background:#0b1c28;display:block}
+.sw-rp-track{flex:1;height:5px;border-radius:999px;background:rgba(255,255,255,.14);overflow:hidden}
+.sw-rp-fill{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--acc2),var(--acc));
+  transition:width .32s linear}
+.sw-rp-spd{font-size:10.5px;font-weight:700;color:#dbe2e6;border:1px solid rgba(255,255,255,.25);border-radius:999px;padding:2px 8px;flex:none}
+.sw-rp-voice{font-size:10.5px;font-weight:700;color:#ffd66b;background:rgba(245,183,0,.14);
+  border:1px solid rgba(245,183,0,.4);border-radius:999px;padding:2px 8px;flex:none;white-space:nowrap}
+
 /* Pause ambient motion while a card is scrolled out of view (IntersectionObserver toggles .in-view). */
 .svc-card:not(.in-view) .sw-scroll,
 .svc-card:not(.in-view) .svc-tag i,
 .svc-card:not(.in-view) .sw-mem-stat.live i{animation-play-state:paused}
 @media (prefers-reduced-motion:reduce){
   .sw-scroll,.svc-tag i,.sw-mem-stat.live i{animation:none}
-  .sw-avg,.sw-track-fill,.sw-puck,.sw-path-fill,.sw-lvl-fill,.sw-lvl-dot,.sw-badge{transition:none}
+  .sw-avg,.sw-track-fill,.sw-puck,.sw-path-fill,.sw-lvl-fill,.sw-lvl-dot,.sw-badge,.sw-rp-fill,.sw-rp-dot{transition:none}
 }
 @media (max-width:760px){
   .svc-card{grid-template-columns:1fr;gap:22px;padding:24px 20px}
