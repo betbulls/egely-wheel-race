@@ -2105,9 +2105,40 @@ input.vp-seek:focus{padding:0;border:none;box-shadow:none;
   font-variant-numeric:tabular-nums}
 .rp-stat-lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ewr-text-soft);margin-top:2px}
 .rp-ledbar{margin-top:12px}
+
+/* Replay section chrome shared by the race (view-race) and the session
+   (view-room) replays: entry card + dark header with clock and Close. The
+   finished board is never closed automatically — Close is the only way back
+   to the entry look (and it brings the Listen-again card back). */
+.rp-intro{display:flex;align-items:center;gap:14px;background:rgba(82,48,218,.06);
+  border:1px solid rgba(82,48,218,.2);border-radius:14px;padding:14px 16px;margin:2px 0 16px}
+.rp-intro-txt b{font-family:'Montserrat',sans-serif;font-size:14.5px;color:var(--ewr-text);display:block}
+.rp-intro-txt small{font-size:12.5px;color:var(--ewr-text-muted)}
+.rp-board{margin:2px 0 18px}
+.rp-board .rr-list{margin-top:10px}
+.rp-board .rp-bar{margin-top:14px;flex-wrap:wrap}
+.rp-head{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  background:var(--ewr-dark);border-radius:14px;padding:12px 16px}
+.rp-head-pill{display:inline-flex;align-items:center;gap:7px;color:#fff;font-weight:700;
+  font-size:13px;letter-spacing:.04em;font-family:'Montserrat','Inter',sans-serif}
+.rp-head-pill .d{width:8px;height:8px;border-radius:50%;background:#37dbff;box-shadow:0 0 6px rgba(55,219,255,.7)}
+.rp-head-right{display:flex;align-items:center;gap:12px}
+.rp-clock{font-family:'Montserrat',sans-serif;font-weight:700;font-size:20px;color:#fff;font-variant-numeric:tabular-nums}
+.rp-clock.final10{color:#f04438}
+.rp-close{font-family:'Montserrat','Inter',sans-serif;font-size:11.5px;font-weight:700;letter-spacing:.05em;
+  background:transparent;color:#9fb3bf;border:1.5px solid #2a4252;border-radius:999px;padding:7px 13px;cursor:pointer}
+.rp-close:hover:not([disabled]){background:#152936;color:#fff;border-color:#3b5668}
+.rp-close:focus-visible{outline:2px solid #37dbff;outline-offset:2px}
+/* Session replay: temporary live-value chip on each racer card (removed on Close). */
+.rp-live-chip{display:inline-flex;align-items:baseline;gap:4px;margin-left:8px;font-size:10px;
+  font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ewr-text-soft);
+  background:var(--ewr-surface-muted);border:1px solid var(--ewr-border);border-radius:999px;
+  padding:1px 8px;vertical-align:middle}
+.rp-live-chip b{font-size:13px;font-variant-numeric:tabular-nums;letter-spacing:0}
 @media (max-width:600px){
   .rp-hero-row{flex-wrap:wrap;gap:14px}
   .rp-cur-val{font-size:38px}
   .rp-stats{gap:10px;flex:1 1 100%;justify-content:flex-start}
   .rp-stat{flex:1;min-width:0;padding:8px 10px}
+  .rp-clock{font-size:16px}
 }

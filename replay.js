@@ -316,14 +316,31 @@ export function mountRaceReplay(el, o){
   // ---- Entry card: nothing heavy is fetched until this button is pressed.
   function intro(){
     el.innerHTML = `
-      <div class="rrp-intro">
+      <div class="rp-intro">
         <button type="button" class="vp-play" data-rrp-go aria-label="Replay the race">${PLAY_SVG}</button>
-        <div class="rrp-intro-txt">
+        <div class="rp-intro-txt">
           <b>Race replay</b>
           <small data-rrp-sub aria-live="polite">Watch the race run again — every move, every overtake.</small>
         </div>
       </div>`;
     el.querySelector('[data-rrp-go]').addEventListener('click', start);
+  }
+
+  // Back to the entry look: the intro card returns and the view restores the
+  // Listen-again card (onClose). The finished board is NEVER closed
+  // automatically — only this explicit gesture leaves it, so the final
+  // standings stay up as long as the viewer wants them.
+  function teardownToIntro(){
+    if(destroyed) return;
+    if(clock){ clock.destroy(); clock = null; }
+    if(audio){ try{ audio.pause(); }catch(_){} audio.src = ''; audio = null; }
+    built = false; loading = false; playing = false; speed = 1;
+    lastPaintT = -1; lastK = -1;
+    transport = null; lanes = []; offsetMs = 0;
+    if(o.onClose){ try{ o.onClose(); }catch(_){} }
+    intro();
+    const b = el.querySelector('[data-rrp-go]');
+    if(b) b.focus();
   }
 
   async function start(){
@@ -384,14 +401,18 @@ export function mountRaceReplay(el, o){
       return (a.name || '').localeCompare(b.name || '');
     });
     el.innerHTML = `
-      <div class="rrp-wrap">
-        <div class="rr-bar">
-          <span class="rr-live-pill"><span class="d"></span>REPLAY</span>
-          <span class="rr-clock" data-rrp-clock>--:--</span>
+      <div class="rp-board">
+        <div class="rp-head">
+          <span class="rp-head-pill"><span class="d"></span>REPLAY</span>
+          <span class="rp-head-right">
+            <span class="rp-clock" data-rrp-clock>--:--</span>
+            <button type="button" class="rp-close" data-rrp-close aria-label="Close the replay">✕ Close</button>
+          </span>
         </div>
         <div class="rr-list">${lanes.map(laneHtml).join('')}</div>
         <div class="rp-bar" data-rrp-bar></div>
       </div>`;
+    el.querySelector('[data-rrp-close]').addEventListener('click', teardownToIntro);
     const laneEls = [...el.querySelectorAll('.rr-lane')];
     lanes.forEach((p, i) => { p.el = laneEls[i]; });
 
@@ -563,6 +584,179 @@ export function mountRaceReplay(el, o){
     }
     const clockEl = el.querySelector('[data-rrp-clock]');
     if(clockEl){ clockEl.textContent = 'Race finished'; clockEl.classList.remove('final10'); }
+  }
+
+  intro();
+
+  return {
+    destroy(){
+      destroyed = true;
+      if(clock) clock.destroy();
+      if(audio){ try{ audio.pause(); }catch(_){} audio.src = ''; audio = null; }
+      el.innerHTML = '';
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// SESSION REPLAY (R3) — the finished session's results page comes alive: the
+// VIEW supplies renderFrame(tMs) (it redraws the Pulse trio, every racer
+// card's curve and the temporary live chips), and this component owns the
+// shell: entry card, dark header (clock + Close), transport, the replay
+// clock and the synced maker recording. The board's end state equals the
+// static results, so nothing needs visual restoring at the end; Close folds
+// the controls away and the view brings the Listen-again card back (onClose).
+//
+// mountSessionReplay(el, { durationMs, eventStartMs, loadAudio, onStart,
+//   renderFrame, onTakeover, onClose }) -> { destroy() }
+// ---------------------------------------------------------------------------
+export function mountSessionReplay(el, o){
+  const durationMs = Math.max(1, o.durationMs || 60000);
+  let destroyed = false, built = false, loading = false;
+  let clock = null, transport = null, audio = null, offsetMs = 0;
+  let playing = false, lastFrameT = -1;
+
+  function intro(){
+    el.innerHTML = `
+      <div class="rp-intro">
+        <button type="button" class="vp-play" data-rp-go aria-label="Replay this session">${PLAY_SVG}</button>
+        <div class="rp-intro-txt">
+          <b>Session replay</b>
+          <small data-rp-sub aria-live="polite">Watch the session unfold again — the group pulse and every curve, in time.</small>
+        </div>
+      </div>`;
+    el.querySelector('[data-rp-go]').addEventListener('click', start);
+  }
+
+  async function start(){
+    if(loading || built || destroyed) return;
+    loading = true;
+    const sub = el.querySelector('[data-rp-sub]');
+    const btn = el.querySelector('[data-rp-go]');
+    if(sub) sub.textContent = 'Loading the replay…';
+    if(btn) btn.disabled = true;
+    const audioInfo = o.loadAudio ? await o.loadAudio().catch(() => null) : null;
+    loading = false;
+    if(destroyed || !el.isConnected) return;
+    build(audioInfo);
+  }
+
+  // Back to the entry look. The finished board is NEVER folded automatically —
+  // only this explicit gesture leaves it.
+  function teardownToIntro(){
+    if(destroyed) return;
+    if(clock){ clock.destroy(); clock = null; }
+    if(audio){ try{ audio.pause(); }catch(_){} audio.src = ''; audio = null; }
+    built = false; loading = false; playing = false;
+    transport = null; offsetMs = 0; lastFrameT = -1;
+    if(o.onClose){ try{ o.onClose(); }catch(_){} }
+    intro();
+    const b = el.querySelector('[data-rp-go]');
+    if(b) b.focus();
+  }
+
+  function build(audioInfo){
+    built = true;
+    el.innerHTML = `
+      <div class="rp-board">
+        <div class="rp-head">
+          <span class="rp-head-pill"><span class="d"></span>REPLAY</span>
+          <span class="rp-head-right">
+            <span class="rp-clock" data-rp-clock>--:--</span>
+            <button type="button" class="rp-close" data-rp-close aria-label="Close the replay">✕ Close</button>
+          </span>
+        </div>
+        <div class="rp-bar" data-rp-bar></div>
+      </div>`;
+    el.querySelector('[data-rp-close]').addEventListener('click', teardownToIntro);
+    const barEl = el.querySelector('[data-rp-bar]');
+    transport = mountTransport(barEl, {
+      durationSeconds: Math.round(durationMs / 1000),
+      onToggle: () => clock.toggle(),
+      onSeek: ms => clock.seek(ms),
+      onSpeed: x => clock.setSpeed(x),
+    });
+    // Same recording rules as the race replay: a recording that starts after
+    // the official window can never sound inside the replay — no takeover.
+    if(audioInfo && audioInfo.url){
+      const off = (audioInfo.recStartMs != null && o.eventStartMs) ? (audioInfo.recStartMs - o.eventStartMs) : 0;
+      if(off < durationMs){
+        audio = new Audio(audioInfo.url);
+        audio.preload = 'auto';
+        offsetMs = off;
+        audio.addEventListener('play', () => { const fx = el.querySelector('[data-rp-audiofix]'); if(fx) fx.remove(); });
+        const chip = document.createElement('span');
+        chip.className = 'voice-chip';
+        chip.textContent = '🎙 Voice guidance';
+        barEl.appendChild(chip);
+        if(o.onTakeover){ try{ o.onTakeover(); }catch(_){} }
+      }
+    }
+    if(o.onStart){ try{ o.onStart(); }catch(_){} }
+    clock = createReplayClock({ durationMs, onFrame, onState });
+    clock.play();
+    // Keyboard flow: the intro button vanished with the innerHTML swap.
+    const tb = el.querySelector('[data-rp-toggle]');
+    if(tb) tb.focus();
+  }
+
+  function onState(s){
+    playing = s.playing;
+    if(transport) transport.setPlaying(s.playing, s.done);
+    if(audio){
+      audio.playbackRate = s.speed;
+      if(!s.playing && !audio.paused) audio.pause();
+    }
+    if(s.done && !s.playing){
+      const c = el.querySelector('[data-rp-clock]');
+      if(c){ c.textContent = 'Session finished'; c.classList.remove('final10'); }
+    }
+  }
+
+  function onFrame(t){
+    if(destroyed || !built) return;
+    if(transport) transport.paint(t);
+    const c = el.querySelector('[data-rp-clock]');
+    if(c){
+      const left = Math.max(0, durationMs - t);
+      c.textContent = fmt(left) + ' left';
+      c.classList.toggle('final10', left <= 10000 && left > 0);
+    }
+    // The heavy repaint (trio + every racer canvas) is throttled to ~5 Hz;
+    // the final frame always lands.
+    if(t >= durationMs || lastFrameT < 0 || Math.abs(t - lastFrameT) >= 200){
+      lastFrameT = t;
+      try{ o.renderFrame(t); }catch(_){}
+    }
+    syncAudio(t);
+  }
+
+  function syncAudio(t){
+    if(!audio || destroyed) return;
+    const desired = (t - offsetMs) / 1000;
+    const over = isFinite(audio.duration) && audio.duration > 0 && desired > audio.duration;
+    if(!playing || t >= durationMs || desired < 0 || over){
+      if(!audio.paused) audio.pause();
+      return;
+    }
+    if(Math.abs((audio.currentTime || 0) - desired) > 0.35){
+      try{ audio.currentTime = Math.max(0, desired); }catch(_){}
+    }
+    if(audio.paused) audio.play().catch(() => showAudioHint());
+  }
+
+  function showAudioHint(){
+    if(destroyed || el.querySelector('[data-rp-audiofix]')) return;
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'rp-speed'; b.setAttribute('data-rp-audiofix', '');
+    b.textContent = '🎙 Enable voice';
+    b.addEventListener('click', () => {
+      if(clock && !playing) clock.play();
+      if(audio) audio.play().catch(() => {});
+      b.remove();
+    });
+    const bar = el.querySelector('[data-rp-bar]');
+    if(bar) bar.appendChild(b);
   }
 
   intro();

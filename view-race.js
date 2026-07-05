@@ -265,14 +265,8 @@ function injectRaceStyles(){
   .rr-sscore{text-align:right;white-space:nowrap}
   .rr-sscore b{font-family:'Montserrat',sans-serif;font-size:15px;color:#011624}
   .rr-sscore span{display:block;font-size:11px;color:#99a2a7}
-  /* ── RACE REPLAY (R2) ── */
-  .rrp-intro{display:flex;align-items:center;gap:14px;background:rgba(82,48,218,.06);
-    border:1px solid rgba(82,48,218,.2);border-radius:14px;padding:14px 16px;margin:2px 0 16px}
-  .rrp-intro-txt b{font-family:'Montserrat',sans-serif;font-size:14.5px;color:#011624;display:block}
-  .rrp-intro-txt small{font-size:12.5px;color:#67737c}
-  .rrp-wrap{margin:2px 0 18px}
-  .rrp-wrap .rr-list{margin-top:10px}
-  .rrp-wrap .rp-bar{margin-top:14px;flex-wrap:wrap}
+  /* (Race replay section chrome — .rp-intro/.rp-board/.rp-head/.rp-close — is
+     GLOBAL in ewr-redesign.css, shared with the session replay.) */
   @media (prefers-reduced-motion: reduce){
     .rr-puck{transition:none}.rr-lane.moving .rr-tail{opacity:0}.rr-rank.bump{animation:none}.rr-vrf.flash{animation:none}
     .rl-pill.practicing .d,.rl-pill.reconnecting .d,.rr-bar .rr-live-pill .d{animation:none}
@@ -1192,6 +1186,17 @@ export function mount(el, raceId, inviteToken = null){
         // The replay owns the commentary from here — drop the standalone
         // Listen-again card so two audios can never fight.
         onAudioTakeover: () => { if(voicePlayer){ voicePlayer.destroy(); voicePlayer = null; } },
+        // ✕ Close: back to the entry look — bring the Listen-again card back.
+        onClose: () => {
+          const vs = body.querySelector('#rrVoice');
+          if(vs && !voicePlayer){
+            voicePlayer = mountVoicePlayer(vs, {
+              sessionId: raceId, mode: 'race',
+              hostName: hostName || session.created_by || 'The host',
+              hostAvatar: hostAvatar,
+            });
+          }
+        },
       });
     }
   }

@@ -7,7 +7,8 @@ import { drawTrio, drawVitalityChart } from './chart.js';
 import { flagUrl } from './countries.js';
 import { createAddToCalendar } from './calendar.js';
 import * as wakeLock from './wake-lock.js';
-import { mountVoiceDock, mountVoicePlayer, REC_POSTROLL_MS } from './voice.js';
+import { mountVoiceDock, mountVoicePlayer, fetchRecordingPlayback, REC_POSTROLL_MS } from './voice.js';
+import { mountSessionReplay } from './replay.js';
 
 // Robust clipboard copy — Clipboard API with a legacy execCommand fallback.
 async function copyText(text){
@@ -245,6 +246,7 @@ export function mount(el, sessionId, inviteToken = null){
   let hostAvatarUrl = null;                     // maker photo → the voice dock's breathing ring
   let voiceDock = null, voiceLive = false;      // Live Voice: dock UI + my "I am speaking" presence flag
   let voicePlayer = null;                       // "Listen again" card on the results screen
+  let sessReplay = null;                        // session replay (R3) on the results screen
   let recLive = false;                          // host only: server-confirmed "recording is running"
   let unsubVoiceAuth = null;
 
@@ -1329,6 +1331,7 @@ export function mount(el, sessionId, inviteToken = null){
     body.innerHTML = `
       ${pulsePanel}
       <div id="resVoice" hidden></div>
+      <div id="resReplay"></div>
       ${emptyNote}
       ${leaderboardHtml}
       ${mineHtml}
@@ -1375,6 +1378,66 @@ export function mount(el, sessionId, inviteToken = null){
 
     drawTrio(body.querySelector('#spChartRes'), pulseHist, { durationMs });
     mountResVoice(body);
+
+    // ---- Session replay (R3): the results page comes alive — the Pulse trio
+    // and every racer card redraw in time, each card gets a temporary live
+    // chip, and the maker's recording plays in sync. The end state equals the
+    // static results; ✕ Close folds the controls away and brings the
+    // Listen-again card back.
+    if(sessReplay){ sessReplay.destroy(); sessReplay = null; }
+    const rslot = body.querySelector('#resReplay');
+    const rLanes = counted.map((r, i) => ({ r, id: 'rc' + i, chip: null }));
+    if(myExcluded) rLanes.push({ r: myRow, id: 'rcMine', chip: null });
+    if(rslot && rLanes.length && durationMs){
+      for(const L of rLanes){
+        L.hist = ledsToHist(L.r.curve);
+        L.color = vitalityColor(Math.round(L.r.stats.avg));
+      }
+      const trioAt = T => ({
+        host: pulseHist.host.filter(p => p.t <= T),
+        group: pulseHist.group.filter(p => p.t <= T),
+        me: pulseHist.me.filter(p => p.t <= T),
+      });
+      const valAt = (curve, T) => {
+        if(!Array.isArray(curve) || curve.length < 2) return null;
+        const n = curve.length;
+        const idx = T >= durationMs ? n - 1 : Math.max(0, Math.min(n - 1, Math.floor(T / (durationMs / (n - 1)))));
+        return curve[idx];
+      };
+      const ensureChips = () => rLanes.forEach(L => {
+        if(L.chip) return;
+        const row = body.querySelector(`.res-card[data-cid="${L.id}"] .racer-name-row`);
+        if(!row) return;
+        L.chip = document.createElement('span');
+        L.chip.className = 'rp-live-chip';
+        L.chip.innerHTML = '<b>–</b> live';
+        row.appendChild(L.chip);
+      });
+      const removeChips = () => rLanes.forEach(L => { if(L.chip){ L.chip.remove(); L.chip = null; } });
+      const renderFrame = T => {
+        drawTrio(body.querySelector('#spChartRes'), trioAt(T), { durationMs });
+        for(const L of rLanes){
+          const cv = body.querySelector('#' + L.id);
+          if(cv) drawCurve(cv, L.hist.filter(p => p.t <= T), L.color);
+          if(L.chip){
+            const v = valAt(L.r.curve, T);
+            L.chip.innerHTML = `<b style="color:${v == null ? '#99a2a7' : zText(v)}">${v == null ? '–' : v}</b> live`;
+          }
+        }
+      };
+      sessReplay = mountSessionReplay(rslot, {
+        durationMs, eventStartMs: startMs,
+        loadAudio: () => fetchRecordingPlayback(Number(sessionId)),
+        onStart: ensureChips,
+        renderFrame,
+        onTakeover: () => { if(voicePlayer){ voicePlayer.destroy(); voicePlayer = null; } },
+        onClose: () => {
+          removeChips();
+          renderFrame(durationMs);                // back to the full/original charts
+          if(!voicePlayer) mountResVoice(body);   // the Listen-again card returns
+        },
+      });
+    }
   }
 
   // "Listen again" — the recording player card on the results screen. The card
@@ -1397,6 +1460,7 @@ export function mount(el, sessionId, inviteToken = null){
     if(unsubVoiceAuth) unsubVoiceAuth();
     if(voiceDock) voiceDock.destroy();
     if(voicePlayer) voicePlayer.destroy();
+    if(sessReplay) sessReplay.destroy();
     wakeLock.release();
     if(broadcastTimer) clearInterval(broadcastTimer);
     if(renderTimer) clearInterval(renderTimer);
