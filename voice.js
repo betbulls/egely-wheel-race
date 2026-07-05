@@ -194,6 +194,9 @@ function createVoice(sessionId){
       try{
         await connect('listen', name);
         startedAt = Date.now();
+        // Listeners keep the screen awake too — a dimming/locking phone mid-
+        // meditation broke the experience (and can cut the audio on mobile).
+        acquireWake();
         // If the maker is already speaking, TrackSubscribed fires right after
         // connect; until then we sit in "waiting".
         if(state === 'connecting') set('waiting');
@@ -331,7 +334,22 @@ export function mountVoiceDock(el, opts){
       const liveish = st === 'live' || st === 'muted' || st === 'reconnecting';
       if(!recState.started && liveish && (p === 'rec' || p === 'post')) recCall('start');
       if(recState.started && !recState.stopped && p === 'off') recCall('stop');
+      // The idle card has no tick of its own — keep its countdown/phase line
+      // moving too (the live card updates via its own 1s timer).
+      if(st === 'idle' || st === 'ended'){
+        const sm = el.querySelector('.vd-idle .vd-txt small');
+        if(sm){ const line = hostIdleLine(); if(sm.textContent !== line) sm.textContent = line; }
+      }
     }, 1000);
+  }
+  // Listener side: the REC chip appears/disappears with the recording phase —
+  // re-render occasionally so transparency does not depend on state changes.
+  let dockRefresh = null;
+  if(REC_ENABLED && !o.canHost && o.schedule){
+    dockRefresh = setInterval(() => {
+      const st = voice.state;
+      if(st === 'listening' || st === 'waiting') render();
+    }, 10000);
   }
 
   function render(){
@@ -458,6 +476,7 @@ export function mountVoiceDock(el, opts){
       destroyed = true;
       if(tickTimer) clearInterval(tickTimer);
       if(recCtl) clearInterval(recCtl);
+      if(dockRefresh) clearInterval(dockRefresh);
       // NOTE: destroy() does NOT stop the recording — it belongs to the session,
       // not to this page view. The post-roll deadline / finalize path closes it.
       voice.stop();

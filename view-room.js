@@ -1029,6 +1029,10 @@ export function mount(el, sessionId, inviteToken = null){
     // Practice room: live telemetry leads, the countdown card steps back.
     const timeCard = gTimeEl.closest('.gstat');
     if(timeCard) timeCard.classList.toggle('quiet', phase() === 'pre');
+    // The "open for practice" note belongs to the pre-window only — hide it the
+    // moment the official session starts.
+    const practiceNote = $('roomPracticeNote');
+    if(practiceNote && !practiceNote.hidden && now >= startMs) practiceNote.hidden = true;
 
     // Only wheel-data participants count — presence-only people must not dilute.
     const list = [...racers.values()].filter(r => r.hasData);
