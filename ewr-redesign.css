@@ -2078,3 +2078,36 @@ input.vp-seek:focus{padding:0;border:none;box-shadow:none;
 
 /* Live dock polish: a touch more presence while the maker is actually live. */
 .vd.vd-live{border-color:rgba(82,48,218,.32);box-shadow:0 8px 22px -12px rgba(82,48,218,.35)}
+
+/* ============================================================
+   REPLAY (R1) — the measurement detail page re-plays the saved
+   curve in time. Transport controls reuse the voice player's
+   language (.vp-play round button, input.vp-seek); the readout
+   mirrors the live solo cockpit (value / avg / peak / time-left
+   + the 24-cell LED bar).
+   ============================================================ */
+.rp-bar{display:flex;align-items:center;gap:12px;margin-top:12px}
+.rp-speed{flex:none;font-family:'Montserrat','Inter',sans-serif;font-size:12px;font-weight:700;
+  letter-spacing:.04em;border-radius:999px;padding:8px 14px;cursor:pointer;min-width:52px;
+  background:#fff;color:var(--ewr-text);border:1.5px solid var(--ewr-border)}
+.rp-speed:hover:not([disabled]){background:#f2f0fc;border-color:#c9bcf2;color:var(--ewr-text)}
+.rp-speed:focus-visible{outline:2px solid var(--ewr-accent);outline-offset:2px}
+.rp-hero{margin-top:16px}
+.rp-hero-row{display:flex;align-items:center;gap:22px}
+.rp-cur{flex:1;min-width:0}
+.rp-cur-val{font-family:'Montserrat',sans-serif;font-size:46px;font-weight:600;line-height:1;
+  font-variant-numeric:tabular-nums;color:var(--ewr-text)}
+.rp-cur-lbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ewr-text-soft);margin-top:3px}
+.rp-stats{display:flex;gap:14px}
+.rp-stat{background:var(--ewr-surface-muted);border:1px solid var(--ewr-border);border-radius:12px;
+  padding:9px 14px;min-width:74px;text-align:center}
+.rp-stat-val{font-family:'Montserrat',sans-serif;font-size:20px;font-weight:600;color:var(--ewr-text);
+  font-variant-numeric:tabular-nums}
+.rp-stat-lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ewr-text-soft);margin-top:2px}
+.rp-ledbar{margin-top:12px}
+@media (max-width:600px){
+  .rp-hero-row{flex-wrap:wrap;gap:14px}
+  .rp-cur-val{font-size:38px}
+  .rp-stats{gap:10px;flex:1 1 100%;justify-content:flex-start}
+  .rp-stat{flex:1;min-width:0;padding:8px 10px}
+}

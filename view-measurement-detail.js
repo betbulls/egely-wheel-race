@@ -1,7 +1,8 @@
 import { supabase } from './db.js';
 import * as auth from './auth.js';
 import { vitalityLevel, trendLabel } from './analytics.js';
-import { drawVitalityChart, drawTrio } from './chart.js';
+import { drawTrio } from './chart.js';
+import { mountCurveReplay } from './replay.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
@@ -33,9 +34,12 @@ export function mount(el, id){
 
   let onResize = null;
   let onResizeTrio = null;
+  let replay = null;       // curve replay cockpit (replay.js)
+  let disposed = false;    // the async load must not build UI into a dead view
 
   (async () => {
     const { data: r, error } = await supabase.from('results').select('*').eq('id', Number(id)).single();
+    if(disposed) return;
     if(error || !r){ el.querySelector('#dBody').innerHTML = '<div class="empty">Measurement not found.</div>'; return; }
 
     // Set the back link in context: own measurement → My measurements;
@@ -46,6 +50,7 @@ export function mount(el, id){
     if(isClientView){
       const { data: prof } = await supabase.from('profiles')
         .select('id, display_name, avatar_url').eq('id', r.user_id).maybeSingle();
+      if(disposed) return;
       clientProf = prof || null;
       const cname = (clientProf && clientProf.display_name) || 'Member';
       el.querySelector('#dBack').innerHTML = `<a href="#/clients/${esc(r.user_id)}" class="link">← ${esc(cname)}</a>`;
@@ -64,6 +69,7 @@ export function mount(el, id){
     if(solo){ title = r.label || 'Solo measurement'; }
     else {
       const { data: sess } = await supabase.from('sessions').select('name').eq('id', r.session_id).single();
+      if(disposed) return;
       title = (sess && sess.name) || (isRace ? 'Race' : 'Session');
     }
     el.querySelector('#dTitle').textContent = title;
@@ -89,6 +95,7 @@ export function mount(el, id){
       const { data: sessRows } = await supabase.from('results')
         .select('id, curve, racer_name, is_host, duration_seconds, avg, peak, steadiness')
         .eq('session_id', r.session_id);
+      if(disposed) return;
       if(sessRows && sessRows.length){
         const durationMs = (r.duration_seconds || 60) * 1000;
         const maxLen = sessRows.reduce((m, rw) => Math.max(m, Array.isArray(rw.curve) ? rw.curve.length : 0), 0);
@@ -196,7 +203,9 @@ export function mount(el, id){
         <div class="eval-meaning">${esc(lvl.meaning)}</div>
 
         ${Array.isArray(r.curve) && r.curve.length > 1
-          ? '<div class="solo-chart-wrap" style="margin-top:16px"><canvas id="dChart"></canvas></div>'
+          ? `<div class="rp-hero" id="dReplayHero" hidden></div>
+             <div class="solo-chart-wrap" style="margin-top:16px"><canvas id="dChart"></canvas></div>
+             <div class="rp-bar" id="dReplayBar"></div>`
           : '<p class="d-meta" style="margin-top:16px">No curve stored for this measurement.</p>'}
 
         <div class="res-stats" style="justify-content:flex-start;margin-top:18px;gap:22px">
@@ -216,14 +225,25 @@ export function mount(el, id){
       </div>
     `;
 
+    // Replay cockpit (replay.js) — owns all drawing on #dChart: idle = the
+    // full curve (same as the old static draw), ▶ re-plays it in time with
+    // the live readout (value / avg / peak / time-left) and the LED bar.
     if(Array.isArray(r.curve) && r.curve.length > 1){
-      onResize = () => drawVitalityChart(el.querySelector('#dChart'), r.curve, r.duration_seconds);
-      onResize();
+      replay = mountCurveReplay({
+        heroEl: el.querySelector('#dReplayHero'),
+        barEl: el.querySelector('#dReplayBar'),
+        canvas: el.querySelector('#dChart'),
+        curve: r.curve,
+        durationSeconds: r.duration_seconds || 60,
+      });
+      onResize = () => replay.redraw();
       window.addEventListener('resize', onResize);
     }
   })();
 
   return () => {
+    disposed = true;
+    if(replay) replay.destroy();
     if(onResize) window.removeEventListener('resize', onResize);
     if(onResizeTrio) window.removeEventListener('resize', onResizeTrio);
   };
