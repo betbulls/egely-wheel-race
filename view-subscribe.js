@@ -19,6 +19,7 @@ const PRODUCTS = {
     image: 'https://cdn.shopify.com/s/files/1/0946/2382/6306/files/VitalityPack-EgelyWheel.jpg?v=1777371828',
     url: SHOP + '/cart/56459929780610:1?utm_source=ewr-live&utm_medium=subscribe-page&utm_campaign=vitality-pack',
     productUrl: SHOP + '/products/vitality-pack',
+    checkoutDirect: true,
     price: '$499',
     priceNote: 'one-time',
     badge: 'Best value',
@@ -33,8 +34,12 @@ const PRODUCTS = {
     name: 'EWR Access',
     tagline: 'Already own an Egely Wheel? Just add the digital layer.',
     image: 'assets/ewr-access-product-card.png',
-    url: SHOP + '/cart/56516037312898:1?utm_source=ewr-live&utm_medium=subscribe-page&utm_campaign=ewr-subscription',
+    // Subscription product: Shopify only sells it with a selling plan, so a
+    // cart permalink 500s ("Variant can only be purchased with a selling
+    // plan") — this button goes to the product page instead.
+    url: SHOP + '/products/ewr-subscription',
     productUrl: SHOP + '/products/ewr-subscription',
+    checkoutDirect: false,
     price: '$49',
     priceNote: '1 year of access',
     badge: '',
@@ -204,7 +209,7 @@ function card(p, recommended){
     <a class="sub-cta ${recommended ? 'primary' : 'secondary'}" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">
       ${esc(p.cta)} ${ARROW}
     </a>
-    <div class="sub-more">Straight to secure checkout · <a href="${esc(p.productUrl)}" target="_blank" rel="noopener noreferrer">View details ↗</a></div>
+    ${p.checkoutDirect ? `<div class="sub-more">Straight to secure checkout · <a href="${esc(p.productUrl)}" target="_blank" rel="noopener noreferrer">View details ↗</a></div>` : ''}
   </div>`;
 }
 
