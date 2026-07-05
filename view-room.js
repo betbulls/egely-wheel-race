@@ -244,6 +244,7 @@ export function mount(el, sessionId, inviteToken = null){
   let hostHandle = null, hostIsMaker = false;   // approved-maker host → racer card links to their invite page
   let hostAvatarUrl = null;                     // maker photo → the voice dock's breathing ring
   let voiceDock = null, voiceLive = false;      // Live Voice: dock UI + my "I am speaking" presence flag
+  let recLive = false;                          // host only: server-confirmed "recording is running"
   let unsubVoiceAuth = null;
 
   // ---- Load session ---------------------------------------------------------
@@ -322,6 +323,7 @@ export function mount(el, sessionId, inviteToken = null){
         hostAvatar: hostAvatarUrl,
         schedule: { startMs, endMs },
         onVoiceFlag: v => { voiceLive = v; trackPresence(); },
+        onRecFlag: v => { recLive = v; trackPresence(); },
       });
       let dockCanHost = isHostUser && !!auth.getState().approvedMaker;
       voiceDock = mountVoiceDock($('voiceDock'), dockOpts(dockCanHost));
@@ -348,7 +350,13 @@ export function mount(el, sessionId, inviteToken = null){
 
   function tryStart(){
     if(started) return true;
-    const n = (auth.getState().displayName || localStorage.getItem('ewr_name') || '').trim();
+    const a = auth.getState();
+    // Logged-in: WAIT for the profile-backed name. Before accessReady the
+    // displayName falls back to the email prefix, and joining with that froze
+    // hosts under a wrong identity (presence key, host matching, Session Pulse
+    // host column and the voice listen-invite all key off the name).
+    if(a.user && !a.accessReady) return false;
+    const n = (a.displayName || localStorage.getItem('ewr_name') || '').trim();
     if(!n) return false;
     myName = n; started = true; showBody(); return true;
   }
@@ -486,20 +494,24 @@ export function mount(el, sessionId, inviteToken = null){
 
   function trackPresence(){
     if(!channel) return;
-    channel.track({ name: myName, ble: bleConnected, country: auth.getState().country || null, avatar: auth.getState().avatarUrl || null, voice: voiceLive })
+    channel.track({ name: myName, uid: auth.getState().user?.id || null, ble: bleConnected, country: auth.getState().country || null, avatar: auth.getState().avatarUrl || null, voice: voiceLive, rec: recLive })
       .catch(() => {});   // best-effort; the roster also works off broadcasts
   }
 
   function syncPresence(){
     present.clear();
-    let hostVoiceOn = false;
+    let hostVoiceOn = false, hostRecOn = false;
     const state = channel ? channel.presenceState() : {};
     for(const metas of Object.values(state)){
       const m = metas[metas.length - 1];   // latest track wins per key
       if(m && m.name) present.set(m.name, { ble: !!m.ble, country: m.country || null, avatar: m.avatar || null });
-      if(m && m.voice && isHostName(m.name)) hostVoiceOn = true;
+      // Host detection for the voice invite: uid beats the display name (a name
+      // mismatch must never hide the maker's live voice from the room).
+      const fromHost = m && ((m.uid && session?.created_by_user_id) ? m.uid === session.created_by_user_id : isHostName(m.name));
+      if(fromHost && m.voice) hostVoiceOn = true;
+      if(fromHost && m.rec) hostRecOn = true;
     }
-    if(voiceDock) voiceDock.setListenAvailable(hostVoiceOn);
+    if(voiceDock){ voiceDock.setListenAvailable(hostVoiceOn); voiceDock.setRecActive(hostRecOn); }
     // Presence-only participants join the roster; entries that never produced
     // wheel data leave it when their presence drops (broadcasters stay).
     for(const [name, p] of present){
@@ -509,7 +521,13 @@ export function mount(el, sessionId, inviteToken = null){
       }
     }
     for(const [name, r] of racers){
-      if(!r.hasData && !present.has(name)){ racers.delete(name); }
+      if(!r.hasData && !present.has(name)){
+        // Remove the CARD too — deleting only the map entry left an orphan DOM
+        // card behind, and the participant's return built a second one (the
+        // "duplicate info rows after every refresh" bug).
+        if(r.el && r.el.parentNode) r.el.parentNode.removeChild(r.el);
+        racers.delete(name);
+      }
     }
     render();
   }

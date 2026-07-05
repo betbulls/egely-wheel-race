@@ -241,9 +241,11 @@ export function mountVoiceDock(el, opts){
     hostAvatar: null,           // maker photo → the listener's breathing ring
     schedule: null,             // { startMs, endMs } → recording-phase copy (F2)
     onVoiceFlag: null,
+    onRecFlag: null,            // host → presence carries "recording is running"
   }, opts);
   const voice = createVoice(o.sessionId);
   let listenAvailable = false, destroyed = false, tickTimer = null;
+  let recActiveRemote = false;  // listener side: server-confirmed REC via host presence
 
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   const noun = o.mode === 'race' ? 'race' : 'session';
@@ -276,9 +278,14 @@ export function mountVoiceDock(el, opts){
     return 'off';
   }
   function recChip(){
-    const p = recPhase();
-    if(!p || p === 'pre' || p === 'off') return '';
-    return '<span class="vd-rec">● REC</span>';
+    // Honest chip: the host shows it only once the server confirmed the egress;
+    // listeners show it from the host's presence flag (also server-confirmed).
+    if(o.canHost){
+      const p = recPhase();
+      if(!p || p === 'pre' || p === 'off') return '';
+      return (recState.started && !recState.stopped) ? '<span class="vd-rec">● REC</span>' : '';
+    }
+    return recActiveRemote ? '<span class="vd-rec">● REC</span>' : '';
   }
   function postLeft(){
     const ms = Math.max(0, (o.schedule.endMs + REC_POSTROLL_MS) - Date.now());
@@ -289,6 +296,12 @@ export function mountVoiceDock(el, opts){
     const p = recPhase();
     if(!p) return 'Your voice is guiding this ' + noun + '.';
     if(p === 'pre') return 'Warm-up — not recorded. Recording starts with the ' + noun + '.';
+    // Honesty rule: never show "Recording" while the server has not confirmed it.
+    if((p === 'rec' || p === 'post') && !recState.started){
+      return recState.err
+        ? 'Recording not started (' + recState.err + ') — retrying…'
+        : 'Starting the recording…';
+    }
     if(p === 'rec') return 'Recording — everything said during the ' + noun + ' is kept, even if you pause.';
     if(p === 'post') return 'Closing words — still recording · ' + postLeft() + ' left (End stops it).';
     return 'Recording finished — you are live, off the record.';
@@ -308,7 +321,7 @@ export function mountVoiceDock(el, opts){
   // post-roll); STOP when the post-roll deadline passes. End during the window
   // never touches the recording; End in the post-roll stops it (see click
   // handler). Server calls are idempotent; 409 means already recorded/closed.
-  const recState = { started: false, stopped: false, busy: false };
+  const recState = { started: false, stopped: false, busy: false, err: '' };
   async function recCall(action){
     if(recState.busy) return;
     recState.busy = true;
@@ -320,10 +333,14 @@ export function mountVoiceDock(el, opts){
       });
       const j = await r.json().catch(() => ({}));
       if(r.ok || r.status === 409){
+        recState.err = '';
         if(action === 'start'){ recState.started = true; if(j.closed) recState.stopped = true; }
         if(action === 'stop') recState.stopped = true;
+        if(o.onRecFlag){ try{ o.onRecFlag(recState.started && !recState.stopped); }catch(_){} }
+      } else {
+        recState.err = j.error || ('rec ' + action + ' failed (' + r.status + ')');
       }
-    }catch(_){ /* transient — the controller retries on the next tick */ }
+    }catch(_){ recState.err = 'recording service unreachable'; }
     finally{ recState.busy = false; }
   }
   let recCtl = null;
@@ -471,6 +488,14 @@ export function mountVoiceDock(el, opts){
       // If the maker stopped while we listen, the Track/Disconnect events do the
       // talking — this flag only controls the invitation card's visibility.
       render();
+    },
+    // Listener side: the host's presence says whether the recording is running.
+    setRecActive(v){
+      if(destroyed || o.canHost) return;
+      if(recActiveRemote === !!v) return;
+      recActiveRemote = !!v;
+      const st = voice.state;
+      if(st === 'listening' || st === 'waiting' || st === 'tap') render();
     },
     destroy(){
       destroyed = true;

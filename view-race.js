@@ -340,6 +340,7 @@ export function mount(el, raceId, inviteToken = null){
   el.innerHTML = `<div class="rl-wrap"><div class="rl-head" id="rlHead"><div class="rl-title">Loading…</div></div><div class="voice-dock" id="voiceDock" hidden></div><div id="rlBody"></div></div>`;
   const $ = id => el.querySelector('#' + id);
   let voiceDock = null, voiceLive = false;   // Live Voice: dock UI + my "I am speaking" presence flag
+  let recLive = false;                       // host only: server-confirmed "recording is running"
   let unsubVoiceAuth = null;
 
   // ---- Load + access gate ----------------------------------------------------
@@ -379,6 +380,7 @@ export function mount(el, raceId, inviteToken = null){
         hostAvatar: hostAvatar,
         schedule: { startMs, endMs },
         onVoiceFlag: v => { voiceLive = v; trackPresence(); },
+        onRecFlag: v => { recLive = v; trackPresence(); },
       });
       let dockCanHost = isHostUser && !!auth.getState().approvedMaker;
       voiceDock = mountVoiceDock($('voiceDock'), dockOpts(dockCanHost));
@@ -479,7 +481,11 @@ export function mount(el, raceId, inviteToken = null){
   // gate ONLY once we know the visitor is genuinely not logged in.
   function tryBegin(){
     if(begun) return true;
-    const n = (auth.getState().displayName || localStorage.getItem('ewr_name') || '').trim();
+    const a = auth.getState();
+    // Logged-in: wait for the profile-backed name — the pre-accessReady email-
+    // prefix fallback froze racers under a wrong display name (see view-room).
+    if(a.user && !a.accessReady) return false;
+    const n = (a.displayName || localStorage.getItem('ewr_name') || '').trim();
     if(!n) return false;
     myName = n; begun = true; begin(); return true;
   }
@@ -638,7 +644,7 @@ export function mount(el, raceId, inviteToken = null){
       id: myId, clientId: myClientId, name: myName, uid: myUid,
       avatar: auth.getState().avatarUrl || null, country: auth.getState().country || null,
       wheel: bleConnected, slot: curSlot(), cum: myCumulative, live: Math.round(myEma),
-      verified: myVerified, firstSlot: myFirstSlot, ts: Date.now(), voice: voiceLive,
+      verified: myVerified, firstSlot: myFirstSlot, ts: Date.now(), voice: voiceLive, rec: recLive,
     }).catch(() => {});
   }
 
@@ -646,11 +652,12 @@ export function mount(el, raceId, inviteToken = null){
   function syncPresence(){
     const state = channel ? channel.presenceState() : {};
     const seen = new Set();
-    let hostVoiceOn = false;
+    let hostVoiceOn = false, hostRecOn = false;
     for(const metas of Object.values(state)){
       const m = metas[metas.length - 1];
       if(!m || !m.id) continue;
       if(m.voice && isHostUid(m.uid)) hostVoiceOn = true;
+      if(m.rec && isHostUid(m.uid)) hostRecOn = true;
       seen.add(m.id);
       ensureEntry(m);
       // Seed race state from the snapshot (broadcast keeps it fresh afterwards). Marked
@@ -658,7 +665,7 @@ export function mount(el, raceId, inviteToken = null){
       if(phase() !== 'pre') acceptRacerState(m, true);
       else { const r = roster.get(m.id); if(r){ r.lastSeen = Date.now(); } }
     }
-    if(voiceDock) voiceDock.setListenAvailable(hostVoiceOn);
+    if(voiceDock){ voiceDock.setListenAvailable(hostVoiceOn); voiceDock.setRecActive(hostRecOn); }
     // Drop people who left — but KEEP anyone still broadcasting (a lobby-tick / race-tick
     // within the reconnect window) or holding a live score, mirroring how the session room
     // keeps its data-producing racers. Without this, a bot known only from broadcasts (its
