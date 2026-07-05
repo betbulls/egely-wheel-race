@@ -14,8 +14,18 @@ import { supabase } from './db.js';
 
 const TOKEN_URL = 'https://lhyychkrcrndjptptkii.supabase.co/functions/v1/livekit-token';
 
+// F2 flips this on when server-side recording (Egress) actually runs. Until
+// then the recording-phase copy stays hidden — we never claim REC falsely.
+const REC_ENABLED = false;
+// Recording model (agreed with Csaba): the record follows the OFFICIAL window,
+// plus a post-roll so the award ceremony / closing words are kept. Lobby talk
+// before the start is never recorded.
+export const REC_POSTROLL_MS = 10 * 60000;
+
 let lkPromise = null;
 const loadLk = () => (lkPromise ||= import('https://esm.sh/livekit-client@2'));
+
+const MIC_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"/><path d="M12 18v3"/></svg>';
 
 // ---------------------------------------------------------------------------
 // Core connection object (no DOM) — one per view instance.
@@ -211,7 +221,12 @@ function createVoice(sessionId){
 //   -> { setListenAvailable(bool), destroy() }
 // ---------------------------------------------------------------------------
 export function mountVoiceDock(el, opts){
-  const o = Object.assign({ mode: 'session', canHost: false, hostName: 'The host', onVoiceFlag: null }, opts);
+  const o = Object.assign({
+    mode: 'session', canHost: false, hostName: 'The host',
+    hostAvatar: null,           // maker photo → the listener's breathing ring
+    schedule: null,             // { startMs, endMs } → recording-phase copy (F2)
+    onVoiceFlag: null,
+  }, opts);
   const voice = createVoice(o.sessionId);
   let listenAvailable = false, destroyed = false, tickTimer = null;
 
@@ -223,6 +238,40 @@ export function mountVoiceDock(el, opts){
   function fmtElapsed(){
     const s = voice.elapsed();
     return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }
+
+  // Ring content: the maker's face for listeners (the voice made visible), a
+  // clean mic glyph for the host's own controls / avatar-less makers.
+  function ringInner(preferAvatar){
+    if(preferAvatar && o.hostAvatar){
+      return '<img src="' + esc(o.hostAvatar) + '" alt="" onerror="this.remove()">';
+    }
+    return '<span class="vd-mic">' + MIC_SVG + '</span>';
+  }
+
+  // Recording phase, purely from the official window (F2 turns the copy on).
+  // pre → not recording yet · rec → recording · post → closing words · off →
+  // recording finished (voice can continue live-only).
+  function recPhase(){
+    if(!REC_ENABLED || !o.schedule) return null;
+    const t = Date.now();
+    if(t < o.schedule.startMs) return 'pre';
+    if(t <= o.schedule.endMs) return 'rec';
+    if(t <= o.schedule.endMs + REC_POSTROLL_MS) return 'post';
+    return 'off';
+  }
+  function recChip(){
+    const p = recPhase();
+    if(!p || p === 'pre' || p === 'off') return '';
+    return '<span class="vd-rec">● REC</span>';
+  }
+  function hostRecLine(){
+    const p = recPhase();
+    if(!p) return 'Your voice is guiding this ' + noun + '.';
+    if(p === 'pre') return 'Warm-up — not recorded. Recording starts with the ' + noun + '.';
+    if(p === 'rec') return 'Recording — the ' + noun + ' and your guidance are being kept.';
+    if(p === 'post') return 'Closing words — still recording. It stops when you press End.';
+    return 'Recording finished — you are live, off the record.';
   }
 
   function render(){
@@ -240,7 +289,7 @@ export function mountVoiceDock(el, opts){
       if(st === 'idle' || st === 'ended' || st === 'error'){
         el.innerHTML = `
           <div class="vd vd-idle">
-            <span class="vd-ring"><span class="vd-mic">🎙</span></span>
+            <span class="vd-ring">${ringInner(false)}</span>
             <span class="vd-txt">
               <b>Guide this ${noun} with your voice</b>
               <small>${st === 'error' ? esc(voice.error || 'Could not start — try again.') : 'Participants hear you live — no camera, just your voice.'}</small>
@@ -248,23 +297,25 @@ export function mountVoiceDock(el, opts){
             <button type="button" class="vd-btn" data-golive>Go live</button>
           </div>`;
       } else if(st === 'connecting'){
-        el.innerHTML = `<div class="vd"><span class="vd-ring vd-on"><span class="vd-mic">🎙</span></span>
+        el.innerHTML = `<div class="vd"><span class="vd-ring vd-on">${ringInner(false)}</span>
           <span class="vd-txt"><b>Connecting…</b><small>Allow the microphone when asked.</small></span></div>`;
       } else {
         const m = voice.muted;
         el.innerHTML = `
           <div class="vd vd-live">
-            <span class="vd-ring vd-on" data-ring><span class="vd-mic">🎙</span></span>
+            <span class="vd-ring vd-on" data-ring>${ringInner(false)}</span>
             <span class="vd-txt">
-              <b><span class="vd-dot"></span>${st === 'reconnecting' ? 'Reconnecting…' : (m ? 'Muted' : 'You are live')} · <span data-el>${fmtElapsed()}</span></b>
-              <small>Your voice is guiding this ${noun}.</small>
+              <b><span class="vd-dot"></span>${st === 'reconnecting' ? 'Reconnecting…' : (m ? 'Muted' : 'You are live')} · <span data-el>${fmtElapsed()}</span>${recChip()}</b>
+              <small data-recline>${esc(hostRecLine())}</small>
             </span>
             <button type="button" class="vd-btn ghost" data-mute>${m ? 'Unmute' : 'Mute'}</button>
-            <button type="button" class="vd-btn ghost" data-end>End</button>
+            <button type="button" class="vd-btn ghost danger" data-end>End</button>
           </div>`;
         tickTimer = setInterval(() => {
           const t = el.querySelector('[data-el]');
           if(t) t.textContent = fmtElapsed();
+          const rl = el.querySelector('[data-recline]');
+          if(rl){ const line = hostRecLine(); if(rl.textContent !== line) rl.textContent = line; }
         }, 1000);
       }
     } else {
@@ -272,21 +323,21 @@ export function mountVoiceDock(el, opts){
       if(st === 'listening' || st === 'waiting' || st === 'tap' || st === 'reconnecting'){
         el.innerHTML = `
           <div class="vd vd-live">
-            <span class="vd-ring vd-on" data-ring><span class="vd-mic">🎧</span></span>
+            <span class="vd-ring vd-on" data-ring>${ringInner(true)}</span>
             <span class="vd-txt">
-              <b><span class="vd-dot"></span>${st === 'listening' ? esc(o.hostName) + ' is speaking' : st === 'reconnecting' ? 'Reconnecting…' : st === 'tap' ? 'Audio is blocked' : 'Voice connected'}</b>
+              <b><span class="vd-dot"></span>${st === 'listening' ? esc(o.hostName) + ' is speaking' : st === 'reconnecting' ? 'Reconnecting…' : st === 'tap' ? 'Audio is blocked' : 'Voice connected'}${recChip()}</b>
               <small>${st === 'tap' ? 'Your browser needs one tap to play sound.' : st === 'waiting' ? 'Waiting for the maker’s voice…' : 'Live voice guidance — relax and listen.'}</small>
             </span>
             ${st === 'tap' ? '<button type="button" class="vd-btn" data-unlock>Enable audio</button>' : ''}
             <button type="button" class="vd-btn ghost" data-leave>Leave</button>
           </div>`;
       } else if(st === 'connecting'){
-        el.innerHTML = `<div class="vd"><span class="vd-ring vd-on"><span class="vd-mic">🎧</span></span>
+        el.innerHTML = `<div class="vd"><span class="vd-ring vd-on">${ringInner(true)}</span>
           <span class="vd-txt"><b>Connecting…</b><small>Joining the live voice.</small></span></div>`;
       } else {
         el.innerHTML = `
           <div class="vd vd-idle">
-            <span class="vd-ring vd-invite"><span class="vd-mic">🎙</span></span>
+            <span class="vd-ring vd-invite">${ringInner(true)}</span>
             <span class="vd-txt">
               <b>${esc(o.hostName)} is live</b>
               <small>Voice guidance is on — join in, close your eyes, listen.</small>
@@ -313,10 +364,13 @@ export function mountVoiceDock(el, opts){
     }catch(_){ return 'Listener'; }
   }
 
-  // Breathing ring: scale with the live audio level.
+  // Breathing ring: scale + a soft violet glow that swells with the live level —
+  // the listener SEES the voice, right next to the vitality curves.
   voice.onLevel(lvl => {
     const ring = el.querySelector('[data-ring]');
-    if(ring) ring.style.transform = 'scale(' + (1 + lvl * 0.16).toFixed(3) + ')';
+    if(!ring) return;
+    ring.style.transform = 'scale(' + (1 + lvl * 0.14).toFixed(3) + ')';
+    ring.style.boxShadow = '0 0 ' + Math.round(6 + lvl * 26) + 'px rgba(82,48,218,' + (0.15 + lvl * 0.4).toFixed(2) + ')';
   });
   voice.onState(st => {
     // The host's presence flag follows the publishing states only.

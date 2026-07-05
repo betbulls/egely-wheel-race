@@ -376,6 +376,8 @@ export function mount(el, raceId, inviteToken = null){
       const dockOpts = ch => ({
         sessionId: raceId, mode: 'race', canHost: ch,
         hostName: hostName || session.created_by || 'The host',
+        hostAvatar: hostAvatar,
+        schedule: { startMs, endMs },
         onVoiceFlag: v => { voiceLive = v; trackPresence(); },
       });
       let dockCanHost = isHostUser && !!auth.getState().approvedMaker;

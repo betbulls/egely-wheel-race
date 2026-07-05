@@ -242,6 +242,7 @@ export function mount(el, sessionId, inviteToken = null){
 
   const $ = id => el.querySelector('#' + id);
   let hostHandle = null, hostIsMaker = false;   // approved-maker host → racer card links to their invite page
+  let hostAvatarUrl = null;                     // maker photo → the voice dock's breathing ring
   let voiceDock = null, voiceLive = false;      // Live Voice: dock UI + my "I am speaking" presence flag
   let unsubVoiceAuth = null;
 
@@ -278,8 +279,8 @@ export function mount(el, sessionId, inviteToken = null){
     // Approved-maker host → their racer card links to their invite (connect) page.
     if(session.created_by_user_id){
       const { data: hp } = await supabase.from('profiles')
-        .select('practitioner_handle, approved_maker').eq('id', session.created_by_user_id).maybeSingle();
-      if(hp){ hostHandle = hp.practitioner_handle || null; hostIsMaker = !!hp.approved_maker; }
+        .select('practitioner_handle, approved_maker, avatar_url').eq('id', session.created_by_user_id).maybeSingle();
+      if(hp){ hostHandle = hp.practitioner_handle || null; hostIsMaker = !!hp.approved_maker; hostAvatarUrl = hp.avatar_url || null; }
     }
 
     // ---- Access gate (MVP: visible-but-locked; gates ENTRY only, not RLS-level
@@ -318,6 +319,8 @@ export function mount(el, sessionId, inviteToken = null){
       const dockOpts = ch => ({
         sessionId, mode: 'session', canHost: ch,
         hostName: session.created_by || 'The host',
+        hostAvatar: hostAvatarUrl,
+        schedule: { startMs, endMs },
         onVoiceFlag: v => { voiceLive = v; trackPresence(); },
       });
       let dockCanHost = isHostUser && !!auth.getState().approvedMaker;
