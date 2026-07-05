@@ -56,7 +56,8 @@
       "Bash(git -C /c/Users/User/Documents/GitHub/egely-wheel-race diff -- view-room.js view-race.js)",
       "Bash(node -e ' *)",
       "Bash(grep -n -E \"\\(^|[{;}[:space:]]\\)main[[:space:],{]\" /c/Users/User/Documents/GitHub/egely-wheel-race/index.html)",
-      "mcp__claude-in-chrome__javascript_tool"
+      "mcp__claude-in-chrome__javascript_tool",
+      "Bash(echo \"---exit:$?---\")"
     ]
   }
 }

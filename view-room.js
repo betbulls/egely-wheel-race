@@ -3,7 +3,7 @@ import * as ble from './ble.js';
 import * as auth from './auth.js';
 import * as presence from './presence.js';
 import { computeStats, CATEGORIES, METRIC_HELP, icon, trendLabel, vitalityColor } from './analytics.js';
-import { drawTrio, drawVitalityChart } from './chart.js';
+import { drawTrio, drawVitalityChart, drawVitalitySeries } from './chart.js';
 import { flagUrl } from './countries.js';
 import { createAddToCalendar } from './calendar.js';
 import * as wakeLock from './wake-lock.js';
@@ -1362,6 +1362,9 @@ export function mount(el, sessionId, inviteToken = null){
     }
     // Expandable full chart per racer (same as the Live wall) — drawn on open
     // (a hidden canvas has no size, so it can't be drawn ahead of time).
+    // During a session replay the freshly opened big chart joins the replay at
+    // the playhead (replayState.paintBig) instead of revealing the "future".
+    const replayState = { active: false, paintBig: null };
     body.addEventListener('click', (e) => {
       const btn = e.target.closest('.res-expand');
       if(!btn) return;
@@ -1372,7 +1375,9 @@ export function mount(el, sessionId, inviteToken = null){
       if(open){
         const d = bigData[card.dataset.cid];
         const big = body.querySelector('#' + card.dataset.cid + '-big');
-        if(d && big && d.leds.length > 1) drawVitalityChart(big, d.leds, d.dur || Math.round(d.leds.length * 0.75));
+        if(!big) return;
+        if(replayState.active && replayState.paintBig) replayState.paintBig(card.dataset.cid, big);
+        else if(d && d.leds.length > 1) drawVitalityChart(big, d.leds, d.dur || Math.round(d.leds.length * 0.75));
       }
     });
 
@@ -1389,51 +1394,133 @@ export function mount(el, sessionId, inviteToken = null){
     const rLanes = counted.map((r, i) => ({ r, id: 'rc' + i, chip: null }));
     if(myExcluded) rLanes.push({ r: myRow, id: 'rcMine', chip: null });
     if(rslot && rLanes.length && durationMs){
+      const durSecR = Math.round(durationMs / 1000);
+      const bigXLabels = [0, 1, 2, 3, 4].map(i => ({ frac: i / 4, text: Math.round((i / 4) * durSecR) + 's' }));
       for(const L of rLanes){
         L.hist = ledsToHist(L.r.curve);
         L.color = vitalityColor(Math.round(L.r.stats.avg));
+        const curve = Array.isArray(L.r.curve) ? L.r.curve : [];
+        L.n = curve.length;
+        // curve is user-writable jsonb — sanitize to numbers/nulls ONCE; every
+        // replay read (chips, stats, charts) goes through this clean copy.
+        L.leds = curve.map(v => { const x = Number(v); return (v != null && Number.isFinite(x)) ? x : null; });
+        L.ptsAll = L.leds.map((v, i) => ({ x: L.n > 1 ? i / (L.n - 1) : 0, led: v }));
+        L.pre = [];
+        { let s = 0, c = 0, pk = null;
+          for(const v of L.leds){
+            if(v != null){ s += v; c++; pk = pk == null ? v : Math.max(pk, v); }
+            L.pre.push({ s, c, pk });
+          } }
+        L.card = body.querySelector(`.res-card[data-cid="${L.id}"]`);
+        const vals = L.card ? L.card.querySelectorAll('.res-stats .rs-val') : [];
+        L.avgEl = vals[0] || null;    // Avg — runs with the replay
+        L.peakEl = vals[1] || null;   // Peak — runs with the replay
       }
+      const idxAt = (n, T) => n < 2 ? 0
+        : (T >= durationMs ? n - 1 : Math.max(0, Math.min(n - 1, Math.floor(T / (durationMs / (n - 1))))));
+      const laneRun = (L, T) => {
+        const p = L && L.n ? L.pre[idxAt(L.n, T)] : null;
+        return p && p.c ? { avg: p.s / p.c, pk: p.pk } : null;
+      };
       const trioAt = T => ({
         host: pulseHist.host.filter(p => p.t <= T),
         group: pulseHist.group.filter(p => p.t <= T),
         me: pulseHist.me.filter(p => p.t <= T),
       });
-      const valAt = (curve, T) => {
-        if(!Array.isArray(curve) || curve.length < 2) return null;
-        const n = curve.length;
-        const idx = T >= durationMs ? n - 1 : Math.max(0, Math.min(n - 1, Math.floor(T / (durationMs / (n - 1)))));
-        return curve[idx];
+      // Session Pulse metric columns — Avg/Peak run with the replay, Steady
+      // stays (it is a whole-measurement metric). Columns: host, group, you.
+      const spCols = [...body.querySelectorAll('.session-pulse .sp-col')].map(col => col.querySelectorAll('.ss-val'));
+      const hostLane = rLanes.find(L => L.r.host) || null;
+      const meLane = rLanes.find(L => L.r.mine) || null;
+      const setCol = (i, avgTxt, peakTxt) => {
+        const els = spCols[i]; if(!els || els.length < 2) return;
+        els[0].textContent = avgTxt;
+        els[1].textContent = peakTxt;
       };
       const ensureChips = () => rLanes.forEach(L => {
         if(L.chip) return;
-        const row = body.querySelector(`.res-card[data-cid="${L.id}"] .racer-name-row`);
+        const row = L.card ? L.card.querySelector('.racer-name-row') : null;
         if(!row) return;
         L.chip = document.createElement('span');
         L.chip.className = 'rp-live-chip';
-        L.chip.innerHTML = '<b>–</b> live';
+        L.chip.innerHTML = '<b>–</b> live';   // static skeleton; values go in as textContent
         row.appendChild(L.chip);
       });
       const removeChips = () => rLanes.forEach(L => { if(L.chip){ L.chip.remove(); L.chip = null; } });
+      // Expanded big charts REPLAY too (Csaba): time-anchored prefix at the
+      // playhead; at/after the end they return to the original full draw.
+      let lastT = durationMs;
+      const paintBig = (cid, big) => {
+        const L = rLanes.find(l => l.id === cid);
+        if(!L || !big) return;
+        if(lastT >= durationMs){
+          const d = bigData[cid];
+          if(d && d.leds.length > 1) drawVitalityChart(big, d.leds, d.dur || Math.round(d.leds.length * 0.75));
+        } else {
+          drawVitalitySeries(big, L.ptsAll.slice(0, idxAt(L.n, lastT) + 1), { xLabels: bigXLabels, marker: true });
+        }
+      };
       const renderFrame = T => {
+        lastT = T;
         drawTrio(body.querySelector('#spChartRes'), trioAt(T), { durationMs });
         for(const L of rLanes){
           const cv = body.querySelector('#' + L.id);
           if(cv) drawCurve(cv, L.hist.filter(p => p.t <= T), L.color);
+          if(L.card && L.card.classList.contains('expanded')){
+            const big = body.querySelector('#' + L.id + '-big');
+            if(big) paintBig(L.id, big);
+          }
           if(L.chip){
-            const v = valAt(L.r.curve, T);
-            L.chip.innerHTML = `<b style="color:${v == null ? '#99a2a7' : zText(v)}">${v == null ? '–' : v}</b> live`;
+            const v = L.n ? L.leds[idxAt(L.n, T)] : null;
+            const b = L.chip.firstChild;
+            b.textContent = v == null ? '–' : Math.round(v);
+            b.style.color = v == null ? '#99a2a7' : zText(v);
+          }
+          // Card stats: running values during the replay, the OFFICIAL saved
+          // numbers at/after the end (the curve-bucket mean is close to but
+          // not exactly the official avg — the end state must be the truth).
+          if(L.avgEl){
+            if(T >= durationMs) L.avgEl.textContent = L.r.stats.avg.toFixed(1);
+            else { const run = laneRun(L, T); L.avgEl.textContent = run ? run.avg.toFixed(1) : '–'; }
+          }
+          if(L.peakEl){
+            if(T >= durationMs) L.peakEl.textContent = String(L.r.stats.peak);
+            else { const run = laneRun(L, T); L.peakEl.textContent = run ? String(Math.round(run.pk)) : '–'; }
+          }
+        }
+        if(spCols.length === 3){
+          if(T >= durationMs){
+            setCol(0, fmtAvg(pulseStats.host), fmtPeak(pulseStats.host));
+            setCol(1, fmtAvg(pulseStats.group), fmtPeak(pulseStats.group));
+            setCol(2, fmtAvg(pulseStats.me), fmtPeak(pulseStats.me));
+          } else {
+            const hr = laneRun(hostLane, T);
+            const mr = laneRun(meLane, T);
+            const runs = rLanes.map(L => laneRun(L, T)).filter(Boolean);
+            const gr = runs.length
+              ? { avg: runs.reduce((x, y) => x + y.avg, 0) / runs.length, pk: Math.max(...runs.map(x => x.pk)) }
+              : null;
+            setCol(0, hr ? hr.avg.toFixed(1) : '–', hr ? String(Math.round(hr.pk)) : '–');
+            setCol(1, gr ? gr.avg.toFixed(1) : '–', gr ? String(Math.round(gr.pk)) : '–');
+            setCol(2, mr ? mr.avg.toFixed(1) : '–', mr ? String(Math.round(mr.pk)) : '–');
           }
         }
       };
       sessReplay = mountSessionReplay(rslot, {
         durationMs, eventStartMs: startMs,
         loadAudio: () => fetchRecordingPlayback(Number(sessionId)),
-        onStart: ensureChips,
+        onStart: () => {
+          ensureChips();
+          replayState.active = true;
+          replayState.paintBig = paintBig;
+        },
         renderFrame,
         onTakeover: () => { if(voicePlayer){ voicePlayer.destroy(); voicePlayer = null; } },
         onClose: () => {
           removeChips();
-          renderFrame(durationMs);                // back to the full/original charts
+          replayState.active = false;
+          replayState.paintBig = null;
+          renderFrame(durationMs);                // official stats + full charts back
           if(!voicePlayer) mountResVoice(body);   // the Listen-again card returns
         },
       });
