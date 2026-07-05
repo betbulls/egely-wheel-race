@@ -524,8 +524,9 @@ export function mount(el, sessionId, inviteToken = null){
       if(!r.hasData && !present.has(name)){
         // Remove the CARD too — deleting only the map entry left an orphan DOM
         // card behind, and the participant's return built a second one (the
-        // "duplicate info rows after every refresh" bug).
-        if(r.el && r.el.parentNode) r.el.parentNode.removeChild(r.el);
+        // "duplicate rows after every refresh" bug). NOTE: r.el is the handle
+        // OBJECT ({card, rank, ...}); the DOM node is r.el.card.
+        if(r.el && r.el.card) r.el.card.remove();
         racers.delete(name);
       }
     }
@@ -849,6 +850,13 @@ export function mount(el, sessionId, inviteToken = null){
     const b = board();
     if(!b) return;            // results mode has no live board
 
+    // Keep the screen awake for EVERYONE in a live/upcoming room — a dimming
+    // phone mid-session broke the experience even for watchers. acquire() is
+    // idempotent, and re-calling it every paint also heals the lock after a
+    // measurement flow released it. Once the session is over, let go.
+    if(phase() === 'post') wakeLock.release();
+    else wakeLock.acquire();
+
     // The session ended while we are IN the room: finalize (tail drain + saves
     // need a moment to land for everyone), then swap to the final results in
     // place — nobody should have to leave and dig through past sessions.
@@ -877,6 +885,10 @@ export function mount(el, sessionId, inviteToken = null){
       b.innerHTML = '<div class="empty">No one is in the room yet.</div>';
     } else {
       if(b.querySelector('.empty')) b.innerHTML = '';
+      // Self-heal: drop any card the roster no longer owns. Whatever path ever
+      // leaves an orphan behind, it cannot survive a repaint.
+      const own = new Set(list.map(r => r.el && r.el.card).filter(Boolean));
+      [...b.children].forEach(n => { if(!own.has(n)) n.remove(); });
       const sorted = list.sort((a, c) => c.led - a.led);
       const ph = phase();
       sorted.forEach((r, i) => {

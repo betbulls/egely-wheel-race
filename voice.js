@@ -25,7 +25,9 @@ const REC_ENABLED = true;
 //    so reconnecting mid-session is captured too.
 //  - End in the post-roll (or the post-roll running out) closes the recording
 //    for good; any later Go live is live-only, off the record.
-export const REC_POSTROLL_MS = 5 * 60000;
+//  - Post-roll: 1 minute (Csaba, 2026-07-05 — enough for a closing word, tight
+//    enough that a forgotten End does not record dead air).
+export const REC_POSTROLL_MS = 1 * 60000;
 
 let lkPromise = null;
 const loadLk = () => (lkPromise ||= import('https://esm.sh/livekit-client@2'));
