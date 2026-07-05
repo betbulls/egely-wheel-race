@@ -17,10 +17,15 @@ const TOKEN_URL = 'https://lhyychkrcrndjptptkii.supabase.co/functions/v1/livekit
 // F2 flips this on when server-side recording (Egress) actually runs. Until
 // then the recording-phase copy stays hidden — we never claim REC falsely.
 const REC_ENABLED = false;
-// Recording model (agreed with Csaba): the record follows the OFFICIAL window,
-// plus a post-roll so the award ceremony / closing words are kept. Lobby talk
-// before the start is never recorded.
-export const REC_POSTROLL_MS = 10 * 60000;
+// Recording model (agreed with Csaba, 2026-07-05): the recording belongs to
+// the SESSION, not to the maker's connection — it follows the OFFICIAL window
+// plus a 5-minute post-roll for the closing words / award ceremony.
+//  - Lobby talk before the start is never recorded.
+//  - End DURING the window only drops the mic; the recording keeps running,
+//    so reconnecting mid-session is captured too.
+//  - End in the post-roll (or the post-roll running out) closes the recording
+//    for good; any later Go live is live-only, off the record.
+export const REC_POSTROLL_MS = 5 * 60000;
 
 let lkPromise = null;
 const loadLk = () => (lkPromise ||= import('https://esm.sh/livekit-client@2'));
@@ -265,13 +270,27 @@ export function mountVoiceDock(el, opts){
     if(!p || p === 'pre' || p === 'off') return '';
     return '<span class="vd-rec">● REC</span>';
   }
+  function postLeft(){
+    const ms = Math.max(0, (o.schedule.endMs + REC_POSTROLL_MS) - Date.now());
+    const s = Math.ceil(ms / 1000);
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }
   function hostRecLine(){
     const p = recPhase();
     if(!p) return 'Your voice is guiding this ' + noun + '.';
     if(p === 'pre') return 'Warm-up — not recorded. Recording starts with the ' + noun + '.';
-    if(p === 'rec') return 'Recording — the ' + noun + ' and your guidance are being kept.';
-    if(p === 'post') return 'Closing words — still recording. It stops when you press End.';
+    if(p === 'rec') return 'Recording — everything said during the ' + noun + ' is kept, even if you pause.';
+    if(p === 'post') return 'Closing words — still recording · ' + postLeft() + ' left (End stops it).';
     return 'Recording finished — you are live, off the record.';
+  }
+  // The idle card's helper line — the maker always knows what recording would do.
+  function hostIdleLine(){
+    const p = recPhase();
+    if(!p) return 'Participants hear you live — no camera, just your voice.';
+    if(p === 'pre') return 'Participants hear you live. Warm-up talk is never recorded — recording starts with the ' + noun + '.';
+    if(p === 'rec') return 'The ' + noun + ' is being recorded — going live again will be part of the recording.';
+    if(p === 'post') return 'The recording is still open for closing words (' + postLeft() + ' left).';
+    return 'The recording has ended — going live now is live-only.';
   }
 
   function render(){
@@ -292,7 +311,7 @@ export function mountVoiceDock(el, opts){
             <span class="vd-ring">${ringInner(false)}</span>
             <span class="vd-txt">
               <b>Guide this ${noun} with your voice</b>
-              <small>${st === 'error' ? esc(voice.error || 'Could not start — try again.') : 'Participants hear you live — no camera, just your voice.'}</small>
+              <small>${st === 'error' ? esc(voice.error || 'Could not start — try again.') : esc(hostIdleLine())}</small>
             </span>
             <button type="button" class="vd-btn" data-golive>Go live</button>
           </div>`;
