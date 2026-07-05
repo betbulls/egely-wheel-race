@@ -342,7 +342,14 @@ export function mount(el, sessionId, inviteToken = null){
       });
     }
 
-    if(Date.now() > endMs){ renderResults(); resultsShown = true; }   // build once; a later resize must not wipe an expanded chart
+    if(Date.now() > endMs){
+      renderResults(); resultsShown = true;   // build once; a later resize must not wipe an expanded chart
+      // Post-roll: the voice window is still open — join presence too, so a
+      // freshly loaded page can still learn the maker is live (listen invite)
+      // and the host's dock can signal. Without this, only pages already open
+      // when the window ended could hear the closing words.
+      if(Date.now() <= endMs + REC_POSTROLL_MS) joinChannel();
+    }
     else start();
   })();
 
@@ -495,7 +502,9 @@ export function mount(el, sessionId, inviteToken = null){
   }
 
   function trackPresence(){
-    if(!channel) return;
+    // Nameless (post-roll listen-only page before any join): receive-only —
+    // tracking an empty name would collide keys and add roster noise.
+    if(!channel || !myName) return;
     channel.track({ name: myName, uid: auth.getState().user?.id || null, ble: bleConnected, country: auth.getState().country || null, avatar: auth.getState().avatarUrl || null, voice: voiceLive, rec: recLive })
       .catch(() => {});   // best-effort; the roster also works off broadcasts
   }

@@ -248,6 +248,7 @@ export function mountVoiceDock(el, opts){
   const voice = createVoice(o.sessionId);
   let listenAvailable = false, destroyed = false, tickTimer = null;
   let recActiveRemote = false;  // listener side: server-confirmed REC via host presence
+  let hostDone = false;         // host pressed End in the post-roll → the voice window is over
 
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   const noun = o.mode === 'race' ? 'race' : 'session';
@@ -387,9 +388,10 @@ export function mountVoiceDock(el, opts){
     if(!o.canHost && !listenAvailable && !['listening', 'waiting', 'tap', 'connecting', 'reconnecting'].includes(st)){
       el.hidden = true; el.innerHTML = ''; return;
     }
-    // The voice window is CLOSED (post-roll over): no more going live — the
-    // next word belongs to the next session. Hide the dock once idle.
-    if(o.canHost && recPhase() === 'off' && (st === 'idle' || st === 'ended' || st === 'error')){
+    // The voice window is CLOSED (post-roll over, or the maker said their final
+    // word with End during the closing minute): no more going live — the next
+    // word belongs to the next session. Hide the dock once idle.
+    if(o.canHost && (recPhase() === 'off' || hostDone) && (st === 'idle' || st === 'ended' || st === 'error')){
       el.hidden = true; el.innerHTML = ''; return;
     }
     el.hidden = false;
@@ -467,9 +469,14 @@ export function mountVoiceDock(el, opts){
     q('[data-golive]')?.addEventListener('click', () => voice.goLive(auth_name()));
     q('[data-mute]')?.addEventListener('click', () => voice.setMuted(!voice.muted));
     q('[data-end]')?.addEventListener('click', () => {
-      // In the post-roll, End also closes the recording — that is the maker's
-      // "I am done" gesture. During the window it only drops the mic.
-      if(REC_ENABLED && recState.started && !recState.stopped && recPhase() === 'post') recCall('stop');
+      // In the post-roll, End is the maker's "I am done" gesture: it closes the
+      // recording AND the voice window for good — no Go live comes back (Csaba,
+      // 2026-07-05). During the window End is hidden (Mute-only); in the lobby
+      // it simply drops the mic and the maker can go live again.
+      if(REC_ENABLED && recPhase() === 'post'){
+        hostDone = true;
+        if(recState.started && !recState.stopped) recCall('stop');
+      }
       voice.stop();
     });
     q('[data-listen]')?.addEventListener('click', () => voice.listen(auth_name()));
