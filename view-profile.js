@@ -4,6 +4,8 @@ import { COUNTRY_CODES, countryName } from './countries.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
+const AFFILIATE_REGISTER = 'https://affiliate.egelywheel.com/register';
+
 function avatarHtml(url, name){
   if(url) return `<img src="${esc(url)}" alt="">`;
   return `<span class="avatar-initial">${esc((name || '?').charAt(0).toUpperCase())}</span>`;
@@ -27,7 +29,7 @@ function spotStyles(){
   .pf-spot-dot{width:8px;height:8px;border-radius:50%;background:#0e7490;box-shadow:0 0 7px 1px rgba(14,116,144,.5);flex-shrink:0}
   .pf-spot-actions{display:flex;gap:10px;flex-wrap:wrap}
   .pf-spot-off{font-family:'Inter',sans-serif;font-size:14px;font-weight:700;padding:11px 18px;border-radius:999px;cursor:pointer;background:#fff;border:1px solid #dfe3e6;color:#67737c;transition:border-color .15s,color .15s}
-  .pf-spot-off:hover{border-color:#c2415b;color:#c2415b}
+  .pf-spot-off:hover:not(:disabled){background:#fff;border-color:#c2415b;color:#c2415b}
   .pf-spot-off:disabled{opacity:.6;cursor:default}
   .pf-spot-note{color:#99a2a7;font-size:12px;line-height:1.45;margin:12px 0 0}
   .pf-spot-msg{display:block;margin-top:8px;min-height:16px}
@@ -48,12 +50,11 @@ function connectUrl(handle){
 }
 
 // One optional URL field (Social Links + Affiliate share this shape).
-// Layout (columns/gaps) comes from the surrounding grid, not inline margins.
-function urlInput(id, label, placeholder, value){
+function urlInput(id, label, placeholder, value, disabled){
   return `
     <div class="field full">
       <label for="${id}">${esc(label)}</label>
-      <input id="${id}" type="url" inputmode="url" maxlength="200" value="${esc(value || '')}" placeholder="${esc(placeholder)}">
+      <input id="${id}" type="url" inputmode="url" maxlength="200" value="${esc(value || '')}" placeholder="${esc(placeholder)}"${disabled ? ' disabled' : ''}>
     </div>`;
 }
 
@@ -83,14 +84,14 @@ const SOCIAL = [
 
 // One prefixed username field: the platform domain is a fixed label; the user
 // only types the part after it. NOT "full" — sits in the 2-column socials grid.
-function prefixInput(id, label, prefix, ph, value){
+function prefixInput(id, label, prefix, ph, value, disabled){
   return `
     <div class="field">
       <label for="${id}">${esc(label)}</label>
       <div class="prefix-input">
         <span class="prefix-input-pre">${esc(prefix)}</span>
         <input id="${id}" type="text" autocapitalize="none" autocorrect="off" spellcheck="false"
-               maxlength="120" value="${esc(value || '')}" placeholder="${esc(ph)}">
+               maxlength="120" value="${esc(value || '')}" placeholder="${esc(ph)}"${disabled ? ' disabled' : ''}>
       </div>
     </div>`;
 }
@@ -114,33 +115,93 @@ function urlFromHandle(prefix, raw){
   return v ? 'https://' + prefix + v : null;
 }
 
+// The gold "Makers only" pill for locked studio cards.
+const lockPill = `<span class="pfs-lockpill">🔒 Makers only</span>`;
+
+// A studio card header: title + (locked → gold pill).
+function studioHead(title, sub, locked){
+  return `
+    <div class="pfs-cardhead">
+      <div>
+        <h2>${esc(title)}</h2>
+        ${sub ? `<p class="pfs-cardsub">${sub}</p>` : ''}
+      </div>
+      ${locked ? lockPill : ''}
+    </div>`;
+}
+
 export function mount(el){
-  const s = auth.getState();
-  if(!s.user){
-    el.innerHTML = `
-      <div class="view-head"><h1 class="page-title">Profile</h1></div>
-      <div class="panel">
-        <p class="placeholder">Log in to set up your profile.</p>
-        <div class="form-actions"><a class="btn-join" href="#/login">Log in</a></div>
-      </div>`;
-    return () => {};
+  let disposed = false;
+  let accountDeleted = false;
+  let renderedKey = null;    // `${uid}|${maker}` of the last FULL page render; 'out' = logged-out view
+  let editHandler = null;    // active input/change delegate on el (removed on re-render/unmount)
+
+  function detachEditHandler(){
+    if(editHandler){
+      el.removeEventListener('input', editHandler);
+      el.removeEventListener('change', editHandler);
+      editHandler = null;
+    }
   }
 
+  const unsub = auth.subscribeAuth(s => {
+    if(disposed || accountDeleted) return;
+    const uid = s.user?.id || '';
+    if(!uid){
+      if(renderedKey !== 'out'){
+        renderedKey = 'out';
+        detachEditHandler();
+        el.innerHTML = `
+          <div class="view-head"><h1 class="page-title">Profile</h1></div>
+          <div class="panel">
+            <p class="placeholder">Log in to set up your profile.</p>
+            <div class="form-actions"><a class="btn-join" href="#/login">Log in</a></div>
+          </div>`;
+      }
+      return;
+    }
+    if(!s.accessReady){
+      // Token refreshes flap accessReady false→true (hourly + on tab refocus).
+      // NEVER tear down an already-rendered page — that would wipe in-progress
+      // edits. Only show the loader when nothing is rendered yet.
+      if(renderedKey === null || renderedKey === 'out'){
+        renderedKey = null;
+        el.innerHTML = `
+          <div class="view-head"><h1 class="page-title">Profile</h1></div>
+          <div class="panel"><p class="placeholder">Loading your profile…</p></div>`;
+      }
+      return;
+    }
+    const key = uid + '|' + (s.approvedMaker ? 1 : 0);
+    if(key === renderedKey) return;
+    renderedKey = key;
+    detachEditHandler();
+    renderPage(s);
+  });
+
+  function renderPage(s){
+  const isMaker = !!s.approvedMaker;
+  spotStyles();   // .pf-spot-state is also used by the locked (non-maker) spotlight card
   let avatarUrl = s.avatarUrl || '';
+  let wheelUrl = s.wheelPhotoUrl || '';
+  let savedWheel = wheelUrl;   // the pointer currently stored in the DB (uploads use unique paths)
+  // Only send wheel_photo_url when the DB column exists (or a new upload forces it),
+  // so the page keeps working before the migration runs.
+  const hasWheelCol = !!(s.profile && Object.prototype.hasOwnProperty.call(s.profile, 'wheel_photo_url'));
+  let wheelTouched = false;
 
   el.innerHTML = `
     <div class="view-head">
       <h1 class="page-title">Profile</h1>
-      <p class="page-sub">Your public profile — name, photo, links and promotion.</p>
+      <p class="page-sub">Your account, your connection link — and the Spiritual Maker studio.</p>
     </div>
 
-    ${s.approvedMaker ? `
+    ${isMaker ? `
     <div class="pf-maker-banner">
       <img class="pf-maker-logo" src="assets/spiritual-maker-logo.png" alt="Spiritual Maker" onerror="this.style.display='none'">
       <div class="pf-maker-eyebrow">✓ You're recognized</div>
       <p class="pf-maker-sub">Egely Wheel has recognized you as a <b>Spiritual Maker</b>. Your badge now appears across EWR Live — on the leaderboard, in your sessions, and on your connect page.</p>
-    </div>
-    <section class="panel pf-spot" id="pfSpot"></section>` : ''}
+    </div>` : ''}
 
     <div class="panel">
       <div class="panel-head">
@@ -164,10 +225,6 @@ export function mount(el){
             <input id="pfName" maxlength="60" value="${esc(s.displayName || '')}" placeholder="Your name">
           </div>
           <div class="field">
-            <label for="pfBio">Short bio</label>
-            <textarea id="pfBio" maxlength="400" rows="3" placeholder="A few words about you — shown on your connection page.">${esc(s.bio || '')}</textarea>
-          </div>
-          <div class="field">
             <label for="pfCountry">Country <span class="pf-label-note">— auto-detected; shown as a flag on Live</span></label>
             <select id="pfCountry">${countryOptions(s.country)}</select>
           </div>
@@ -175,34 +232,102 @@ export function mount(el){
       </div>
     </div>
 
-    <div class="panel">
-      <h2>Social Links</h2>
-      <p class="page-sub" style="margin:-8px 0 14px">All optional — just your username, we build the link.</p>
-      <div class="pf-socials">
-        ${urlInput('pfWebsite', 'Website', 'https://yoursite.com', s.website)}
-        ${prefixInput('pfInsta', 'Instagram', 'instagram.com/', 'yourhandle', handleFromUrl(s.instagram, 'instagram.com/'))}
-        ${prefixInput('pfYt', 'YouTube', 'youtube.com/', '@yourchannel', handleFromUrl(s.youtube, 'youtube.com/'))}
-        ${prefixInput('pfTt', 'TikTok', 'tiktok.com/', '@yourhandle', handleFromUrl(s.tiktok, 'tiktok.com/'))}
-        ${prefixInput('pfFb', 'Facebook', 'facebook.com/', 'yourpage', handleFromUrl(s.facebook, 'facebook.com/'))}
-      </div>
-    </div>
+    <div id="pfLinkPanel"></div>
+    <div id="pfFollowing"></div>
 
-    <div class="panel">
-      <h2>Promotion</h2>
-      <p class="page-sub" style="margin:-8px 0 14px">Optional — used later to support your recommendations.</p>
-      <div class="pf-promo">
-        ${urlInput('pfAff', 'Affiliate link', 'https://egelywheel.com/?ref=you', s.affiliateLink)}
-        <div class="field">
-          <label for="pfCoupon">Coupon code</label>
-          <input id="pfCoupon" maxlength="40" value="${esc(s.couponCode || '')}" placeholder="e.g. SPIRIT10">
+    <!-- ============ SPIRITUAL MAKER STUDIO ============ -->
+    <section class="pfs-band" aria-label="Spiritual Maker studio">
+      <div class="pfs-band-top">
+        <div>
+          <div class="pfs-eyebrow">Spiritual Maker Studio</div>
+          <h2 class="pfs-title">${isMaker ? 'Your maker toolkit' : 'Services for Spiritual Makers'}</h2>
+          <p class="pfs-sub">${isMaker
+            ? 'Everything below is live on your public connection page — your photo, your story, your links and your offer. Keep it fresh; it’s what members see first.'
+            : 'Spiritual Makers get a public presence on EWR Live — a richer connection page, live visibility, voice-guided sessions and promotion tools. Everything below unlocks when you’re approved.'}</p>
+        </div>
+        <img class="pfs-logo" src="assets/spiritual-maker-logo.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
+      </div>
+      <div class="pfs-chips">
+        <div class="pfs-chip${isMaker ? '' : ' locked'}"><span class="ic">◎</span>Live Wall Spotlight</div>
+        <div class="pfs-chip${isMaker ? '' : ' locked'}"><span class="ic">🎙</span>Voice-guided sessions</div>
+        <div class="pfs-chip${isMaker ? '' : ' locked'}"><span class="ic">📸</span>Maker photo</div>
+        <div class="pfs-chip${isMaker ? '' : ' locked'}"><span class="ic">🌐</span>Bio &amp; social links</div>
+        <div class="pfs-chip${isMaker ? '' : ' locked'}"><span class="ic">🏷️</span>Promotion &amp; coupon</div>
+      </div>
+      ${isMaker ? `
+      <div class="pfs-cta-row">
+        <span class="pfs-unlocked">✓ Unlocked — you're an approved Spiritual Maker</span>
+        <a class="pfs-features-link" href="#/spiritual-makers">Your maker features ↗</a>
+      </div>` : `
+      <div class="pfs-cta-row">
+        <a class="pfs-cta" href="${AFFILIATE_REGISTER}" target="_blank" rel="noopener">Become a Spiritual Maker ↗</a>
+        <a class="pfs-features-link" href="#/spiritual-makers">See what makers get</a>
+      </div>`}
+    </section>
+
+    ${isMaker ? `<section class="panel pf-spot" id="pfSpot"></section>` : `
+    <section class="panel pfs-locked">
+      ${studioHead('Live Wall Spotlight', 'Stay featured on the Live wall for 7 days — people discover your connection page, sessions and offer.', true)}
+      <div class="pf-spot-state off" style="margin:0">Available to approved Spiritual Makers.</div>
+    </section>`}
+
+    <section class="panel ${isMaker ? '' : 'pfs-locked'}" id="pfVoiceCard">
+      ${studioHead('Voice-guided sessions', isMaker
+        ? 'Host any session or race and go live with your voice — members hear your guidance while they measure, and can listen again afterwards.'
+        : 'Makers host sessions and races with their live voice — members hear the guidance while they measure, and can listen again afterwards.', !isMaker)}
+      <div class="pfs-voice-row">
+        <span class="voice-chip">🎙 Live Voice</span>
+        <span class="pfs-voice-note">${isMaker
+          ? 'No setup needed — the “Go live with your voice” card appears in every session or race you host.'
+          : 'Included automatically for approved makers — no setup needed.'}</span>
+      </div>
+    </section>
+
+    <section class="panel ${isMaker ? '' : 'pfs-locked'}">
+      ${studioHead('Maker photo', 'A photo of you holding your Egely Wheel — shown on your connection page. It’s the strongest trust signal a maker can give.', !isMaker)}
+      <div class="pfs-wheel">
+        <div class="pfs-wheel-prev" id="pfWheelPrev">${wheelUrl
+          ? `<img src="${esc(wheelUrl)}" alt="You holding your Egely Wheel">`
+          : `<span class="pfs-wheel-empty">📸<br>No photo yet</span>`}</div>
+        <div class="pfs-wheel-side">
+          <p class="pfs-wheel-tip">Natural light, wheel clearly visible in your hands, friendly look into the camera. Portrait orientation works best.</p>
+          <button type="button" class="pf-upload" id="pfWheelBtn"${isMaker ? '' : ' disabled'}>Upload maker photo</button>
+          <input id="pfWheelFile" type="file" accept="image/*" hidden>
+          ${isMaker && wheelUrl ? `<button type="button" class="pfs-wheel-remove" id="pfWheelRemove">Remove photo</button>` : ''}
+          <span class="pf-upload-hint">JPG or PNG — resized automatically.</span>
         </div>
       </div>
-    </div>
+    </section>
 
-    <div class="pf-savebar">
-      <span class="form-msg" id="pfMsg"></span>
-      <button id="pfSave">Save profile</button>
-    </div>
+    <section class="panel ${isMaker ? '' : 'pfs-locked'}">
+      ${studioHead('Short bio', 'A few words about you and your practice — shown on your connection page.', !isMaker)}
+      <div class="field">
+        <textarea id="pfBio" aria-label="Short bio" maxlength="400" rows="3" placeholder="A few words about you — shown on your connection page."${isMaker ? '' : ' disabled'}>${esc(s.bio || '')}</textarea>
+      </div>
+    </section>
+
+    <section class="panel ${isMaker ? '' : 'pfs-locked'}">
+      ${studioHead('Social links', 'All optional — just your username, we build the link.', !isMaker)}
+      <div class="pf-socials">
+        ${urlInput('pfWebsite', 'Website', 'https://yoursite.com', s.website, !isMaker)}
+        ${prefixInput('pfInsta', 'Instagram', 'instagram.com/', 'yourhandle', handleFromUrl(s.instagram, 'instagram.com/'), !isMaker)}
+        ${prefixInput('pfYt', 'YouTube', 'youtube.com/', '@yourchannel', handleFromUrl(s.youtube, 'youtube.com/'), !isMaker)}
+        ${prefixInput('pfTt', 'TikTok', 'tiktok.com/', '@yourhandle', handleFromUrl(s.tiktok, 'tiktok.com/'), !isMaker)}
+        ${prefixInput('pfFb', 'Facebook', 'facebook.com/', 'yourpage', handleFromUrl(s.facebook, 'facebook.com/'), !isMaker)}
+      </div>
+    </section>
+
+    <section class="panel ${isMaker ? '' : 'pfs-locked'}">
+      ${studioHead('Promotion', 'Your affiliate link and coupon code power the offer on your connection page.', !isMaker)}
+      <div class="pf-promo">
+        ${urlInput('pfAff', 'Affiliate link', 'https://egelywheel.com/?ref=you', s.affiliateLink, !isMaker)}
+        <div class="field">
+          <label for="pfCoupon">Coupon code</label>
+          <input id="pfCoupon" maxlength="40" value="${esc(s.couponCode || '')}" placeholder="e.g. SPIRIT10"${isMaker ? '' : ' disabled'}>
+        </div>
+      </div>
+    </section>
+    <!-- ============ /SPIRITUAL MAKER STUDIO ============ -->
 
     <div class="panel">
       <h2>Measurement marks</h2>
@@ -225,18 +350,65 @@ export function mount(el){
       </div>
     </div>
 
-    <div id="pfLinkPanel"></div>
-    <div id="pfFollowing"></div>`;
+    <section class="panel pf-danger">
+      <h2>Danger zone</h2>
+      <p class="pf-danger-sub">Deleting your account removes your login, profile, photos, achievements and connections — permanently. Your past session and race results stay on the boards, but under an anonymous name that can't be traced back to you. This cannot be undone.</p>
+      <button type="button" class="pf-danger-btn" id="pfDelToggle">Delete my account…</button>
+      <div class="pf-danger-confirm" id="pfDelZone" hidden>
+        <p class="pf-danger-warn" id="pfDelWarn">Last check. Type your email address (<b>${esc(s.email || '')}</b>) to confirm:</p>
+        <div class="pf-danger-row">
+          <input id="pfDelEmail" type="email" autocomplete="off" placeholder="your@email.com"
+                 aria-label="Confirm your email address to delete your account" aria-describedby="pfDelWarn">
+          <button type="button" class="pf-danger-final" id="pfDelGo" disabled>Permanently delete my account</button>
+        </div>
+        <span class="form-msg" id="pfDelMsg"></span>
+      </div>
+    </section>
+
+    <div class="pf2-savebar" id="pfBar">
+      <span class="form-msg" id="pfMsg">You have unsaved changes.</span>
+      <button id="pfSave">Save profile</button>
+    </div>`;
 
   const $ = id => el.querySelector('#' + id);
   const msg = $('pfMsg');
+  const bar = $('pfBar');
+  let dirty = false;
+  let hideTimer = null;
+
+  function showBar(text){
+    if(hideTimer){ clearTimeout(hideTimer); hideTimer = null; }
+    msg.className = 'form-msg';
+    msg.textContent = text || 'You have unsaved changes.';
+    bar.classList.add('show');
+  }
+  function markDirty(){
+    dirty = true;
+    if(!bar.classList.contains('show')) showBar();
+  }
+
+  // Any edit in a live (non-disabled) field surfaces the sticky save bar.
+  // The danger zone + readonly link input are excluded — they never save via the
+  // bar. Registered through detachEditHandler-managed slots so re-renders and
+  // unmount never leave stale delegates on the router-shared view element.
+  function onEdit(e){
+    const t = e.target;
+    if(!t || !t.matches || !t.matches('input, textarea, select')) return;
+    if(t.disabled || t.readOnly) return;
+    if(t.closest('.pf-danger')) return;
+    if(t.id === 'pfLink' || t.type === 'file') return;
+    markDirty();
+  }
+  detachEditHandler();
+  el.addEventListener('input', onEdit);
+  el.addEventListener('change', onEdit);
+  editHandler = onEdit;
 
   // ---- Live Wall Spotlight (approved Spiritual Makers only) -----------------
   // A maker can choose to stay featured on the Live wall for 7 days. It is an
   // honest "featured" placement, NOT a fake online status — it lapses on its own
   // (encouraging a return visit), and never claims presence the maker doesn't have.
-  if(s.approvedMaker){
-    spotStyles();
+  if(isMaker){
     const spotEl = $('pfSpot');
     let spotUntil = s.featuredUntil || null;
     const fmtSpot = iso => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -256,11 +428,10 @@ export function mount(el){
         actions = `<button type="button" class="btn-join" data-spot-on>Turn on for 7 days</button>`;
       }
       spotEl.innerHTML = `
-        <div class="pf-spot-head">
-          <span class="pf-spot-icon" aria-hidden="true">◎</span>
+        <div class="pfs-cardhead">
           <div>
-            <h2 class="pf-spot-title">Live Wall Spotlight</h2>
-            <p class="pf-spot-sub">Stay visible on the Live wall for 7 days. People can discover your connection page, sessions, coupon and offer.</p>
+            <h2>Live Wall Spotlight</h2>
+            <p class="pfs-cardsub">Stay visible on the Live wall for 7 days. People can discover your connection page, sessions, coupon and offer.</p>
           </div>
         </div>
         ${body}
@@ -287,20 +458,52 @@ export function mount(el){
     renderSpot();
   }
 
-  // Custom upload pill — the native input stays (hidden) and keeps its logic.
+  // ---- Avatar upload ---------------------------------------------------------
   $('pfUploadBtn').addEventListener('click', () => $('pfFile').click());
-
   $('pfFile').addEventListener('change', async () => {
     const file = $('pfFile').files[0];
     if(!file) return;
-    msg.className = 'form-msg'; msg.textContent = 'Uploading photo…';
+    showBar('Uploading photo…');
     const { url, error } = await auth.uploadAvatar(file);
     if(error){ msg.className = 'form-msg err'; msg.textContent = 'Upload error: ' + error.message; return; }
     avatarUrl = url;
     $('pfAvatar').innerHTML = avatarHtml(avatarUrl, $('pfName').value);
+    dirty = true;
     msg.className = 'form-msg ok'; msg.textContent = 'Photo ready — click Save profile.';
   });
 
+  // ---- Maker wheel photo upload ----------------------------------------------
+  // Uploads go to a UNIQUE path (wheel-<ts>.jpg), so the currently saved photo is
+  // never overwritten before Save; superseded files are cleaned up best-effort.
+  if(isMaker){
+    $('pfWheelBtn').addEventListener('click', () => $('pfWheelFile').click());
+    $('pfWheelFile').addEventListener('change', async () => {
+      const file = $('pfWheelFile').files[0];
+      if(!file) return;
+      showBar('Uploading maker photo…');
+      const prevUnsaved = (wheelTouched && wheelUrl && wheelUrl !== savedWheel) ? wheelUrl : null;
+      const { url, error } = await auth.uploadWheelPhoto(file);
+      if(error){ msg.className = 'form-msg err'; msg.textContent = 'Upload error: ' + error.message; return; }
+      if(prevUnsaved) auth.removeWheelObject(prevUnsaved);   // replaced before ever being saved
+      wheelUrl = url;
+      wheelTouched = true;
+      dirty = true;
+      $('pfWheelPrev').innerHTML = `<img src="${esc(wheelUrl)}" alt="You holding your Egely Wheel">`;
+      msg.className = 'form-msg ok'; msg.textContent = 'Maker photo ready — click Save profile.';
+    });
+    const rm = $('pfWheelRemove');
+    if(rm) rm.addEventListener('click', () => {
+      if(wheelTouched && wheelUrl && wheelUrl !== savedWheel) auth.removeWheelObject(wheelUrl);
+      wheelUrl = '';
+      wheelTouched = true;
+      dirty = true;
+      $('pfWheelPrev').innerHTML = `<span class="pfs-wheel-empty">📸<br>No photo yet</span>`;
+      rm.remove();
+      showBar('Photo removed — click Save profile.');
+    });
+  }
+
+  // ---- Save (sticky bar) -------------------------------------------------------
   // Full-URL fields (validated as URLs). Socials are handled separately as
   // username-only inputs below.
   const URL_FIELDS = [
@@ -314,48 +517,98 @@ export function mount(el){
 
     const payload = {
       display_name, avatar_url: avatarUrl || null,
-      bio: $('pfBio').value.trim() || null,
-      is_practitioner: true,   // everyone can be a Spiritual Maker / gather members
-      coupon_code: $('pfCoupon').value.trim() || null,
+      is_practitioner: true,   // everyone keeps a connection link / can gather members
       show_on_live: $('pfLive').checked,
       country: $('pfCountry').value || null,
     };
-    // Validate + normalise every URL field (all optional; empty is fine).
-    for(const [col, id, label] of URL_FIELDS){
-      const r = cleanUrl($(id).value);
-      if(r.error){
-        msg.className = 'form-msg err';
-        msg.textContent = `Please enter a valid URL for ${label}, or leave it empty.`;
-        $(id).focus();
-        return;
+
+    // Maker-only fields go into the payload ONLY for approved makers, so a
+    // regular member's save can never wipe previously stored studio data.
+    if(isMaker){
+      payload.bio = $('pfBio').value.trim() || null;
+      payload.coupon_code = $('pfCoupon').value.trim() || null;
+      for(const [col, id, label] of URL_FIELDS){
+        const r = cleanUrl($(id).value);
+        if(r.error){
+          msg.className = 'form-msg err';
+          msg.textContent = `Please enter a valid URL for ${label}, or leave it empty.`;
+          $(id).focus();
+          return;
+        }
+        payload[col] = r.value;
+        $(id).value = r.value || '';   // reflect the normalised value (adds https://)
       }
-      payload[col] = r.value;
-      $(id).value = r.value || '';   // reflect the normalised value (adds https://)
-    }
-    // Socials: username in → full URL stored. Reflect the cleaned handle back.
-    for(const sf of SOCIAL){
-      payload[sf.col] = urlFromHandle(sf.prefix, $(sf.id).value);
-      $(sf.id).value = handleFromUrl(payload[sf.col], sf.prefix);
+      for(const sf of SOCIAL){
+        payload[sf.col] = urlFromHandle(sf.prefix, $(sf.id).value);
+        $(sf.id).value = handleFromUrl(payload[sf.col], sf.prefix);
+      }
+      if(hasWheelCol || wheelTouched){
+        payload.wheel_photo_url = wheelUrl || null;
+      }
     }
 
     $('pfSave').disabled = true; msg.className = 'form-msg'; msg.textContent = 'Saving…';
     const { error } = await auth.saveProfile(payload);
     $('pfSave').disabled = false;
     if(error){ msg.className = 'form-msg err'; msg.textContent = 'Error: ' + error.message; return; }
+    // The new pointer is stored — clean up the superseded wheel photo file.
+    if(isMaker && 'wheel_photo_url' in payload && savedWheel && savedWheel !== wheelUrl){
+      auth.removeWheelObject(savedWheel);
+    }
+    if(isMaker && 'wheel_photo_url' in payload) savedWheel = wheelUrl;
+    dirty = false;
     msg.className = 'form-msg ok'; msg.textContent = 'Profile saved.';
+    hideTimer = setTimeout(() => { if(!dirty) bar.classList.remove('show'); }, 1800);
     renderLinkPanel();
   });
 
-  // ---- Practitioner's own connection link ----------------------------------
+  // ---- Danger zone --------------------------------------------------------------
+  $('pfDelToggle').addEventListener('click', () => {
+    const zone = $('pfDelZone');
+    zone.hidden = !zone.hidden;
+    if(!zone.hidden) $('pfDelEmail').focus();
+  });
+  $('pfDelEmail').addEventListener('input', () => {
+    const match = $('pfDelEmail').value.trim().toLowerCase() === (s.email || '').toLowerCase();
+    $('pfDelGo').disabled = !match;
+  });
+  $('pfDelGo').addEventListener('click', async () => {
+    const dm = $('pfDelMsg');
+    $('pfDelGo').disabled = true;
+    dm.className = 'form-msg'; dm.textContent = 'Deleting your account…';
+    const { error } = await auth.deleteAccount();
+    if(error){
+      dm.className = 'form-msg err';
+      dm.textContent = 'Error: ' + error.message;
+      $('pfDelGo').disabled = false;
+      return;
+    }
+    accountDeleted = true;   // stop auth re-renders from replacing the farewell
+    detachEditHandler();
+    el.innerHTML = `
+      <div class="view-head"><h1 class="page-title">Account deleted</h1></div>
+      <div class="panel">
+        <p class="placeholder">Your account has been deleted. Your past results remain under an anonymous name. Take care! 👋</p>
+      </div>`;
+    // The local session is dropped AFTER the farewell — signing out immediately
+    // would trigger app.js's global logout redirect and replace this screen.
+    setTimeout(async () => {
+      await auth.finalizeAccountDeletion();
+      location.hash = '#/home';
+    }, 2200);
+  });
+
+  // ---- Everyone's connection link ----------------------------------------------
   function renderLinkPanel(){
     const a = auth.getState();
     const panel = $('pfLinkPanel');
+    if(!panel) return;
     if(!a.isPractitioner || !a.practitionerHandle){ panel.innerHTML = ''; return; }
     const url = connectUrl(a.practitionerHandle);
     panel.innerHTML = `
       <div class="panel">
         <h2>Your connection link</h2>
-        <p class="page-sub" style="margin:2px 0 12px">Share this with your members — by link, QR code, or social media. When they open it, they can connect with you.</p>
+        <p class="page-sub" style="margin:2px 0 12px">Everyone can gather followers. Share this link — by message, QR code, or social media — and people who open it can connect with you and follow your journey.</p>
         <div class="link-row">
           <input id="pfLink" class="link-input" readonly value="${esc(url)}">
           <button class="btn-secondary" id="pfCopy">Copy</button>
@@ -389,10 +642,11 @@ export function mount(el){
     });
   }
 
-  // ---- Practitioners following me (the client's control) -------------------
+  // ---- Spiritual Makers following me (the member's control) --------------------
   async function renderFollowing(){
     const panel = $('pfFollowing');
     const list = await auth.getMyPractitioners();
+    if(!panel || !panel.isConnected) return;   // navigated away while loading
     if(!list.length){ panel.innerHTML = ''; return; }
     panel.innerHTML = `
       <div class="panel">
@@ -419,6 +673,7 @@ export function mount(el){
 
   renderLinkPanel();
   renderFollowing();
+  }
 
-  return () => {};
+  return () => { disposed = true; unsub(); detachEditHandler(); };
 }

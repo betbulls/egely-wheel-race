@@ -33,6 +33,8 @@ function state(){
     facebook: profile?.facebook_url || '',
     affiliateLink: profile?.affiliate_link || '',
     couponCode: profile?.coupon_code || '',
+    // Maker photo (holding the Egely Wheel) — shown on the connection page.
+    wheelPhotoUrl: profile?.wheel_photo_url || null,
     // Country (2-letter ISO code) — auto-detected once, or set manually on the profile.
     country: profile?.country || null,
     // Live presence visibility — default ON unless the user explicitly turned it off.
@@ -50,7 +52,11 @@ async function refreshSubscriber(){
 
 async function refreshProfile(){
   if(!user){ profile = null; return; }
-  const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+  const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+  // Transient fetch failure ≠ "no profile": keep whatever we had and bail — falling
+  // through would try to create a fresh row and the UI would render (and on Save,
+  // store) email-prefix defaults over the member's real data.
+  if(error) return;
   if(data){
     // Everyone is a Spiritual Maker: backfill a connection handle for existing members
     // who don't have one yet, so their share link appears without saving the profile.
@@ -309,4 +315,90 @@ export async function uploadAvatar(file){
   if(error) return { error };
   const { data } = supabase.storage.from('avatars').getPublicUrl(path);
   return { url: data.publicUrl + '?t=' + Date.now() };
+}
+
+// Scale a photo down to a max edge, KEEPING the aspect ratio (no crop) — used for
+// the maker "holding the wheel" photo, which is a portrait, not a square avatar.
+function processPhotoScaled(file, maxEdge = 1080, quality = 0.85){
+  return new Promise(resolve => {
+    if(!file || !/^image\//.test(file.type || '')){ resolve(file); return; }
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.onload = () => {
+      try {
+        const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+        if(!w || !h){ URL.revokeObjectURL(url); resolve(file); return; }
+        const scale = Math.min(1, maxEdge / Math.max(w, h));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(w * scale); canvas.height = Math.round(h * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(url);
+        const done = blob => resolve(blob || file);
+        if(canvas.toBlob){ canvas.toBlob(done, 'image/jpeg', quality); return; }
+        try {
+          const b64 = canvas.toDataURL('image/jpeg', quality).split(',')[1];
+          const bin = atob(b64), arr = new Uint8Array(bin.length);
+          for(let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+          done(new Blob([arr], { type: 'image/jpeg' }));
+        } catch { resolve(file); }
+      } catch { URL.revokeObjectURL(url); resolve(file); }
+    };
+    img.src = url;
+  });
+}
+
+// Maker photo (holding the Egely Wheel) — same public bucket, own-folder path, so
+// the existing path-scoped storage policies cover it without new SQL.
+// Each upload gets a UNIQUE wheel-<ts>.jpg path: the currently saved photo is never
+// overwritten before the user clicks Save (the DB pointer switches on Save, and the
+// superseded file is removed via removeWheelObject). Files that can't be decoded as
+// an image are REJECTED — never uploaded raw to the public bucket.
+export async function uploadWheelPhoto(file){
+  if(!user) return { error: { message: 'Not logged in' } };
+  if(file && file.size > 20 * 1024 * 1024) return { error: { message: 'That file is too large — please choose a photo under 20 MB.' } };
+  const blob = await processPhotoScaled(file);
+  if(blob === file) return { error: { message: 'That file could not be read as a photo — please choose a JPG or PNG image.' } };
+  const path = `${user.id}/wheel-${Date.now()}.jpg`;
+  const { error } = await supabase.storage.from('avatars').upload(path, blob, { upsert: true, contentType: 'image/jpeg' });
+  if(error) return { error };
+  const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+  return { url: data.publicUrl + '?t=' + Date.now() };
+}
+
+// Best-effort cleanup of a superseded/removed wheel photo file. Only ever touches
+// the caller's own wheel-* files; needs the "avatars delete own" storage policy —
+// silently a no-op until that SQL runs.
+export function removeWheelObject(url){
+  if(!user) return;
+  const m = /\/storage\/v1\/object\/public\/avatars\/([^?]+)/.exec(url || '');
+  const path = m ? decodeURIComponent(m[1]) : null;
+  if(!path || !path.startsWith(user.id + '/wheel-')) return;
+  supabase.storage.from('avatars').remove([path]).catch(() => {});
+}
+
+// ---- Account deletion --------------------------------------------------------
+// The heavy lifting happens server-side in the delete_own_account() RPC
+// (SECURITY DEFINER): past results/sessions keep their data under an anonymized
+// name, personal rows and the auth user are removed. Here we only call it and
+// clean up the local traces.
+export async function deleteAccount(){
+  if(!user) return { error: { message: 'Not logged in' } };
+  const uid = user.id;
+  const { data, error } = await supabase.rpc('delete_own_account');
+  if(error) return { error };
+  if(data && data !== 'ok') return { error: { message: String(data) } };
+  try {
+    ['ewr_name', 'ewr_level', 'ewr_pending_connect', 'ewr_pending_room', 'ewr_welcomed_' + uid]
+      .forEach(k => localStorage.removeItem(k));
+  } catch {}
+  return { ok: true };
+}
+
+// Second step of deletion, called by the view AFTER showing its farewell screen:
+// dropping the local session fires the app-level logout redirect, so doing it
+// here immediately would replace the farewell. Global sign-out would fail anyway
+// (the server-side user is already gone) — local scope only.
+export async function finalizeAccountDeletion(){
+  try { await supabase.auth.signOut({ scope: 'local' }); } catch {}
 }

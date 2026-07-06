@@ -6,23 +6,37 @@ import { fetchUserAchievements } from './achievements-store.js';
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
 function avatarHtml(url, name){
-  if(url) return `<img src="${esc(url)}" alt="">`;
+  // onerror: a provisioned avatar URL can 404 until the assets deploy lands —
+  // hide the broken image rather than showing the browser's broken-image icon.
+  if(url) return `<img src="${esc(url)}" alt="" onerror="this.style.display='none'">`;
   return `<span class="avatar-initial">${esc((name || '?').charAt(0).toUpperCase())}</span>`;
 }
 
-// Central, admin-managed offer — the SAME official Egely Wheel pack for every
-// Spiritual Maker. Only shown when the maker filled in an affiliate link +
-// coupon code. The product image is NOT taken from the maker's profile; set the
-// official image URL here once and every maker reuses it.
+// Central, admin-managed offer — the SAME official Egely Wheel pack everywhere.
+// The maker page adds their referral link + coupon on top; the member page links
+// to the plain product page (no referral).
 const OFFER = {
   name: 'Egely Wheel Vitality Pack',
-  // Official Vitality Pack product image (from the Shopify store). Central — the
-  // same for every Spiritual Maker; swap this one URL to change it everywhere.
   image: 'https://cdn.shopify.com/s/files/1/0946/2382/6306/files/VitalityPack-EgelyWheel.jpg?v=1777371828',
   features: ['Egely Wheel', 'Vitality Indicator', '1 Year Free EWR Membership'],
   regularPrice: '$499',
-  yourPrice: '$449',
+  couponPrice: '$449',   // shown only for the standard $50-off partner coupons
+  plainUrl: 'https://egelywheel.com/products/vitality-pack?utm_source=ewr-live&utm_medium=connect-page',
 };
+
+// The offer card always sells the Vitality Pack. A maker's stored affiliate link
+// is the store root with the affiliate's tracking query (e.g. ?sca_ref=…), so we
+// carry that query onto the Vitality Pack PRODUCT url — the buyer lands on the
+// product AND the maker gets credited. Falls back to the plain product page.
+const VITALITY_PACK_URL = 'https://egelywheel.com/products/vitality-pack';
+function makerBuyUrl(affiliateLink){
+  try {
+    const u = new URL((affiliateLink || '').trim());
+    return u.search ? VITALITY_PACK_URL + u.search : VITALITY_PACK_URL;
+  } catch {
+    return VITALITY_PACK_URL;
+  }
+}
 
 // Social icons (inline SVG). `field` is the profiles column the link lives in.
 const SOCIALS = [
@@ -33,7 +47,10 @@ const SOCIALS = [
   { field: 'tiktok_url',    label: 'TikTok',    icon: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 3c.3 2.3 1.9 4 4 4.2v3c-1.5 0-2.9-.5-4-1.3V15a6 6 0 1 1-6-6v3a3 3 0 1 0 3 3V3h3z"/></svg>` },
 ];
 
-// Public-facing mini landing page reached via a Spiritual Maker's shared link.
+// Public-facing landing page reached via a shared connection link.
+// Two shapes: a Spiritual Maker gets the full navy hero (wheel photo, bio,
+// socials, referral offer); a regular member gets a clean personal invite
+// (no bio/socials — those are maker services) with the plain product card.
 export function mount(el, handle){
   el.innerHTML = `<div id="cnBody"><div class="empty">Loading…</div></div>`;
   const body = el.querySelector('#cnBody');
@@ -43,6 +60,9 @@ export function mount(el, handle){
   (async () => {
     const pr = handle ? await auth.getPractitionerByHandle(handle) : null;
     if(!pr || !pr.is_practitioner){
+      // Drop any pending-connect token too — otherwise every future login would
+      // keep redirecting here (app.js honors the token before #/home).
+      try { localStorage.removeItem('ewr_pending_connect'); } catch {}
       body.innerHTML = `
         <div class="connect-card">
           <h1 class="connect-title">Link not found</h1>
@@ -51,6 +71,7 @@ export function mount(el, handle){
       return;
     }
     const name = pr.display_name || 'A member';
+    const isMaker = !!pr.approved_maker;
     const now = Date.now();
 
     // ---- Public stats --------------------------------------------------------
@@ -90,17 +111,20 @@ export function mount(el, handle){
       for(const s of upcoming) s._participants = (counts.get(s.id) || new Set()).size;
     }
 
-    const socials = SOCIALS.filter(s => (pr[s.field] || '').trim());
-    const hasOffer = !!((pr.affiliate_link || '').trim() && (pr.coupon_code || '').trim());
+    // Bio + socials are Spiritual Maker services — never shown on a member page.
+    const socials = isMaker ? SOCIALS.filter(s => (pr[s.field] || '').trim()) : [];
+    const hasReferral = isMaker && !!(pr.affiliate_link || '').trim();
 
     body.innerHTML = `
       <div class="cn-wrap">
-        ${renderHero(pr, name, socials, connectedMembers)}
+        ${isMaker
+          ? renderMakerHero(pr, name, socials, connectedMembers)
+          : renderMemberHero(pr, name, connectedMembers)}
         ${renderWhat(name)}
         ${renderUpcoming(upcoming, now, name)}
         ${renderCommunity({ connectedMembers, hostedSessions: allSessions.length, level: levelState.level, verifiedRate })}
-        ${hasOffer ? renderOffer(pr, name) : ''}
-        ${renderFinal()}
+        ${hasReferral ? renderMakerOffer(pr, name) : renderPlainOffer()}
+        ${renderFinal(name)}
       </div>`;
 
     // ---- Connect flow --------------------------------------------------------
@@ -109,14 +133,18 @@ export function mount(el, handle){
     }
 
     const ctaSub = `<p class="cn-cta-sub">Connect to share your measurements with ${esc(name)} so they can follow your progress. You stay in control.</p>`;
+    const freeNote = `<p class="cn-cta-note">Free account — you sign in with just an email code. Watching and following is always free.</p>`;
 
     async function updateConnectUI(){
       const a = auth.getState();
       if(!a.user){
-        setCtas(`<button class="cn-cta" data-act="login">Connect with ${esc(name)}</button>${ctaSub}`);
+        setCtas(`<button class="cn-cta" data-act="login">Connect with ${esc(name)}</button>${ctaSub}${freeNote}`);
         return;
       }
       if(a.user.id === pr.id){
+        // A pending token must not survive this path either — it would hijack
+        // every later login back to this page.
+        try { localStorage.removeItem('ewr_pending_connect'); } catch {}
         setCtas(`<p class="cn-note">This is your own page — share this link with the people you want to follow your journey.</p>`);
         return;
       }
@@ -196,21 +224,55 @@ export function mount(el, handle){
 }
 
 // ---- Section renderers -------------------------------------------------------
-function renderHero(pr, name, socials, connectedMembers){
+
+// Spiritual Maker hero — the page's navy focus card: identity + bio + socials on
+// the left, the maker's "holding the wheel" photo on the right (when they have
+// one; the text column simply takes the full width otherwise).
+function renderMakerHero(pr, name, socials, connectedMembers){
   const socialHtml = socials.length ? `
-    <div class="cn-socials">
+    <div class="cn-socials cnm-socials">
       ${socials.map(s => `<a class="cn-social" href="${esc((pr[s.field] || '').trim())}" target="_blank" rel="noopener noreferrer nofollow" aria-label="${esc(s.label)}" title="${esc(s.label)}">${s.icon}</a>`).join('')}
     </div>` : '';
+  const trust = connectedMembers > 0
+    ? `<p class="cnm-trust">Trusted by <b>${connectedMembers}</b> connected member${connectedMembers === 1 ? '' : 's'}</p>`
+    : '';
+  const photo = (pr.wheel_photo_url || '').trim();
+  return `
+    <section class="cnm-hero${photo ? '' : ' no-photo'}">
+      <div class="cnm-grid">
+        <div class="cnm-text">
+          <div class="cnm-id">
+            <div class="cnm-avatar">${avatarHtml(pr.avatar_url, name)}</div>
+            <div>
+              <div class="cnm-eyebrow">✦ Spiritual Maker</div>
+              <h1 class="cnm-name">${esc(name)}</h1>
+            </div>
+          </div>
+          ${pr.bio ? `<p class="cnm-bio">${esc(pr.bio)}</p>` : ''}
+          ${socialHtml}
+          <div class="cn-cta-slot" data-cta-slot><button class="cn-cta" data-act="connect">Connect with ${esc(name)}</button></div>
+          ${trust}
+        </div>
+        ${photo ? `
+        <div class="cnm-photo">
+          <img src="${esc(photo)}" alt="${esc(name)} holding the Egely Wheel" loading="lazy"
+               onerror="this.closest('.cnm-hero').classList.add('no-photo');this.closest('.cnm-photo').style.display='none'">
+        </div>` : ''}
+      </div>
+    </section>`;
+}
+
+// Regular member hero — clean personal invite. No bio, no socials, no badge:
+// those are Spiritual Maker services.
+function renderMemberHero(pr, name, connectedMembers){
   const trust = connectedMembers > 0
     ? `<p class="cn-trust">Trusted by <b>${connectedMembers}</b> connected member${connectedMembers === 1 ? '' : 's'}</p>`
     : '';
   return `
     <section class="cn-hero">
       <div class="cn-hero-avatar">${avatarHtml(pr.avatar_url, name)}</div>
-      ${pr.approved_maker ? '<div class="cn-badge">✦ Spiritual Maker</div>' : ''}
       <h1 class="cn-name">${esc(name)}</h1>
-      ${pr.bio ? `<p class="cn-intro">${esc(pr.bio)}</p>` : ''}
-      ${socialHtml}
+      <p class="cn-intro">invites you to follow their vitality journey on EWR Live.</p>
       <div class="cn-cta-slot" data-cta-slot><button class="cn-cta" data-act="connect">Connect with ${esc(name)}</button></div>
       ${trust}
     </section>`;
@@ -278,46 +340,77 @@ function renderUpcoming(upcoming, now, name){
     </section>`;
 }
 
-function renderOffer(pr, name){
-  const link = esc((pr.affiliate_link || '').trim());
-  const coupon = esc((pr.coupon_code || '').trim());
-  const img = OFFER.image
-    ? `<img class="cn-offer-img" src="${esc(OFFER.image)}" alt="${esc(OFFER.name)}" onerror="this.style.display='none'">`
-    : `<div class="cn-offer-img cn-offer-img-ph">Official<br>Egely Wheel<br>image</div>`;
+// Maker offer — the official pack through THEIR referral link, with their coupon.
+// The $449 "your price" is only claimed for the standard $50-off partner coupons
+// (codes ending in 50); other codes show the coupon without a computed price.
+function renderMakerOffer(pr, name){
+  const buy = esc(makerBuyUrl(pr.affiliate_link));   // Vitality Pack product + the maker's referral tracking
+  const coupon = (pr.coupon_code || '').trim();
+  const fiftyOff = /50$/.test(coupon);
+  const priceHtml = fiftyOff
+    ? `<span class="cn-price-reg"><s>${esc(OFFER.regularPrice)}</s></span>
+       <span class="cn-price-your">${esc(OFFER.couponPrice)}</span>
+       <span class="cn-price-lbl">with coupon</span>`
+    : `<span class="cn-price-your">${esc(OFFER.regularPrice)}</span>
+       <span class="cn-price-lbl">${coupon ? 'use the coupon at checkout' : '1 year of EWR Live included'}</span>`;
+  const couponHtml = coupon ? `
+    <div class="cn-coupon">
+      <span class="cn-coupon-lbl">Coupon</span>
+      <span class="cn-coupon-code">${esc(coupon)}</span>
+      <button type="button" class="cn-coupon-copy" data-act="copy-coupon" data-coupon="${esc(coupon)}">Copy</button>
+    </div>` : '';
   return `
     <section class="cn-card cn-offer">
       <div class="cn-offer-tag">★ Maker recommendation</div>
       <h2 class="cn-h">Recommended by ${esc(name)}</h2>
       <div class="cn-offer-body">
-        ${img}
+        <img class="cn-offer-img" src="${esc(OFFER.image)}" alt="${esc(OFFER.name)}" onerror="this.style.display='none'">
         <div class="cn-offer-info">
           <div class="cn-offer-name">${esc(OFFER.name)}</div>
           <ul class="cn-check cn-offer-feats">
             ${OFFER.features.map(f => `<li><span class="cn-tick">✓</span><span>${esc(f)}</span></li>`).join('')}
           </ul>
-          <div class="cn-price">
-            <span class="cn-price-reg"><s>${esc(OFFER.regularPrice)}</s></span>
-            <span class="cn-price-your">${esc(OFFER.yourPrice)}</span>
-            <span class="cn-price-lbl">your price</span>
-          </div>
-          <div class="cn-coupon">
-            <span class="cn-coupon-lbl">Coupon</span>
-            <span class="cn-coupon-code">${coupon}</span>
-            <button type="button" class="cn-coupon-copy" data-act="copy-coupon" data-coupon="${coupon}">Copy</button>
-          </div>
+          <div class="cn-price">${priceHtml}</div>
+          ${couponHtml}
           <div class="cn-offer-actions">
-            <a class="cn-cta" href="${link}" target="_blank" rel="noopener noreferrer nofollow">Buy through ${esc(name)}</a>
-            <a class="btn-secondary" href="${link}" target="_blank" rel="noopener noreferrer nofollow">View product</a>
+            <a class="cn-cta" href="${buy}" target="_blank" rel="noopener noreferrer nofollow">Get the Vitality Pack</a>
+            <span class="cn-offer-fine">Supports ${esc(name)} — your purchase credits them.</span>
           </div>
         </div>
       </div>
     </section>`;
 }
 
-function renderFinal(){
+// Member page product card — same official pack, plain store link, no referral,
+// no coupon. The visitor still learns what the wheel is and where to get it.
+function renderPlainOffer(){
+  return `
+    <section class="cn-card cn-offer">
+      <div class="cn-offer-tag">◎ Measure your own vitality</div>
+      <h2 class="cn-h">The tool behind this journey</h2>
+      <div class="cn-offer-body">
+        <img class="cn-offer-img" src="${esc(OFFER.image)}" alt="${esc(OFFER.name)}" onerror="this.style.display='none'">
+        <div class="cn-offer-info">
+          <div class="cn-offer-name">${esc(OFFER.name)}</div>
+          <ul class="cn-check cn-offer-feats">
+            ${OFFER.features.map(f => `<li><span class="cn-tick">✓</span><span>${esc(f)}</span></li>`).join('')}
+          </ul>
+          <div class="cn-price">
+            <span class="cn-price-your">${esc(OFFER.regularPrice)}</span>
+            <span class="cn-price-lbl">1 year of EWR Live included</span>
+          </div>
+          <div class="cn-offer-actions">
+            <a class="cn-cta" href="${esc(OFFER.plainUrl)}" target="_blank" rel="noopener noreferrer">See the Vitality Pack ↗</a>
+          </div>
+        </div>
+      </div>
+    </section>`;
+}
+
+function renderFinal(name){
   return `
     <section class="cn-final">
       <h2 class="cn-final-h">Ready to connect?</h2>
-      <div class="cn-cta-slot" data-cta-slot><button class="cn-cta" data-act="connect">Connect</button></div>
+      <div class="cn-cta-slot" data-cta-slot><button class="cn-cta" data-act="connect">Connect with ${esc(name)}</button></div>
     </section>`;
 }
