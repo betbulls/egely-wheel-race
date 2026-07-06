@@ -105,7 +105,7 @@ function mountLogin(el){
           <svg viewBox="0 0 24 24" width="26" height="26"><path fill="#fff" d="M13 1L6 13h5l-2 10 8-13h-5l1-9z"/></svg>
         </div>
         <h1 class="login-title">Log in or sign up</h1>
-        <p class="login-sub">Enter your email and we'll send you a 6-digit code — no password to remember.</p>
+        <p class="login-sub">Enter your email and we'll send you an 8-digit code — no password to remember.</p>
 
         <div class="field full">
           <label for="liEmail">Email</label>
@@ -113,7 +113,7 @@ function mountLogin(el){
         </div>
         <div class="field full" id="liCodeWrap" hidden>
           <label for="liCode">Login code (from your email)</label>
-          <input id="liCode" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="6-digit code">
+          <input id="liCode" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="8-digit code">
         </div>
         <div class="form-actions login-actions">
           <button id="liSend">Send code</button>
@@ -135,7 +135,7 @@ function mountLogin(el){
   const sendBtn = el.querySelector('#liSend');
   const verifyBtn = el.querySelector('#liVerify');
 
-  sendBtn.addEventListener('click', async () => {
+  async function sendCode(){
     const email = emailInput.value.trim();
     if(!email){ msg.className = 'form-msg err'; msg.textContent = 'Enter your email.'; return; }
     // Registration is open to everyone — anyone can create an account and appear on
@@ -150,11 +150,11 @@ function mountLogin(el){
     sendBtn.textContent = 'Resend code';
     sendBtn.classList.add('lo-secondary');   // primary action is now Verify
     msg.className = 'form-msg ok';
-    msg.textContent = 'We sent a 6-digit code to your email. Enter it below.';
+    msg.textContent = 'We sent an 8-digit code to your email. Enter it below.';
     codeInput.focus();
-  });
+  }
 
-  verifyBtn.addEventListener('click', async () => {
+  async function verify(){
     const email = emailInput.value.trim();
     const code = codeInput.value.trim();
     if(!code){ msg.className = 'form-msg err'; msg.textContent = 'Enter the code from your email.'; return; }
@@ -165,6 +165,22 @@ function mountLogin(el){
     if(error){ msg.className = 'form-msg err'; msg.textContent = 'Error: ' + error.message; return; }
     msg.className = 'form-msg ok';
     msg.textContent = 'Logged in!';
+  }
+
+  sendBtn.addEventListener('click', sendCode);
+  verifyBtn.addEventListener('click', verify);
+
+  // Enter submits — from the email field it sends (or verifies once the code box
+  // is showing); from the code field it always verifies. No mouse needed.
+  emailInput.addEventListener('keydown', (e) => {
+    if(e.key !== 'Enter') return;
+    e.preventDefault();
+    if(codeWrap.hidden) sendCode(); else verify();
+  });
+  codeInput.addEventListener('keydown', (e) => {
+    if(e.key !== 'Enter') return;
+    e.preventDefault();
+    verify();
   });
 }
 
