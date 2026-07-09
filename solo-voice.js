@@ -9,6 +9,11 @@
 
 import { supabase } from './db.js';
 
+// Server-side upload endpoint — the browser sends the audio + its JWT; the Edge
+// Function stores it with the service role (bypassing Storage RLS, exactly like
+// the session/race recordings). No direct client Storage write.
+const FN_URL = 'https://lhyychkrcrndjptptkii.supabase.co/functions/v1/solo-audio';
+
 const CAN_REC = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
 
 let cssDone = false;
@@ -81,25 +86,26 @@ export function createSoloVoice(anchorEl) {
       });
       return stopping;
     },
-    // After the results row exists: upload the audio + register the recording.
-    async saveFor(resultId, uid, durationSeconds) {
+    // After the results row exists: hand the audio to the Edge Function, which
+    // stores it server-side with the service role (no client Storage write).
+    async saveFor(resultId, _uid, durationSeconds) {
       if (stopping) { try { await stopping; } catch (_) {} }   // ensure the blob is finalized
       if (!armed) return { ok: false, reason: 'not recording' };
       if (!blob || !blob.size) { console.error('[solo-voice] empty blob', { chunks: chunks.length }); return { ok: false, reason: 'no audio captured' }; }
-      if (!resultId || !uid) return { ok: false, reason: 'missing id' };
+      if (!resultId) return { ok: false, reason: 'missing id' };
       try {
-        const path = `solo/${uid}/voice-${recStartMs}.webm`;
-        const up = await supabase.storage.from('session-audio').upload(path, blob, { contentType: 'audio/webm', upsert: true });
-        if (up.error) { console.error('[solo-voice] upload failed', up.error); throw new Error('upload: ' + up.error.message); }
-        const { error } = await supabase.from('session_recordings').insert({
-          kind: 'solo', result_id: resultId, host_id: uid, status: 'ready',
-          storage_path: path, duration_seconds: durationSeconds || Math.round((Date.now() - recStartMs) / 1000),
-          started_at: new Date(recStartMs).toISOString(),
-        });
-        if (error) { console.error('[solo-voice] insert failed', error); throw new Error('insert: ' + error.message); }
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error('login required');
+        const fd = new FormData();
+        fd.append('file', blob, 'voice.webm');
+        fd.append('resultId', String(resultId));
+        fd.append('duration', String(durationSeconds || Math.round((Date.now() - recStartMs) / 1000)));
+        const r = await fetch(FN_URL, { method: 'POST', headers: { authorization: 'Bearer ' + session.access_token }, body: fd });
+        const jr = await r.json().catch(() => ({}));
+        if (!r.ok || !jr.ok) { console.error('[solo-voice] server upload failed', jr); throw new Error(jr.error || ('HTTP ' + r.status)); }
         blob = null;
         return { ok: true };
-      } catch (e) { return { ok: false, reason: e.message || String(e) }; }
+      } catch (e) { console.error('[solo-voice]', e); return { ok: false, reason: e.message || String(e) }; }
     },
     destroy() {
       try { if (rec && rec.state !== 'inactive') rec.stop(); } catch (_) {}
