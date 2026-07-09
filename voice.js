@@ -14,6 +14,7 @@ import { supabase } from './db.js';
 
 const TOKEN_URL = 'https://lhyychkrcrndjptptkii.supabase.co/functions/v1/livekit-token';
 const REC_URL = 'https://lhyychkrcrndjptptkii.supabase.co/functions/v1/voice-rec';
+const SOLO_AUDIO_URL = 'https://lhyychkrcrndjptptkii.supabase.co/functions/v1/solo-audio';
 
 // F2: server-side recording (LiveKit Egress → Supabase Storage) is live.
 const REC_ENABLED = true;
@@ -549,10 +550,22 @@ export function mountVoiceDock(el, opts){
 // no ready recording. The replay computes: audioTime = (replayT - (recStartMs
 // - eventStartMs)) / 1000.
 // ---------------------------------------------------------------------------
-export async function fetchRecordingPlayback(sessionId){
+export async function fetchRecordingPlayback(id, kind = 'session'){
   try{
+    // Solo: the recording lives in session_recordings(kind='solo', result_id).
+    // The solo-audio Edge Function returns a fresh signed URL server-side
+    // (service role) — it starts with the measurement, so offset is 0.
+    if(kind === 'solo'){
+      const { data: { session } } = await supabase.auth.getSession();
+      if(!session) return null;
+      const r = await fetch(SOLO_AUDIO_URL + '?resultId=' + encodeURIComponent(id), { headers: { authorization: 'Bearer ' + session.access_token } });
+      if(!r.ok) return null;
+      const b = await r.json().catch(() => ({}));
+      if(!b.url) return null;
+      return { url: b.url, duration: b.duration || null, recStartMs: null };
+    }
     const g = async action => {
-      const r = await fetch(REC_URL + '?action=' + action + '&room=' + encodeURIComponent(sessionId));
+      const r = await fetch(REC_URL + '?action=' + action + '&room=' + encodeURIComponent(id));
       return { ok: r.ok, body: await r.json().catch(() => ({})) };
     };
     const s = await g('sync');
@@ -664,7 +677,9 @@ export function mountVoicePlayer(el, opts){
       const btn = el.querySelector('[data-play]');
       if(btn) btn.disabled = true;
       try{
-        const r = await recGet('play').catch(() => null);
+        const r = o.mode === 'solo'
+          ? await fetchRecordingPlayback(o.sessionId, 'solo').then(i => i && i.url ? { ok: true, body: { url: i.url } } : { ok: false, body: {} }).catch(() => null)
+          : await recGet('play').catch(() => null);
         if(destroyed) return;
         if(!r || !r.ok || !r.body.url){ showErr((r && r.body.error) || 'The recording is not available right now.'); return; }
         bindAudio(r.body.url);
@@ -728,6 +743,13 @@ export function mountVoicePlayer(el, opts){
     // The slot leaving the DOM (route change while an await was in flight)
     // must end the poll chain — an orphaned player must never keep polling.
     if(destroyed || !el.isConnected){ hide(); return; }
+    // Solo: the recording is ready right after upload (no egress wait).
+    if(o.mode === 'solo'){
+      const i = await fetchRecordingPlayback(o.sessionId, 'solo').catch(() => null);
+      if(destroyed || !el.isConnected){ hide(); return; }
+      if(i && i.url){ serverDur = i.duration || null; renderReady(); } else hide();
+      return;
+    }
     const r = await recGet('sync').catch(() => null);
     if(destroyed || !el.isConnected){ hide(); return; }
     if(r && r.ok && r.body.status === 'ready'){

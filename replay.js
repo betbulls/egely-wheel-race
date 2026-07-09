@@ -172,6 +172,30 @@ export function mountCurveReplay(o){
     } }
 
   let destroyed = false;
+  // Optional voice: a solo recording plays in sync with the replay (offset 0 —
+  // it starts with the measurement). Same model as the session/race replay;
+  // loaded lazily so the page stays light.
+  let audio = null, offMs = 0, aPlaying = false, audioLoaded = false;
+  // Lazy: load the voice only when the replay first plays, then take over the
+  // standalone Listen-again card (onAudio) — like the session/race replay.
+  function ensureAudio(){
+    if(audioLoaded || !o.loadAudio) return;
+    audioLoaded = true;
+    o.loadAudio().then(info => {
+      if(destroyed || !info || !info.url) return;
+      audio = new Audio(info.url); audio.preload = 'auto'; offMs = 0;
+      if(o.onAudio){ try{ o.onAudio(); }catch(_){} }
+      syncAudio(lastT);
+    }).catch(() => {});
+  }
+  function syncAudio(t){
+    if(!audio || destroyed) return;
+    const desired = (t - offMs) / 1000;
+    const over = isFinite(audio.duration) && audio.duration > 0 && desired > audio.duration;
+    if(!aPlaying || t >= durationMs || desired < 0 || over){ if(!audio.paused) audio.pause(); return; }
+    if(Math.abs((audio.currentTime || 0) - desired) > 0.35){ try{ audio.currentTime = Math.max(0, desired); }catch(_){} }
+    if(audio.paused) audio.play().catch(() => {});
+  }
 
   // ---- Static UI --------------------------------------------------------
   o.heroEl.innerHTML = `
@@ -254,6 +278,7 @@ export function mountCurveReplay(o){
     updateBar(cur);
 
     transport.paint(t);
+    syncAudio(t);
   }
 
   const clock = createReplayClock({
@@ -261,6 +286,9 @@ export function mountCurveReplay(o){
     onFrame: paint,
     onState: s => {
       transport.setPlaying(s.playing, s.done);
+      aPlaying = s.playing;
+      if(s.playing) ensureAudio();
+      if(audio){ audio.playbackRate = s.speed; if(!s.playing && !audio.paused) audio.pause(); }
       // Playback ran to the end (or the slider was dragged there): fold the
       // live readout away — back to the entry look, the full curve alone
       // (Csaba). A mid-way pause keeps it up for reading the values.
@@ -277,6 +305,7 @@ export function mountCurveReplay(o){
     destroy(){
       destroyed = true;
       clock.destroy();
+      if(audio){ try{ audio.pause(); }catch(_){} audio.src = ''; audio = null; }
     },
   };
 }

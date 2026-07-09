@@ -4,6 +4,7 @@ import { vitalityLevel, trendLabel } from './analytics.js';
 import { drawTrio } from './chart.js';
 import { mountCurveReplay } from './replay.js';
 import { mountVideoShare } from './video-share.js';
+import { fetchRecordingPlayback, mountVoicePlayer } from './voice.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
@@ -37,6 +38,7 @@ export function mount(el, id){
   let onResizeTrio = null;
   let replay = null;       // curve replay cockpit (replay.js)
   let videoShare = null;   // "Share as video" block (solo only)
+  let voicePlayer = null;  // "Listen again" recording card (solo only)
   let disposed = false;    // the async load must not build UI into a dead view
 
   (async () => {
@@ -203,6 +205,7 @@ export function mount(el, id){
 
         <div class="eval-level" style="color:${zText(r.avg || 0)};margin-top:16px">${esc(lvl.name)}</div>
         <div class="eval-meaning">${esc(lvl.meaning)}</div>
+        ${solo ? '<div id="dVoice" hidden style="margin-top:16px"></div>' : ''}
 
         ${Array.isArray(r.curve) && r.curve.length > 1
           ? `<div class="solo-chart-wrap" style="margin-top:16px"><canvas id="dChart"></canvas></div>
@@ -242,15 +245,27 @@ export function mount(el, id){
         canvas: el.querySelector('#dChart'),
         curve: r.curve,
         durationSeconds: r.duration_seconds || 60,
+        // Solo voice: play the recording in sync with the replay (same as the
+        // session/race replay). onAudio removes the standalone Listen-again card
+        // so two audios never fight.
+        loadAudio: solo ? (() => fetchRecordingPlayback(Number(id), 'solo')) : null,
+        onAudio: () => { if(voicePlayer){ voicePlayer.destroy(); voicePlayer = null; } },
       });
       onResize = () => replay.redraw();
       window.addEventListener('resize', onResize);
+    }
+    // "Listen again" — the recording player (solo only); the replay's onAudio
+    // takes this card over the moment playback starts there (session pattern).
+    if(solo){
+      const vslot = el.querySelector('#dVoice');
+      if(vslot) voicePlayer = mountVoicePlayer(vslot, { sessionId: Number(id), mode: 'solo', hostName: r.racer_name || 'You' });
     }
   })();
 
   return () => {
     disposed = true;
     if(replay) replay.destroy();
+    if(voicePlayer) voicePlayer.destroy();
     if(videoShare) videoShare.destroy();
     if(onResize) window.removeEventListener('resize', onResize);
     if(onResizeTrio) window.removeEventListener('resize', onResizeTrio);
