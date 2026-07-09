@@ -3,6 +3,7 @@ import * as auth from './auth.js';
 import { vitalityLevel, trendLabel } from './analytics.js';
 import { drawTrio } from './chart.js';
 import { mountCurveReplay } from './replay.js';
+import { mountVideoShare } from './video-share.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
@@ -35,6 +36,7 @@ export function mount(el, id){
   let onResize = null;
   let onResizeTrio = null;
   let replay = null;       // curve replay cockpit (replay.js)
+  let videoShare = null;   // "Share as video" block (solo only)
   let disposed = false;    // the async load must not build UI into a dead view
 
   (async () => {
@@ -222,8 +224,13 @@ export function mount(el, id){
         </div>
 
         ${r.comment ? `<div class="d-comment"><div class="d-comment-lbl">Comment</div><p>${esc(r.comment)}</p></div>` : ''}
+        ${solo ? '<div id="dVideo"></div>' : ''}
       </div>
     `;
+    // "Share as video" — solo social clip via the render worker (owner only:
+    // the RLS already gates who can load this row at all).
+    const vslot = el.querySelector('#dVideo');
+    if(vslot) videoShare = mountVideoShare(vslot, { kind: 'solo', targetId: Number(id) });
 
     // Replay cockpit (replay.js) — owns all drawing on #dChart: idle = the
     // full curve (same as the old static draw), ▶ re-plays it in time with
@@ -244,6 +251,7 @@ export function mount(el, id){
   return () => {
     disposed = true;
     if(replay) replay.destroy();
+    if(videoShare) videoShare.destroy();
     if(onResize) window.removeEventListener('resize', onResize);
     if(onResizeTrio) window.removeEventListener('resize', onResizeTrio);
   };

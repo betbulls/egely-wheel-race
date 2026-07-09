@@ -9,6 +9,7 @@ import { createAddToCalendar } from './calendar.js';
 import * as wakeLock from './wake-lock.js';
 import { mountVoiceDock, mountVoicePlayer, fetchRecordingPlayback, REC_POSTROLL_MS } from './voice.js';
 import { mountSessionReplay } from './replay.js';
+import { mountVideoShare } from './video-share.js';
 
 // Robust clipboard copy — Clipboard API with a legacy execCommand fallback.
 async function copyText(text){
@@ -1331,6 +1332,7 @@ export function mount(el, sessionId, inviteToken = null){
     body.innerHTML = `
       ${pulsePanel}
       <div id="resVoice" hidden></div>
+      <div id="resVideo"></div>
       <div id="resReplay"></div>
       ${emptyNote}
       ${leaderboardHtml}
@@ -1539,7 +1541,14 @@ export function mount(el, sessionId, inviteToken = null){
       hostName: session.created_by || 'The host',
       hostAvatar: hostAvatarUrl,
     });
+    // "Share as video" — social clip via the render worker.
+    const vslot = body.querySelector('#resVideo');
+    if(vslot){
+      if(videoShare) videoShare.destroy();
+      videoShare = mountVideoShare(vslot, { kind: 'session', targetId: Number(sessionId) });
+    }
   }
+  let videoShare = null;
 
   window.addEventListener('resize', render);
 
@@ -1548,6 +1557,7 @@ export function mount(el, sessionId, inviteToken = null){
     if(voiceDock) voiceDock.destroy();
     if(voicePlayer) voicePlayer.destroy();
     if(sessReplay) sessReplay.destroy();
+    if(videoShare) videoShare.destroy();
     wakeLock.release();
     if(broadcastTimer) clearInterval(broadcastTimer);
     if(renderTimer) clearInterval(renderTimer);

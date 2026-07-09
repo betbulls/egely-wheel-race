@@ -122,7 +122,7 @@ function headerHtml(d, label) {
       ${avatarHtml(d.host.avatar, d.host.name, 'big')}
       <div class="rv-ev-txt">
         <div class="rv-ev-name">${esc(d.title)}</div>
-        <div class="rv-ev-meta"><b>Hosted by ${esc(d.host.name)}</b> · ${esc(fmtWhen(d.session.scheduled_start))} · ${d.session.duration_minutes} min</div>
+        <div class="rv-ev-meta"><b>${d.kind === 'solo' ? '' : 'Hosted by '}${esc(d.host.name)}</b> · ${esc(fmtWhen(d.session.scheduled_start))} · ${d.durText || d.session.duration_minutes + ' min'}</div>
       </div>
     </div>`;
 }
@@ -135,10 +135,10 @@ function introHtml(d, label, nounCount) {
     <div class="rv-center">
       <div class="rv-pill"><i class="rv-dot"></i>${esc(label.text)}</div>
       ${avatarHtml(d.host.avatar, d.host.name, 'hero')}
-      <div class="rv-in-host">Hosted by <b>${esc(d.host.name)}</b></div>
+      <div class="rv-in-host">${d.kind === 'solo' ? '' : 'Hosted by '}<b>${esc(d.host.name)}</b></div>
       <div class="rv-in-name">${esc(d.title)}</div>
-      <div class="rv-in-meta">${esc(fmtWhen(d.session.scheduled_start))} · ${d.count} ${nounCount} · ${d.session.duration_minutes} min</div>
-      <div class="rv-mini-track"><span class="rv-finish"></span>${pucks}</div>
+      <div class="rv-in-meta">${esc(fmtWhen(d.session.scheduled_start))}${d.kind === 'solo' ? '' : ` · ${d.count} ${nounCount}`} · ${d.durText || d.session.duration_minutes + ' min'}</div>
+      ${pucks ? `<div class="rv-mini-track"><span class="rv-finish"></span>${pucks}</div>` : ''}
     </div>
     <div class="rv-ft"><div class="rv-url">▶ replayed on <b>live.egelywheel.com</b></div></div>`;
 }
@@ -302,17 +302,20 @@ function showPhase(stage, ph) {
 }
 
 // Auto sequence: intro hold (~2.5s) → board (sped up so the clip stays social-
-// length) → finale (~3s) → __rvDone. Driven by a performance.now() loop (real
+// length) → finale → __rvDone. Driven by a performance.now() loop (real
 // elapsed wall time × speed) rather than the clock's per-frame delta
 // accumulator, so the timeline stays true regardless of the headless frame rate.
-function playRaceSequence(stage, d, setStop) {
+// The capture worker can override: __rvSpeed (1× when a voice recording will be
+// muxed) and __rvHoldMs (finale holds until the recorded audio runs out).
+function playSequence(stage, d, paintFrame, defSpeed, setStop) {
   window.__rvDone = false;
   showPhase(stage, 'intro');
-  const SPEED = window.__rvSpeed || raceSpeed(d.durationMs);
-  const spd = stage.querySelector('#rvSpd'); if (spd) spd.textContent = 'REPLAY · ' + SPEED + '×';
+  const SPEED = window.__rvSpeed || defSpeed(d.durationMs);
+  const HOLD = window.__rvHoldMs || 3000;
+  const spd = stage.querySelector('#rvSpd');
+  if (spd) spd.textContent = 'REPLAY · ' + SPEED + '×' + (window.__rvVoice ? ' · 🎙 LIVE VOICE' : '');
   let raf = 0, stopped = false;
-  const stop = () => { stopped = true; if (raf) cancelAnimationFrame(raf); };
-  setStop(stop);
+  setStop(() => { stopped = true; if (raf) cancelAnimationFrame(raf); });
   setTimeout(() => {
     if (stopped || !stage.isConnected) return;
     showPhase(stage, 'board');
@@ -321,11 +324,11 @@ function playRaceSequence(stage, d, setStop) {
     const loop = () => {
       if (stopped) return;
       const t = Math.min(d.durationMs, (performance.now() - start) * SPEED);
-      paintRaceFrame(stage, d, t);
+      paintFrame(stage, d, t);
       if (t >= d.durationMs) {
         showPhase(stage, 'final');
-        paintConfetti(stage);
-        setTimeout(() => { window.__rvDone = true; }, 3000);
+        if (d.kind === 'race') paintConfetti(stage);
+        setTimeout(() => { window.__rvDone = true; }, HOLD);
         return;
       }
       raf = requestAnimationFrame(loop);
@@ -580,28 +583,119 @@ function sessionFinalHtml(d) {
 
 const sessionSpeed = durationMs => Math.max(1, Math.min(8, Math.round(durationMs / 22000)));
 
-function playSessionSequence(stage, d, setStop) {
-  window.__rvDone = false;
-  showPhase(stage, 'intro');
-  const SPEED = window.__rvSpeed || sessionSpeed(d.durationMs);
-  const spd = stage.querySelector('#rvSpd'); if (spd) spd.textContent = 'REPLAY · ' + SPEED + '×';
-  let raf = 0, stopped = false;
-  const stop = () => { stopped = true; if (raf) cancelAnimationFrame(raf); };
-  setStop(stop);
-  setTimeout(() => {
-    if (stopped || !stage.isConnected) return;
-    showPhase(stage, 'board');
-    d._lastOrder = '';
-    const start = performance.now();
-    const loop = () => {
-      if (stopped) return;
-      const t = Math.min(d.durationMs, (performance.now() - start) * SPEED);
-      paintSessionFrame(stage, d, t);
-      if (t >= d.durationMs) { showPhase(stage, 'final'); setTimeout(() => { window.__rvDone = true; }, 3000); return; }
-      raf = requestAnimationFrame(loop);
-    };
-    raf = requestAnimationFrame(loop);
-  }, 2500);
+// ---------------------------------------------------------------------------
+// SOLO — one measurer, one story: a big living curve with a large readout.
+// Solo results are RLS-private, so the render worker (service role) fetches the
+// row and injects it as window.__rvSoloData before the app loads; an anonymous
+// page query would come back empty.
+// ---------------------------------------------------------------------------
+async function loadSolo(id) {
+  let raw = window.__rvSoloData || null;
+  if (!raw) {
+    const { data: r } = await supabase.from('results')
+      .select('id, user_id, racer_name, label, avg, peak, steadiness, zone_red, zone_yellow, zone_green, duration_seconds, curve, verified, created_at')
+      .eq('id', Number(id)).is('session_id', null).maybeSingle();
+    if (!r) return null;
+    let profile = null;
+    if (r.user_id) { const { data: p } = await supabase.from('profiles').select('id, avatar_url, country, display_name').eq('id', r.user_id).maybeSingle(); profile = p || null; }
+    raw = { result: r, profile };
+  }
+  const r = raw.result, p = raw.profile || {};
+  if (!r || !Array.isArray(r.curve) || !r.curve.length) return null;
+  const curve = sanitizeCurve(r.curve);
+  const durationMs = (r.duration_seconds || Math.round(curve.length / 4)) * 1000;
+  return {
+    kind: 'solo', durationMs,
+    session: { scheduled_start: r.created_at, duration_minutes: Math.max(1, Math.round((r.duration_seconds || 60) / 60)) },
+    durText: (r.duration_seconds || 60) < 120 ? `${r.duration_seconds || 60}s` : `${Math.round((r.duration_seconds || 60) / 60)} min`,
+    title: r.label || 'Solo vitality reading',
+    host: { name: r.racer_name || (p.display_name || 'Measurer'), avatar: p.avatar_url || null },
+    country: p.country || null, verified: r.verified,
+    curve, ...prefixStats(curve),
+    stats: { avg: Number(r.avg) || 0, peak: r.peak || 0, steadiness: r.steadiness || 0, zoneGreen: Math.round(Number(r.zone_green) || 0) },
+    count: 1, members: [],
+  };
+}
+
+function soloBoardHtml(d) {
+  return `
+    ${SVG_DEFS}
+    ${headerHtml(d, { text: 'SOLO REPLAY' })}
+    <div class="rv-solo-hero">
+      <div class="rv-solo-val"><div class="v" id="rvSoloV">–</div><div class="l">VITALITY</div></div>
+      <div class="rv-solo-side">
+        <div class="rv-sstat"><div class="v" id="rvSoloAvg">–</div><div class="l">AVG</div></div>
+        <div class="rv-sstat"><div class="v" id="rvSoloPeak">–</div><div class="l">PEAK</div></div>
+      </div>
+    </div>
+    <div class="rv-hero-card rv-solo-card">
+      <svg id="rvHero" width="888" height="430" viewBox="0 0 888 430"></svg>
+    </div>
+    <div class="rv-ft">
+      <div class="rv-clockrow"><div class="rv-clock" id="rvClock">0:00<small>left</small></div><div class="rv-spd" id="rvSpd">REPLAY</div></div>
+      <div class="rv-prog"><i id="rvProg" style="width:0%"></i></div>
+      <div class="rv-url">⚡ <b>live.egelywheel.com</b></div>
+    </div>`;
+}
+
+function soloHeroSvg(d, t) {
+  const W = 888, H = 430, y = v => H - (v / 24) * H;
+  const frac = Math.max(0, Math.min(1, t / d.durationMs));
+  const k = kAt(d.n, frac);
+  let s = '';
+  s += `<rect x="0" y="0" width="${W}" height="${y(13)}" fill="#3ddc8e" opacity=".05"/>`;
+  s += `<rect x="0" y="${y(13)}" width="${W}" height="${y(6) - y(13)}" fill="#ffc933" opacity=".05"/>`;
+  s += `<rect x="0" y="${y(6)}" width="${W}" height="${H - y(6)}" fill="#ff6257" opacity=".06"/>`;
+  [6, 13].forEach(v => { s += `<line x1="0" y1="${y(v)}" x2="${W}" y2="${y(v)}" stroke="rgba(255,255,255,.08)" stroke-width="1.5"/>`; });
+  [[24, 16], [13, y(13) + 7], [6, y(6) + 7]].forEach(([v, yy]) => { s += `<text x="${W - 8}" y="${yy}" text-anchor="end" fill="#5f7280" font-size="21" font-family="Inter">${v}</text>`; });
+  const g = prefixPath(d.curve, k, W, H);
+  if (g.d) {
+    const area = g.d + (g.last ? ` L ${g.last[0].toFixed(1)} ${H} L 0 ${H} Z` : '');
+    s += `<path d="${area}" fill="url(#rvsf)"/>`;
+    s += `<path d="${g.d}" fill="none" stroke="#37dbff" stroke-opacity=".3" stroke-width="14" stroke-linecap="round"/>`;
+    s += `<path d="${g.d}" fill="none" stroke="url(#rvsg)" stroke-width="7" stroke-linecap="round"/>`;
+  }
+  const px = frac * W;
+  s += `<line x1="${px.toFixed(1)}" y1="0" x2="${px.toFixed(1)}" y2="${H}" stroke="rgba(255,255,255,.22)" stroke-width="2" stroke-dasharray="4 8"/>`;
+  const lv = d.curve[k];
+  if (g.last) s += `<circle cx="${g.last[0].toFixed(1)}" cy="${g.last[1].toFixed(1)}" r="11" fill="${zCol(lv != null ? lv : 6)}" stroke="#0b1b28" stroke-width="3"/>`;
+  return s;
+}
+
+function paintSoloFrame(stage, d, t) {
+  const frac = Math.max(0, Math.min(1, t / d.durationMs));
+  const k = kAt(d.n, frac);
+  const hero = stage.querySelector('#rvHero');
+  if (hero) hero.innerHTML = soloHeroSvg(d, t);
+  const lv = d.curve[k];
+  const vEl = stage.querySelector('#rvSoloV');
+  if (vEl) { vEl.textContent = lv == null ? '–' : lv; vEl.style.color = lv == null ? '#5f7280' : zCol(lv); }
+  const ravg = d.pcnt[k] ? d.psum[k] / d.pcnt[k] : 0;
+  const aEl = stage.querySelector('#rvSoloAvg');
+  if (aEl) { aEl.textContent = ravg ? ravg.toFixed(1) : '–'; aEl.style.color = zCol(ravg); }
+  let pk = 0; for (let i = 0; i <= k; i++) { const v = d.curve[i]; if (v != null && v > pk) pk = v; }
+  const pEl = stage.querySelector('#rvSoloPeak');
+  if (pEl) { pEl.textContent = pk; pEl.style.color = zCol(pk); }
+  const clockEl = stage.querySelector('#rvClock');
+  if (clockEl) clockEl.innerHTML = fmtClock(Math.max(0, d.durationMs - t)) + '<small>left</small>';
+  const progEl = stage.querySelector('#rvProg');
+  if (progEl) progEl.style.width = (frac * 100).toFixed(1) + '%';
+}
+
+function soloFinalHtml(d) {
+  const hl = (l, v) => `<div class="rv-hl"><div class="rv-hl-l">${l}</div><div></div><div class="rv-hl-v">${v}</div></div>`;
+  return `
+    ${headerHtml(d, { text: 'READING COMPLETE', gold: true })}
+    <div class="rv-win-wrap">
+      <div class="rv-sfin-avg"><div class="rv-sfin-num">${d.stats.avg.toFixed(1)}</div><div class="rv-sfin-lbl">AVERAGE VITALITY</div></div>
+      <div class="rv-hls">
+        ${hl('Peak', d.stats.peak)}
+        ${hl('Steadiness', d.stats.steadiness + ' / 100')}
+        ${hl('Time in green', d.stats.zoneGreen + '%')}
+      </div>
+      <div class="rv-win-count">${d.verified ? 'Verified reading · ' : ''}${esc(d.title)} · ${esc(fmtWhen(d.session.scheduled_start).split(' · ')[0])}</div>
+      <div class="rv-cta">Measure with us → live.egelywheel.com</div>
+    </div>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -609,7 +703,7 @@ function playSessionSequence(stage, d, setStop) {
 // ---------------------------------------------------------------------------
 export function mount(el, kind, id) {
   injectStyles();
-  kind = (kind === 'session' || kind === 'room') ? 'session' : 'race';
+  kind = (kind === 'session' || kind === 'room') ? 'session' : (kind === 'solo' || kind === 'm') ? 'solo' : 'race';
   document.body.classList.add('rv-mode');
 
   const stage = document.createElement('div');
@@ -621,21 +715,24 @@ export function mount(el, kind, id) {
 
   (async () => {
     let d = null;
-    try { d = kind === 'race' ? await loadRace(id) : await loadSession(id); } catch (e) { console.error('rv load error', e); }
+    try { d = kind === 'race' ? await loadRace(id) : kind === 'solo' ? await loadSolo(id) : await loadSession(id); } catch (e) { console.error('rv load error', e); }
     if (destroyed) return;
     if (!d) { stage.innerHTML = `<div class="rv-loading">No renderable data for ${esc(kind)} ${esc(id)}.</div>`; window.__rvReady = true; return; }
     if (!d.count) { stage.innerHTML = `<div class="rv-loading">No measurements saved for ${esc(kind)} ${esc(id)}.</div>`; window.__rvReady = true; return; }
 
-    const isRace = d.kind === 'race';
-    stage.innerHTML = `
-      <div class="rv-hair"></div>
-      <div class="rv-frame" data-phase="intro">${introHtml(d, { text: isRace ? 'RACE REPLAY' : 'SESSION REPLAY' }, isRace ? (d.count === 1 ? 'racer' : 'racers') : 'in the circle')}</div>
-      <div class="rv-frame" data-phase="board" hidden>${isRace ? raceBoardHtml(d) : sessionBoardHtml(d)}</div>
-      <div class="rv-frame" data-phase="final" hidden>${isRace ? finalHtml(d) : sessionFinalHtml(d)}</div>`;
-
+    const K = d.kind;
+    const pillTxt = K === 'race' ? 'RACE REPLAY' : K === 'solo' ? 'SOLO REPLAY' : 'SESSION REPLAY';
+    const paintFrame = K === 'race' ? paintRaceFrame : K === 'solo' ? paintSoloFrame : paintSessionFrame;
+    const defSpeed = K === 'session' ? sessionSpeed : raceSpeed;
     try {
-      if (isRace) { buildRaceLanes(stage, d); paintRaceFrame(stage, d, d.durationMs * 0.62); paintConfetti(stage); }
-      else { buildSessionRows(stage, d); paintSessionFrame(stage, d, d.durationMs * 0.62); }
+      stage.innerHTML = `
+        <div class="rv-hair"></div>
+        <div class="rv-frame" data-phase="intro">${introHtml(d, { text: pillTxt }, K === 'race' ? (d.count === 1 ? 'racer' : 'racers') : 'in the circle')}</div>
+        <div class="rv-frame" data-phase="board" hidden>${K === 'race' ? raceBoardHtml(d) : K === 'solo' ? soloBoardHtml(d) : sessionBoardHtml(d)}</div>
+        <div class="rv-frame" data-phase="final" hidden>${K === 'race' ? finalHtml(d) : K === 'solo' ? soloFinalHtml(d) : sessionFinalHtml(d)}</div>`;
+      if (K === 'race') { buildRaceLanes(stage, d); paintConfetti(stage); }
+      else if (K === 'session') buildSessionRows(stage, d);
+      paintFrame(stage, d, d.durationMs * 0.62);
     } catch (e) {
       console.error('rv build error', e);
       stage.innerHTML = '<div class="rv-loading">Build error: ' + esc(String((e && e.message) || e)) + '</div>';
@@ -646,8 +743,8 @@ export function mount(el, kind, id) {
     // The capture worker (F2) waits for __rvReady, starts recording, calls
     // __rvPlay(), then waits for __rvDone. __rvShow is a manual phase switch.
     window.__rvShow = ph => showPhase(stage, ph);
-    window.__rvPlay = () => (isRace ? playRaceSequence : playSessionSequence)(stage, d, fn => { stopSeq = fn; });
-    window.__rvData = { kind: d.kind, id, count: d.count, durationMs: d.durationMs, speed: (isRace ? raceSpeed : sessionSpeed)(d.durationMs) };
+    window.__rvPlay = () => playSequence(stage, d, paintFrame, defSpeed, fn => { stopSeq = fn; });
+    window.__rvData = { kind: d.kind, id, count: d.count, durationMs: d.durationMs, speed: defSpeed(d.durationMs) };
     window.__rvReady = true;
     window.__rvDone = false;
   })();
@@ -809,6 +906,16 @@ body.rv-mode > header, body.rv-mode #navMoreMenu, body.rv-mode .fab, body.rv-mod
 .rv-hl-l{font:600 21px Inter;letter-spacing:.14em;color:var(--faint);text-transform:uppercase;text-align:left}
 .rv-hl-w{display:flex;align-items:center;gap:16px;font:600 30px Inter;color:#fff}
 .rv-hl-v{font:700 34px Montserrat;color:var(--gold)}
+
+/* solo */
+.rv-solo-hero{display:flex;justify-content:space-between;align-items:flex-end;margin-top:44px;padding:0 8px}
+.rv-solo-val .v{font:800 170px Montserrat;line-height:.95}
+.rv-solo-val .l{font:600 24px Inter;letter-spacing:.26em;color:var(--faint);margin-top:10px}
+.rv-solo-side{display:flex;gap:44px;padding-bottom:14px}
+.rv-sstat{text-align:right}
+.rv-sstat .v{font:700 62px Montserrat;line-height:1}
+.rv-sstat .l{font:600 19px Inter;letter-spacing:.22em;color:var(--faint);margin-top:8px}
+.rv-solo-card{margin-top:30px}
 `;
   document.head.appendChild(s);
 }

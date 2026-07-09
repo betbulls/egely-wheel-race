@@ -32,6 +32,7 @@ import { computeStats, downsample } from './analytics.js';
 import * as wakeLock from './wake-lock.js';
 import { mountVoiceDock, mountVoicePlayer, fetchRecordingPlayback, REC_POSTROLL_MS } from './voice.js';
 import { mountRaceReplay } from './replay.js';
+import { mountVideoShare } from './video-share.js';
 
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
@@ -345,6 +346,7 @@ export function mount(el, raceId, inviteToken = null){
   let voiceDock = null, voiceLive = false;   // Live Voice: dock UI + my "I am speaking" presence flag
   let voicePlayer = null;                    // "Listen again" card on the results screen
   let racePlayback = null;                   // race replay (R2) on the results screen
+  let videoShare = null;                     // "Share as video" block on the results screen
   let recLive = false;                       // host only: server-confirmed "recording is running"
   let unsubVoiceAuth = null;
 
@@ -1137,6 +1139,7 @@ export function mount(el, raceId, inviteToken = null){
         <div class="rr-summary">${ranked.length} finisher${ranked.length === 1 ? '' : 's'} · ${dur} min${session.verified_only ? ' · verified only' : ''}</div>
         <div id="rrVoice" hidden></div>
         <div id="rrReplay"></div>
+        <div id="rrVideo"></div>
         ${yourResult}
         ${awards}
         ${ranked.length ? `<h3 class="rr-sec">Full standings</h3><div class="rr-standings">${ranked.map(standRow).join('')}</div>` : ''}
@@ -1199,6 +1202,13 @@ export function mount(el, raceId, inviteToken = null){
         },
       });
     }
+    // "Share as video" — social clip via the render worker (renderResults can
+    // re-run on the finalize retry → destroy-before-remount, like the player).
+    const vidslot = body.querySelector('#rrVideo');
+    if(vidslot){
+      if(videoShare) videoShare.destroy();
+      videoShare = mountVideoShare(vidslot, { kind: 'race', targetId: Number(raceId) });
+    }
   }
 
   function paint(){ if(view === 'lobby') paintLobby(); else if(view === 'race') paintRace(); }
@@ -1209,6 +1219,7 @@ export function mount(el, raceId, inviteToken = null){
     if(voiceDock) voiceDock.destroy();
     if(voicePlayer) voicePlayer.destroy();
     if(racePlayback) racePlayback.destroy();
+    if(videoShare) videoShare.destroy();
     wakeLock.release();
     // If the race already ended but my own result hasn't saved yet (e.g. I navigated
     // away during the finalize grace), save it now. Idempotent: the myResultSaved guard
