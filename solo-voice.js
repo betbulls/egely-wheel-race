@@ -33,7 +33,7 @@ function injectCss() {
 
 export function createSoloVoice(anchorEl) {
   injectCss();
-  let armed = false, rec = null, stream = null, chunks = [], recStartMs = 0, blob = null;
+  let armed = false, rec = null, stream = null, chunks = [], recStartMs = 0, blob = null, stopping = null;
 
   const row = document.createElement('div');
   row.className = 'slv-row';
@@ -72,27 +72,31 @@ export function createSoloVoice(anchorEl) {
       } catch (_) { rec = null; }
     },
     stop() {
-      return new Promise(res => {
+      stopping = new Promise(res => {
         if (!rec || rec.state === 'inactive') { res(); return; }
         rec.onstop = () => { blob = new Blob(chunks, { type: 'audio/webm' }); res(); };
         try { rec.stop(); } catch (_) { res(); }
         const h = row.querySelector('[data-slv-h]');
         if (h) h.textContent = 'Voice captured — it is saved with your measurement.';
       });
+      return stopping;
     },
     // After the results row exists: upload the audio + register the recording.
     async saveFor(resultId, uid, durationSeconds) {
-      if (!blob || !resultId || !uid) return { ok: false, reason: 'nothing to save' };
+      if (stopping) { try { await stopping; } catch (_) {} }   // ensure the blob is finalized
+      if (!armed) return { ok: false, reason: 'not recording' };
+      if (!blob || !blob.size) { console.error('[solo-voice] empty blob', { chunks: chunks.length }); return { ok: false, reason: 'no audio captured' }; }
+      if (!resultId || !uid) return { ok: false, reason: 'missing id' };
       try {
         const path = `solo/${uid}/voice-${recStartMs}.webm`;
         const up = await supabase.storage.from('session-audio').upload(path, blob, { contentType: 'audio/webm', upsert: true });
-        if (up.error) throw up.error;
+        if (up.error) { console.error('[solo-voice] upload failed', up.error); throw new Error('upload: ' + up.error.message); }
         const { error } = await supabase.from('session_recordings').insert({
           kind: 'solo', result_id: resultId, host_id: uid, status: 'ready',
           storage_path: path, duration_seconds: durationSeconds || Math.round((Date.now() - recStartMs) / 1000),
           started_at: new Date(recStartMs).toISOString(),
         });
-        if (error) throw error;
+        if (error) { console.error('[solo-voice] insert failed', error); throw new Error('insert: ' + error.message); }
         blob = null;
         return { ok: true };
       } catch (e) { return { ok: false, reason: e.message || String(e) }; }
