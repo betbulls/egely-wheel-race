@@ -295,7 +295,9 @@ function flipReorder(container, lanes) {
   });
 }
 
-const raceSpeed = durationMs => Math.max(1, Math.min(6, Math.round(durationMs / 22000)));
+// Csaba (2026-07-09): every video plays 1× — social platforms can speed up on
+// upload; a sped-up master can't be slowed back down. (__rvSpeed still overrides.)
+const raceSpeed = () => 1;
 
 function showPhase(stage, ph) {
   stage.querySelectorAll('.rv-frame').forEach(f => { f.hidden = f.dataset.phase !== ph; });
@@ -581,7 +583,7 @@ function sessionFinalHtml(d) {
     </div>`;
 }
 
-const sessionSpeed = durationMs => Math.max(1, Math.min(8, Math.round(durationMs / 22000)));
+const sessionSpeed = () => 1;
 
 // ---------------------------------------------------------------------------
 // SOLO — one measurer, one story: a big living curve with a large readout.

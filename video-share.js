@@ -11,7 +11,7 @@ import { supabase } from './db.js';
 import * as auth from './auth.js';
 
 const FN_URL = 'https://lhyychkrcrndjptptkii.supabase.co/functions/v1/render-video';
-const FRESH_MS = 6.5 * 24 * 3600 * 1000;   // signed URLs live 7 days — treat older as expired
+const FRESH_MS = 360 * 24 * 3600 * 1000;   // signed URLs live 1 year — treat older as expired
 
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -59,7 +59,7 @@ export function mountVideoShare(el, { kind, targetId }) {
       el.innerHTML = `<div class="vs-wrap">
         <a class="vs-btn primary" href="${esc(job.signed_url)}" target="_blank" rel="noopener" download>🎬 Download video</a>
         <button type="button" class="vs-btn" data-vs-copy>Copy link</button>
-        <span class="vs-note">Ready to share${job.has_audio ? ' · 🎙 with live voice' : ''} · link valid 7 days</span></div>`;
+        <span class="vs-note">Ready to share${job.has_audio ? ' · 🎙 with live voice' : ''} · link valid for a year</span></div>`;
       el.querySelector('[data-vs-copy]').addEventListener('click', ev => {
         navigator.clipboard && navigator.clipboard.writeText(job.signed_url).then(() => { ev.target.textContent = 'Copied ✓'; });
       });

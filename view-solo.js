@@ -6,6 +6,7 @@ import * as presence from './presence.js';
 import { computeStats, vitalityLevel, downsample } from './analytics.js';
 import { drawVitalitySeries } from './chart.js';
 import { durationPicker, fmtSeconds, MAX_SOLO_SECONDS } from './time-controls.js';
+import { createSoloVoice } from './solo-voice.js';
 
 const SAMPLE_MS = 250;        // how often the curve is sampled while measuring
 const LIVE_WINDOW_MS = 60000; // idle live-preview window
@@ -280,6 +281,7 @@ export function mount(el){
     openLive();   // fire and forget; channels become ready within ~1s
     presence.setMeasuring(true);   // show me as "measuring" on the Live wall
     wakeLock.acquire();
+    soloVoice.start();             // optional mic recording (no-op unless armed)
   }
 
   // Countdown hit zero (or the user pressed Stop): stop SAMPLING immediately —
@@ -289,6 +291,7 @@ export function mount(el){
   function beginFinalize(){
     if(!measuring || finalizing) return;
     measuring = false; finalizing = true;
+    soloVoice.stop();              // the voice window = the measurement window
     if(sampleTimer){ clearInterval(sampleTimer); sampleTimer = null; }
     counterAtEnd = lastCounter; lateHandled = false;
     $('sStart').disabled = true;
@@ -349,7 +352,7 @@ export function mount(el){
     const comment = ($('sComment').value || '').trim();
     const label = ($('sLabel').value || '').trim();
     const s = lastStats;
-    const { error } = await supabase.from('results').insert({
+    const { data: savedRow, error } = await supabase.from('results').insert({
       session_id: null, user_id: a.user?.id || null,
       racer_id: racerId(identity), racer_name: identity,
       label: label || null, duration_seconds: duration,
@@ -358,11 +361,18 @@ export function mount(el){
       zone_red: Number(s.zone.red.toFixed(1)), trend: Number(s.trendTotal.toFixed(2)),
       green_streak: s.greenStreak, samples: s.n, is_host: false, verified: !cheatDetected && !signalLost,
       comment: comment || null, curve: samples.slice(),   // FULL measured series (250ms samples) — no 80-point downsample
-    });
+    }).select('id').single();
     if(error){ btn.disabled = false; $('sSaveMsg').className = 'form-msg err'; $('sSaveMsg').textContent = 'Error: ' + error.message; return; }
     saved = true;
     $('sSaveMsg').className = 'form-msg ok';
     $('sSaveMsg').textContent = 'Saved to your measurements.';
+    // Voice recorded? Attach it to the saved result — the share video plays it.
+    if(soloVoice.armed && savedRow && savedRow.id){
+      const vr = await soloVoice.saveFor(savedRow.id, a.user?.id, duration);
+      $('sSaveMsg').textContent = vr.ok
+        ? 'Saved with your voice recording. 🎙'
+        : 'Saved — but the voice recording could not be stored (' + vr.reason + ').';
+    }
   }
 
   function setMsg(text, state){ const m = $('sMsg'); m.className = 'solo-msg ' + (state || ''); m.textContent = text; }
@@ -371,6 +381,7 @@ export function mount(el){
     if(finalizing) return;                       // drain in progress — ignore clicks
     measuring ? beginFinalize() : startMeasurement();
   });
+  const soloVoice = createSoloVoice($('sStart'));   // 🎙 toggle above the Start button
 
   unsubStatus = ble.subscribeStatus(s => { connected = s.connected; if(!connected && !measuring) setMsg('', ''); });
   unsubFrames = ble.subscribeFrames(frame => {
@@ -403,6 +414,7 @@ export function mount(el){
   window.addEventListener('resize', drawChart);
 
   return () => {
+    soloVoice.destroy();
     if(sampleTimer) clearInterval(sampleTimer);
     if(uiTimer) clearInterval(uiTimer);
     if(finalizeTimer) clearTimeout(finalizeTimer);
