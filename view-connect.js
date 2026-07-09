@@ -24,18 +24,24 @@ const OFFER = {
   plainUrl: 'https://egelywheel.com/products/vitality-pack?utm_source=ewr-live&utm_medium=connect-page',
 };
 
-// The offer card always sells the Vitality Pack. A maker's stored affiliate link
-// is the store root with the affiliate's tracking query (e.g. ?sca_ref=…), so we
-// carry that query onto the Vitality Pack PRODUCT url — the buyer lands on the
-// product AND the maker gets credited. Falls back to the plain product page.
+// The offer card always sells the Vitality Pack.
+// With a coupon: a direct CART permalink adds the pack and pre-applies the code
+// (?discount=…) — one tap to a checkout-ready cart. The affiliate program (UpPromote)
+// credits the maker by their UNIQUE coupon, so no sca_ref is needed — and a /cart/
+// redirect strips unknown params anyway (and an extra param can even break the
+// discount). Without a coupon (rare): attribution can only ride on the referral
+// link's ?sca_ref cookie, which is set on a real store page, so we send them to
+// the product page with that query instead of a cart permalink.
 const VITALITY_PACK_URL = 'https://egelywheel.com/products/vitality-pack';
-function makerBuyUrl(affiliateLink){
+const VP_VARIANT = '56459929780610';   // Vitality Pack variant (Shopify)
+function makerBuyUrl(affiliateLink, coupon){
+  if(coupon){
+    return 'https://egelywheel.com/cart/' + VP_VARIANT + ':1?discount=' + encodeURIComponent(coupon);
+  }
   try {
     const u = new URL((affiliateLink || '').trim());
     return u.search ? VITALITY_PACK_URL + u.search : VITALITY_PACK_URL;
-  } catch {
-    return VITALITY_PACK_URL;
-  }
+  } catch { return VITALITY_PACK_URL; }
 }
 
 // Social icons (inline SVG). `field` is the profiles column the link lives in.
@@ -344,15 +350,15 @@ function renderUpcoming(upcoming, now, name){
 // The $449 "your price" is only claimed for the standard $50-off partner coupons
 // (codes ending in 50); other codes show the coupon without a computed price.
 function renderMakerOffer(pr, name){
-  const buy = esc(makerBuyUrl(pr.affiliate_link));   // Vitality Pack product + the maker's referral tracking
   const coupon = (pr.coupon_code || '').trim();
+  const buy = esc(makerBuyUrl(pr.affiliate_link, coupon));   // cart + auto-coupon + referral tracking
   const fiftyOff = /50$/.test(coupon);
   const priceHtml = fiftyOff
     ? `<span class="cn-price-reg"><s>${esc(OFFER.regularPrice)}</s></span>
        <span class="cn-price-your">${esc(OFFER.couponPrice)}</span>
        <span class="cn-price-lbl">with coupon</span>`
     : `<span class="cn-price-your">${esc(OFFER.regularPrice)}</span>
-       <span class="cn-price-lbl">${coupon ? 'use the coupon at checkout' : '1 year of EWR Live included'}</span>`;
+       <span class="cn-price-lbl">${coupon ? 'coupon applied at checkout' : '1 year of EWR Live included'}</span>`;
   const couponHtml = coupon ? `
     <div class="cn-coupon">
       <span class="cn-coupon-lbl">Coupon</span>
@@ -373,8 +379,10 @@ function renderMakerOffer(pr, name){
           <div class="cn-price">${priceHtml}</div>
           ${couponHtml}
           <div class="cn-offer-actions">
-            <a class="cn-cta" href="${buy}" target="_blank" rel="noopener noreferrer nofollow">Get the Vitality Pack</a>
-            <span class="cn-offer-fine">Supports ${esc(name)} — your purchase credits them.</span>
+            <a class="cn-cta" href="${buy}" target="_blank" rel="noopener noreferrer nofollow">${coupon ? 'Add to cart — coupon applied' : 'Get the Vitality Pack'}</a>
+            <span class="cn-offer-fine">${coupon
+              ? 'Opens a ready-to-checkout cart with coupon ' + esc(coupon) + ' — this purchase supports ' + esc(name) + '.'
+              : 'This purchase supports ' + esc(name) + '.'}</span>
           </div>
         </div>
       </div>

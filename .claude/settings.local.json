@@ -87,7 +87,18 @@
       "Bash(git -C /c/Users/User/Documents/GitHub/egely-wheel-race show HEAD:ewr-redesign.css)",
       "WebFetch(domain:github.com)",
       "Skill(artifact-design)",
-      "Skill(artifact-design:*)"
+      "Skill(artifact-design:*)",
+      "Bash(cd \"C:/Users/User/Documents/GitHub/egely-wheel-race/assets/makers\")",
+      "Bash(echo \"PIL_MISSING\")",
+      "Bash(python3)",
+      "Bash(git -C C:/Users/User/Documents/GitHub/egely-wheel-race diff -- view-connect.js ewr-redesign.css index.html)",
+      "WebFetch(domain:shopify.dev)",
+      "WebFetch(domain:docs.uppromote.com)",
+      "WebFetch(domain:community.shopify.com)",
+      "Bash(node test_url.mjs)",
+      "Bash(node test_roundtrip.mjs)",
+      "Bash(grep -iE '\\\\.sql$|migration|provision|seed|maker|coupon|affiliate')",
+      "Bash(grep -icE '\\\\.\\(js|css|html|sql|md|json\\)$')"
     ]
   }
 }
