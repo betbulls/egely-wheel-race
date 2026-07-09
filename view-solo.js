@@ -67,6 +67,7 @@ export function mount(el){
         <div id="sDurPick"></div>
         <input id="sDur" type="hidden" value="60">
       </div>
+      <div id="sVoiceDock"></div>
       <div class="solo-msg" id="sMsg"></div>
     </div>
 
@@ -381,7 +382,7 @@ export function mount(el){
     if(finalizing) return;                       // drain in progress — ignore clicks
     measuring ? beginFinalize() : startMeasurement();
   });
-  const soloVoice = createSoloVoice($('sStart'));   // 🎙 toggle above the Start button
+  const soloVoice = createSoloVoice($('sVoiceDock'));   // 🎙 voice dock in the setup panel
 
   unsubStatus = ble.subscribeStatus(s => { connected = s.connected; if(!connected && !measuring) setMsg('', ''); });
   unsubFrames = ble.subscribeFrames(frame => {
