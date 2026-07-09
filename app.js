@@ -21,6 +21,7 @@ import { mount as mountWelcome } from './view-welcome.js';
 import { mount as mountAdmin } from './view-admin.js';
 import { mount as mountHowToConnect } from './view-how-to-connect.js';
 import { mount as mountSpiritualMakers } from './view-spiritual-makers.js';
+import { mount as mountRender } from './view-render.js';
 import * as presence from './presence.js';
 import { supabase } from './db.js';
 
@@ -51,6 +52,12 @@ function router(){
   });
   if(path === '/room') setView(mountRoom, param);
   else if(path === '/race') setView(mountRace, param);
+  else if(path === '/render'){
+    // Hidden social-video render stage: #/render/race/:id or #/render/session/:id.
+    // parseHash only exposes 2 segments, so read the id (3rd segment) directly.
+    const seg = location.hash.replace(/^#/, '').split('/').filter(Boolean);
+    setView(mountRender, seg[1] || 'race', seg[2] || null);
+  }
   else if(path === '/join'){
     // An invite link can point to a session OR a race — peek at the type, then
     // mount the matching room (passing the token through for the access gate).
