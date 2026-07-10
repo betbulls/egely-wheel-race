@@ -292,7 +292,8 @@ export function mount(el){
   function beginFinalize(){
     if(!measuring || finalizing) return;
     measuring = false; finalizing = true;
-    soloVoice.stop();              // the voice window = the measurement window
+    // The voice keeps recording past the measurement — the closing-words
+    // post-roll starts on the results screen (soloVoice.beginPostRoll in showEval).
     if(sampleTimer){ clearInterval(sampleTimer); sampleTimer = null; }
     counterAtEnd = lastCounter; lateHandled = false;
     $('sStart').disabled = true;
@@ -316,6 +317,7 @@ export function mount(el){
     setMsg('', '');
     lastStats = computeStats(samples);
     if(lastStats) showEval(lastStats);
+    else if(soloVoice.armed) soloVoice.endPostRoll();   // no results screen → close the recording so it never runs on
     closeLive();
     wakeLock.release();
   }
@@ -334,6 +336,7 @@ export function mount(el){
         <span><b>${stats.steadiness}</b> Steady</span>
         ${(cheatDetected || signalLost) ? '<span class="warn">Not verified</span>' : '<span class="v-badge verified">✓ Verified</span>'}
       </div>
+      <div id="sEvalRec"></div>
       <div class="field full" style="margin-top:16px">
         <label for="sComment">Comment (optional)</label>
         <textarea id="sComment" maxlength="500" rows="2" placeholder="Add a note about this measurement…"></textarea>
@@ -343,10 +346,14 @@ export function mount(el){
         <span class="form-msg" id="sSaveMsg"></span>
       </div>`;
     eval_.querySelector('#sSave').addEventListener('click', saveMeasurement);
+    // Voice armed? Keep recording for a 1-minute closing-words post-roll, shown
+    // as a live rec bar under the stats (End stops it; Save finalizes it too).
+    if(soloVoice.armed) soloVoice.beginPostRoll(eval_.querySelector('#sEvalRec'));
   }
 
   async function saveMeasurement(){
     if(saved || !lastStats) return;
+    soloVoice.endPostRoll();   // close the closing-words recording before we store it
     const a = auth.getState();
     const identity = (a.displayName || '').trim() || 'Me';
     const btn = $('sSave'); btn.disabled = true;
@@ -369,7 +376,7 @@ export function mount(el){
     $('sSaveMsg').textContent = 'Saved to your measurements.';
     // Voice recorded? Attach it to the saved result — the share video plays it.
     if(soloVoice.armed && savedRow && savedRow.id){
-      const vr = await soloVoice.saveFor(savedRow.id, a.user?.id, duration);
+      const vr = await soloVoice.saveFor(savedRow.id, a.user?.id);
       $('sSaveMsg').textContent = vr.ok
         ? 'Saved with your voice recording. 🎙'
         : 'Saved — but the voice recording could not be stored (' + vr.reason + ').';
