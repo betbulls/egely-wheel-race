@@ -1,0 +1,3 @@
+# Claude Code personal, per-machine settings (permission allow-list, rewritten
+# automatically each session). Not used by the site — keep it out of git.
+.claude/settings.local.json
