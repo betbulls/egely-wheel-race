@@ -127,6 +127,11 @@ function headerHtml(d, label) {
     </div>`;
 }
 
+// In-flow placeholder for the camera band. The actual <video> lives in ONE
+// absolutely-positioned layer on the stage (buildCamLayer) so playback never
+// hiccups when the board frame swaps to the finale — the boards change UNDER it.
+const camSpace = d => d.cam ? '<div class="rv-camspace"></div>' : '';
+
 function introHtml(d, label, nounCount) {
   const pucks = (d.racers || d.members || []).slice(0, 3).map((r, i) =>
     `<span class="rv-puck" style="left:${18 + i * 19}%">${avatarHtml(r.avatar, r.name, 'pk')}</span>`).join('');
@@ -138,6 +143,7 @@ function introHtml(d, label, nounCount) {
       <div class="rv-in-host">${d.kind === 'solo' ? '' : 'Hosted by '}<b>${esc(d.host.name)}</b></div>
       <div class="rv-in-name">${esc(d.title)}</div>
       <div class="rv-in-meta">${esc(fmtWhen(d.session.scheduled_start))}${d.kind === 'solo' ? '' : ` · ${d.count} ${nounCount}`} · ${d.durText || d.session.duration_minutes + ' min'}</div>
+      ${d.cam ? '<div class="rv-pill gold rv-camchip"><i class="rv-dot"></i>🎥&nbsp; FILMED LIVE</div>' : ''}
       ${pucks ? `<div class="rv-mini-track"><span class="rv-finish"></span>${pucks}</div>` : ''}
     </div>
     <div class="rv-ft"><div class="rv-url">▶ replayed on <b>live.egelywheel.com</b></div></div>`;
@@ -146,6 +152,7 @@ function introHtml(d, label, nounCount) {
 function raceBoardHtml(d) {
   return `
     ${headerHtml(d, { text: 'RACE REPLAY' })}
+    ${camSpace(d)}
     <div class="rv-lanes" id="rvLanes"></div>
     <div class="rv-more" id="rvMore" hidden></div>
     <div class="rv-ft">
@@ -181,6 +188,7 @@ function finalHtml(d) {
     </div>`;
   return `
     ${headerHtml(d, { text: 'RACE FINISHED', gold: true })}
+    ${camSpace(d)}
     <div class="rv-confetti" id="rvConfetti"></div>
     <div class="rv-win-wrap">
       <div class="rv-win-pill">🏆&nbsp; WINNER</div>
@@ -234,8 +242,8 @@ function paintRaceFrame(stage, d, t) {
   const leaderScore = leader ? leader.cum[k] : 0;
   const leaderPos = 8 + Math.max(0, Math.min(1, t / dur)) * 88;
 
-  const shown = now.slice(0, TOP_LANES);
-  const rest = now.slice(TOP_LANES).concat(d.racers.filter(r => !r.ranked));
+  const shown = now.slice(0, d._top || TOP_LANES);
+  const rest = now.slice(d._top || TOP_LANES).concat(d.racers.filter(r => !r.ranked));
 
   now.forEach(r => {
     const el = r.laneEl; if (!el) return;
@@ -303,6 +311,38 @@ function showPhase(stage, ph) {
   stage.querySelectorAll('.rv-frame').forEach(f => { f.hidden = f.dataset.phase !== ph; });
 }
 
+// ---------------------------------------------------------------------------
+// Camera composite. One <video> in one absolutely-positioned layer over the
+// stage: the board→finale swap happens UNDER it, so playback never stutters.
+// The board and finale frames reserve identical room via .rv-camspace; the
+// layer is measured against the board's slot once it becomes visible.
+// The element stays muted — the camera's own audio is muxed by the worker.
+// ---------------------------------------------------------------------------
+function buildCamLayer(stage, d) {
+  const layer = document.createElement('div');
+  layer.className = 'rv-camlayer';
+  const inner = document.createElement('div');
+  inner.className = 'rv-camin';
+  const v = document.createElement('video');
+  v.muted = true; v.playsInline = true; v.preload = 'auto';
+  v.src = d.cam.url;                                   // .src property, never innerHTML
+  const tag = document.createElement('div');
+  tag.className = 'rv-camtag';
+  tag.textContent = '🎥 ' + d.host.name;               // textContent → XSS-safe
+  inner.appendChild(v); inner.appendChild(tag);
+  layer.appendChild(inner);
+  stage.appendChild(layer);
+  d._cam = { layer, video: v };
+}
+
+function placeCam(stage, d) {
+  const slot = stage.querySelector('.rv-frame[data-phase="board"] .rv-camspace');
+  if (!slot || !d._cam) return;
+  const r = slot.getBoundingClientRect();              // stage is fixed at (0,0) → page coords
+  d._cam.layer.style.top = r.top + 'px';
+  d._cam.layer.style.height = r.height + 'px';
+}
+
 // Auto sequence: intro hold (~2.5s) → board (sped up so the clip stays social-
 // length) → finale → __rvDone. Driven by a performance.now() loop (real
 // elapsed wall time × speed) rather than the clock's per-frame delta
@@ -315,12 +355,31 @@ function playSequence(stage, d, paintFrame, defSpeed, setStop) {
   const SPEED = window.__rvSpeed || defSpeed(d.durationMs);
   const HOLD = window.__rvHoldMs || 3000;
   const spd = stage.querySelector('#rvSpd');
-  if (spd) spd.textContent = 'REPLAY · ' + SPEED + '×' + (window.__rvVoice ? ' · 🎙 LIVE VOICE' : '');
+  if (spd) spd.textContent = 'REPLAY · ' + SPEED + '×' + (d.cam ? ' · 🎥 ON CAMERA' : window.__rvVoice ? ' · 🎙 LIVE VOICE' : '');
   let raf = 0, stopped = false;
-  setStop(() => { stopped = true; if (raf) cancelAnimationFrame(raf); });
+  setStop(() => { stopped = true; if (raf) cancelAnimationFrame(raf); if (d._cam) { try { d._cam.video.pause(); } catch (_) {} } });
+  // Prime the video decoder during the intro (play→pause→rewind) so playback
+  // starts frame-instant at board time — kills the ~0.4s cold-start lag the
+  // F0 spike measured in headless Chrome.
+  if (d._cam) {
+    const v = d._cam.video;
+    const p = v.play();
+    if (p && p.then) p.then(() => { v.pause(); try { v.currentTime = 0; } catch (_) {} }).catch(() => {});
+  }
   setTimeout(() => {
     if (stopped || !stage.isConnected) return;
     showPhase(stage, 'board');
+    if (d._cam) {                                       // camera cuts in with the board
+      placeCam(stage, d);
+      d._cam.layer.classList.add('on');
+      const v = d._cam.video;
+      // measure how late the first camera frame actually paints after the cut —
+      // the worker shifts the muxed audio by this much (lip-sync)
+      const t0 = performance.now();
+      v.addEventListener('playing', () => { window.__rvCamLagMs = Math.round(performance.now() - t0); }, { once: true });
+      const pl = v.play();
+      if (pl && pl.catch) pl.catch(() => {});
+    }
     d._lastOrder = '';
     const start = performance.now();
     const loop = () => {
@@ -329,6 +388,7 @@ function playSequence(stage, d, paintFrame, defSpeed, setStop) {
       paintFrame(stage, d, t);
       if (t >= d.durationMs) {
         showPhase(stage, 'final');
+        if (d._cam) d._cam.layer.classList.add('fin');   // gold frame — closing words over the results
         if (d.kind === 'race') paintConfetti(stage);
         setTimeout(() => { window.__rvDone = true; }, HOLD);
         return;
@@ -345,8 +405,11 @@ function paintConfetti(stage) {
   const cols = ['#e8b84b', '#37dbff', '#7a5cff', '#ffffff'];
   let s = 0, h = '';
   const rnd = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
+  // with the camera band on stage the winner area sits lower — drop the
+  // confetti below the camera so it isn't hidden behind the video layer
+  const yBase = stage.classList.contains('rv-with-cam') ? 770 : 140;
   for (let i = 0; i < 16; i++) {
-    const x = 60 + rnd() * 960, y = 140 + rnd() * 560, w = 10 + rnd() * 12, hh = 16 + rnd() * 14, rot = rnd() * 90 - 45;
+    const x = 60 + rnd() * 960, y = yBase + rnd() * 520, w = 10 + rnd() * 12, hh = 16 + rnd() * 14, rot = rnd() * 90 - 45;
     h += `<span style="left:${x}px;top:${y}px;width:${w}px;height:${hh}px;background:${cols[i % 4]};transform:rotate(${rot}deg);opacity:${(.4 + rnd() * .45).toFixed(2)}"></span>`;
   }
   el.innerHTML = h;
@@ -430,6 +493,7 @@ function sessionBoardHtml(d) {
   return `
     ${SVG_DEFS}
     ${headerHtml(d, { text: 'SESSION REPLAY' })}
+    ${camSpace(d)}
     <div class="rv-hero-card">
       <div class="rv-hc-head">
         <div>
@@ -442,7 +506,7 @@ function sessionBoardHtml(d) {
         </div>
         <div class="rv-hc-avg"><div class="lbl">GROUP AVG</div><div class="val" id="rvGavg">–</div></div>
       </div>
-      <svg id="rvHero" width="888" height="330" viewBox="0 0 888 330"></svg>
+      <svg id="rvHero" width="888" height="${d.cam ? 230 : 330}" viewBox="0 0 888 ${d.cam ? 230 : 330}"></svg>
     </div>
     <div class="rv-rows" id="rvRows"></div>
     <div class="rv-more" id="rvMore" hidden></div>
@@ -491,7 +555,7 @@ function prefixPath(curve, kmax, W, H) {
 }
 
 function heroChartSvg(d, t) {
-  const W = 888, H = 330, y = v => H - (v / 24) * H;
+  const W = 888, H = d.cam ? 230 : 330, y = v => H - (v / 24) * H;
   const frac = Math.max(0, Math.min(1, t / d.durationMs));
   let s = '';
   s += `<rect x="0" y="0" width="${W}" height="${y(13)}" fill="#3ddc8e" opacity=".05"/>`;
@@ -530,7 +594,7 @@ function paintSessionFrame(stage, d, t) {
   if (gEl) { gEl.textContent = gAvg ? gAvg.toFixed(1) : '–'; gEl.style.color = zCol(gAvg); }
 
   const now = d.members.slice().sort((a, b) => ravgAt(b, frac) - ravgAt(a, frac));
-  const shown = now.slice(0, TOP_ROWS);
+  const shown = now.slice(0, d._top || TOP_ROWS);
   const topAvg = shown[0];
   now.forEach(m => {
     const el = m.rowEl; if (!el) return;
@@ -554,7 +618,7 @@ function paintSessionFrame(stage, d, t) {
   const order = shown.map(m => m.rowEl && m.rowEl.dataset.rid).join(',');
   if (order !== d._lastOrder) { flipReorder(stage.querySelector('#rvRows'), shown.map(m => m.rowEl)); d._lastOrder = order; }
 
-  const rest = now.slice(TOP_ROWS);
+  const rest = now.slice(d._top || TOP_ROWS);
   const moreEl = stage.querySelector('#rvMore');
   if (rest.length) { moreEl.hidden = false; moreEl.innerHTML = `＋ ${rest.length} more in the circle <span>everyone counts in the group pulse</span>`; } else moreEl.hidden = true;
 
@@ -571,6 +635,7 @@ function sessionFinalHtml(d) {
   const hl = (l, m, v) => m ? `<div class="rv-hl"><div class="rv-hl-l">${l}</div><div class="rv-hl-w">${avatarHtml(m.avatar, m.name, 'pod')}<span>${esc(m.name)}</span></div><div class="rv-hl-v">${v}</div></div>` : '';
   return `
     ${headerHtml(d, { text: 'SESSION COMPLETE', gold: true })}
+    ${camSpace(d)}
     <div class="rv-win-wrap">
       <div class="rv-sfin-avg"><div class="rv-sfin-num">${d.groupAvg.toFixed(1)}</div><div class="rv-sfin-lbl">GROUP AVERAGE</div></div>
       <div class="rv-hls">
@@ -623,6 +688,7 @@ function soloBoardHtml(d) {
   return `
     ${SVG_DEFS}
     ${headerHtml(d, { text: 'SOLO REPLAY' })}
+    ${camSpace(d)}
     <div class="rv-solo-hero">
       <div class="rv-solo-val"><div class="v" id="rvSoloV">–</div><div class="l">VITALITY</div></div>
       <div class="rv-solo-side">
@@ -631,7 +697,7 @@ function soloBoardHtml(d) {
       </div>
     </div>
     <div class="rv-hero-card rv-solo-card">
-      <svg id="rvHero" width="888" height="430" viewBox="0 0 888 430"></svg>
+      <svg id="rvHero" width="888" height="${d.cam ? 300 : 430}" viewBox="0 0 888 ${d.cam ? 300 : 430}"></svg>
     </div>
     <div class="rv-ft">
       <div class="rv-clockrow"><div class="rv-clock" id="rvClock">0:00<small>left</small></div><div class="rv-spd" id="rvSpd">REPLAY</div></div>
@@ -641,7 +707,7 @@ function soloBoardHtml(d) {
 }
 
 function soloHeroSvg(d, t) {
-  const W = 888, H = 430, y = v => H - (v / 24) * H;
+  const W = 888, H = d.cam ? 300 : 430, y = v => H - (v / 24) * H;
   const frac = Math.max(0, Math.min(1, t / d.durationMs));
   const k = kAt(d.n, frac);
   let s = '';
@@ -688,6 +754,7 @@ function soloFinalHtml(d) {
   const hl = (l, v) => `<div class="rv-hl"><div class="rv-hl-l">${l}</div><div></div><div class="rv-hl-v">${v}</div></div>`;
   return `
     ${headerHtml(d, { text: 'READING COMPLETE', gold: true })}
+    ${camSpace(d)}
     <div class="rv-win-wrap">
       <div class="rv-sfin-avg"><div class="rv-sfin-num">${d.stats.avg.toFixed(1)}</div><div class="rv-sfin-lbl">AVERAGE VITALITY</div></div>
       <div class="rv-hls">
@@ -723,6 +790,15 @@ export function mount(el, kind, id) {
     if (!d.count) { stage.innerHTML = `<div class="rv-loading">No measurements saved for ${esc(kind)} ${esc(id)}.</div>`; window.__rvReady = true; return; }
 
     const K = d.kind;
+    // Camera composite (Broadcast layout): the worker injects __rvCamUrl when the
+    // event has a camera recording. Without it every layout is byte-identical to
+    // the voice-only render — all camera styling hangs off .rv-with-cam.
+    d.cam = window.__rvCamUrl ? { url: String(window.__rvCamUrl) } : null;
+    stage.dataset.kind = K;
+    if (d.cam) stage.classList.add('rv-with-cam');
+    // The camera band costs vertical room: fewer list rows, same podium math
+    // (rows are score-sorted, so 1st–3rd can never scroll out of frame).
+    d._top = K === 'race' ? (d.cam ? 5 : TOP_LANES) : (d.cam ? 4 : TOP_ROWS);
     const pillTxt = K === 'race' ? 'RACE REPLAY' : K === 'solo' ? 'SOLO REPLAY' : 'SESSION REPLAY';
     const paintFrame = K === 'race' ? paintRaceFrame : K === 'solo' ? paintSoloFrame : paintSessionFrame;
     const defSpeed = K === 'session' ? sessionSpeed : raceSpeed;
@@ -734,6 +810,7 @@ export function mount(el, kind, id) {
         <div class="rv-frame" data-phase="final" hidden>${K === 'race' ? finalHtml(d) : K === 'solo' ? soloFinalHtml(d) : sessionFinalHtml(d)}</div>`;
       if (K === 'race') { buildRaceLanes(stage, d); paintConfetti(stage); }
       else if (K === 'session') buildSessionRows(stage, d);
+      if (d.cam) buildCamLayer(stage, d);
       paintFrame(stage, d, d.durationMs * 0.62);
     } catch (e) {
       console.error('rv build error', e);
@@ -746,7 +823,7 @@ export function mount(el, kind, id) {
     // __rvPlay(), then waits for __rvDone. __rvShow is a manual phase switch.
     window.__rvShow = ph => showPhase(stage, ph);
     window.__rvPlay = () => playSequence(stage, d, paintFrame, defSpeed, fn => { stopSeq = fn; });
-    window.__rvData = { kind: d.kind, id, count: d.count, durationMs: d.durationMs, speed: defSpeed(d.durationMs) };
+    window.__rvData = { kind: d.kind, id, count: d.count, durationMs: d.durationMs, speed: defSpeed(d.durationMs), cam: !!d.cam };
     window.__rvReady = true;
     window.__rvDone = false;
   })();
@@ -918,6 +995,97 @@ body.rv-mode > header, body.rv-mode #navMoreMenu, body.rv-mode .fab, body.rv-mod
 .rv-sstat .v{font:700 62px Montserrat;line-height:1}
 .rv-sstat .l{font:600 19px Inter;letter-spacing:.22em;color:var(--faint);margin-top:8px}
 .rv-solo-card{margin-top:30px}
+
+/* ── camera composite (Broadcast layout) ─────────────────────────────────
+   The camera band is the top act; boards below get a tighter rhythm. All of
+   it is scoped to .rv-with-cam so camera-less renders stay byte-identical. */
+.rv-camspace{height:430px;margin:24px 0 26px;flex:none}
+.rv-with-cam[data-kind="solo"] .rv-camspace{height:640px}
+.rv-camlayer{position:absolute;left:64px;right:64px;z-index:6;display:none;border-radius:34px;padding:4px;
+  background:linear-gradient(135deg,#37dbff,#5230da);box-shadow:0 34px 90px -22px rgba(82,48,218,.6)}
+.rv-camlayer.on{display:block}
+.rv-camlayer.fin{background:linear-gradient(135deg,#f6d98a,#c9922c);box-shadow:0 34px 90px -22px rgba(232,184,75,.55)}
+.rv-camin{position:relative;width:100%;height:100%;border-radius:30px;overflow:hidden;background:#0b1b28}
+.rv-camin video{width:100%;height:100%;object-fit:cover;display:block}
+.rv-camtag{position:absolute;left:22px;bottom:20px;display:inline-flex;align-items:center;gap:10px;padding:10px 24px;
+  border-radius:999px;background:rgba(4,15,25,.62);border:1.5px solid rgba(255,255,255,.14);font:600 24px Inter;color:#f4f7f9;white-space:nowrap}
+.rv-camchip{margin-top:30px}
+.rv-center .rv-camchip{margin-bottom:0}
+
+/* header tightens + title clamps to one line (deterministic camera geometry) */
+.rv-with-cam .rv-event{margin-top:22px;gap:22px}
+.rv-with-cam .rv-ava.big{width:96px;height:96px}
+.rv-with-cam .rv-ev-name{font-size:52px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rv-with-cam .rv-ev-meta{margin-top:8px;font-size:25px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rv-with-cam .rv-clock{font-size:54px}
+.rv-with-cam .rv-clock small{font-size:25px}
+.rv-with-cam .rv-url{margin-top:14px}
+
+/* race: 5 lanes under the commentator band */
+.rv-with-cam .rv-lanes{gap:12px;margin-top:0}
+.rv-with-cam .rv-lane{grid-template-columns:46px 1fr 205px;gap:18px;padding:13px 26px;border-radius:22px}
+.rv-with-cam .rv-rank{font-size:37px}
+.rv-with-cam .rv-nm{font-size:28px}
+.rv-with-cam .rv-nrow{gap:12px}
+.rv-with-cam .rv-flag{width:30px;height:23px}
+.rv-with-cam .rv-tag{padding:4px 12px;font-size:16px}
+.rv-with-cam .rv-track{height:18px;margin-top:12px;background-size:40px 18px}
+.rv-with-cam .rv-ava.pk{width:46px;height:46px}
+.rv-with-cam .rv-ava.pk>span{font-size:19px}
+.rv-with-cam .rv-lv{font-size:38px}
+.rv-with-cam .rv-lvl{font-size:14px;margin:2px 0 6px}
+.rv-with-cam .rv-sc{font-size:21px}
+.rv-with-cam .rv-sc b{margin-top:3px;font-size:19px}
+.rv-with-cam .rv-more{margin-top:14px;padding:17px 28px;font-size:23px;border-radius:20px}
+
+/* session: slimmer pulse card + 3 rows */
+.rv-with-cam .rv-hero-card{margin-top:0;padding:20px 26px}
+.rv-with-cam .rv-hc-title{font-size:20px}
+.rv-with-cam .rv-legend{gap:16px;margin-top:8px}
+.rv-with-cam .rv-lg{font-size:18px}
+.rv-with-cam .rv-hc-avg .val{font-size:46px}
+.rv-with-cam #rvHero{margin-top:12px}
+.rv-with-cam .rv-rows{gap:12px;margin-top:16px}
+.rv-with-cam .rv-row{grid-template-columns:38px 66px 1fr 220px 155px;gap:16px;padding:13px 22px;border-radius:22px}
+.rv-with-cam .rv-ava.row{width:60px;height:60px}
+.rv-with-cam .rv-ava.row>span{font-size:24px}
+.rv-with-cam .rv-idx{font-size:28px}
+.rv-with-cam .rv-rname .rv-nm{font-size:26px;margin-bottom:5px}
+.rv-with-cam .rv-livechip{font-size:18px;padding:3px 11px}
+.rv-with-cam .rv-spark{width:220px;height:52px}
+.rv-with-cam .rv-ravg{font-size:38px}
+.rv-with-cam .rv-rlbl{font-size:14px}
+
+/* solo: readout + chart share the room below the big camera */
+.rv-with-cam .rv-solo-hero{margin-top:0;padding:0 6px}
+.rv-with-cam .rv-solo-val .v{font-size:120px}
+.rv-with-cam .rv-solo-val .l{font-size:20px;margin-top:6px}
+.rv-with-cam .rv-sstat .v{font-size:50px}
+.rv-with-cam .rv-solo-card{margin-top:20px;padding:20px 26px}
+
+/* finale: closing words on camera above the results */
+.rv-with-cam .rv-win-pill{margin-bottom:24px;padding:12px 26px;font-size:24px}
+.rv-with-cam .rv-ava.win{width:140px;height:140px}
+.rv-with-cam .rv-ava.win>span{font-size:52px}
+.rv-with-cam .rv-win-name{margin-top:20px;font-size:58px}
+.rv-with-cam .rv-win-pts{margin-top:8px;font-size:40px}
+.rv-with-cam .rv-win-meta{margin-top:8px;font-size:25px}
+.rv-with-cam .rv-podium{margin-top:32px;gap:16px}
+.rv-with-cam .rv-pod-card{padding:16px 26px;border-radius:20px}
+.rv-with-cam .rv-ava.pod{width:72px;height:72px}
+.rv-with-cam .rv-ava.pod>span{font-size:27px}
+.rv-with-cam .rv-pod-nm{font-size:25px}
+.rv-with-cam .rv-pod-pts{font-size:21px}
+.rv-with-cam .rv-win-count{margin-top:28px;font-size:24px}
+.rv-with-cam .rv-cta{margin-top:22px;padding:20px 46px;font-size:28px}
+.rv-with-cam .rv-sfin-avg{margin:0 0 14px}
+.rv-with-cam .rv-sfin-num{font-size:96px}
+.rv-with-cam .rv-sfin-lbl{font-size:21px;margin-top:6px}
+.rv-with-cam .rv-hls{gap:11px;max-width:700px;margin-top:6px}
+.rv-with-cam .rv-hl{padding:13px 24px;border-radius:18px}
+.rv-with-cam .rv-hl-l{font-size:18px}
+.rv-with-cam .rv-hl-w{font-size:25px;gap:12px}
+.rv-with-cam .rv-hl-v{font-size:27px}
 `;
   document.head.appendChild(s);
 }

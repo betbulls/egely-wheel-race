@@ -376,10 +376,11 @@ export function mount(el){
     $('sSaveMsg').textContent = 'Saved to your measurements.';
     // Voice recorded? Attach it to the saved result — the share video plays it.
     if(soloVoice.armed && savedRow && savedRow.id){
+      $('sSaveMsg').textContent = 'Storing your recording…';   // a camera take can be big — show that we're working
       const vr = await soloVoice.saveFor(savedRow.id, a.user?.id);
       $('sSaveMsg').textContent = vr.ok
-        ? 'Saved with your voice recording. 🎙'
-        : 'Saved — but the voice recording could not be stored (' + vr.reason + ').';
+        ? (vr.media === 'video' ? 'Saved with your camera recording. 🎥' : 'Saved with your voice recording. 🎙')
+        : 'Saved — but the recording could not be stored (' + vr.reason + ').';
     }
   }
 
