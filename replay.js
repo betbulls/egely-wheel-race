@@ -24,6 +24,21 @@ const PAUSE_SVG = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="tru
 // views use; vivid yellow is unreadable on white).
 const zText = v => v < 6 ? '#c2415b' : v < 13 ? '#b8860b' : '#0f8a52';
 
+// Camera-take card (solo replay): the maker's video plays in sync above the
+// readout. Styles injected here so a deploy stays JS-only (no CSS ?v bump).
+let camCssDone = false;
+function injectCamCss(){
+  if(camCssDone || document.getElementById('rpCamStyles')){ camCssDone = true; return; }
+  camCssDone = true;
+  const s = document.createElement('style');
+  s.id = 'rpCamStyles';
+  s.textContent = `
+.rp-camcard{position:relative;margin:12px 0;border-radius:16px;overflow:hidden;background:#011624;border:1px solid var(--ewr-border,#dfe3e6);box-shadow:0 10px 28px rgba(1,22,36,.08)}
+.rp-camcard video{display:block;width:100%;max-height:300px;object-fit:contain;background:#011624}
+.rp-camtag{position:absolute;left:10px;bottom:10px;padding:5px 12px;border-radius:999px;background:rgba(1,22,36,.55);color:#fff;font:600 12px Inter,sans-serif}`;
+  document.head.appendChild(s);
+}
+
 const fmt = ms => {
   const s = Math.max(0, Math.round(ms / 1000));
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = String(s % 60).padStart(2, '0');
@@ -172,18 +187,35 @@ export function mountCurveReplay(o){
     } }
 
   let destroyed = false;
-  // Optional voice: a solo recording plays in sync with the replay (offset 0 —
-  // it starts with the measurement). Same model as the session/race replay;
-  // loaded lazily so the page stays light.
-  let audio = null, offMs = 0, aPlaying = false, audioLoaded = false;
-  // Lazy: load the voice only when the replay first plays, then take over the
-  // standalone Listen-again card (onAudio) — like the session/race replay.
+  // Optional voice OR camera: a solo recording plays in sync with the replay
+  // (offset 0 — it starts with the measurement). Same model as the session/
+  // race replay; loaded lazily so the page stays light. A camera take mounts
+  // a visible video card above the readout — the drive logic is identical
+  // (a <video> is the same HTMLMediaElement the sync engine already speaks).
+  let audio = null, offMs = 0, aPlaying = false, audioLoaded = false, camCard = null;
+  function mountCam(url){
+    injectCamCss();
+    camCard = document.createElement('div');
+    camCard.className = 'rp-camcard';
+    camCard.hidden = !heroShown;
+    const v = document.createElement('video');
+    v.playsInline = true; v.preload = 'auto'; v.src = url;
+    const tag = document.createElement('div');
+    tag.className = 'rp-camtag';
+    tag.textContent = '🎥 Recorded on camera';
+    camCard.appendChild(v); camCard.appendChild(tag);
+    o.heroEl.parentNode.insertBefore(camCard, o.heroEl);
+    return v;
+  }
+  // Lazy: load the recording only when the replay first plays, then take over
+  // the standalone Listen-again card (onAudio) — like the session/race replay.
   function ensureAudio(){
     if(audioLoaded || !o.loadAudio) return;
     audioLoaded = true;
     o.loadAudio().then(info => {
       if(destroyed || !info || !info.url) return;
-      audio = new Audio(info.url); audio.preload = 'auto'; offMs = 0;
+      audio = info.media === 'video' ? mountCam(info.url) : new Audio(info.url);
+      audio.preload = 'auto'; offMs = 0;
       if(o.onAudio){ try{ o.onAudio(); }catch(_){} }
       syncAudio(lastT);
     }).catch(() => {});
@@ -237,6 +269,7 @@ export function mountCurveReplay(o){
     if(heroShown) return;
     heroShown = true;
     o.heroEl.hidden = false;
+    if(camCard) camCard.hidden = false;
   }
 
   // ---- Per-frame render --------------------------------------------------
@@ -292,7 +325,7 @@ export function mountCurveReplay(o){
       // Playback ran to the end (or the slider was dragged there): fold the
       // live readout away — back to the entry look, the full curve alone
       // (Csaba). A mid-way pause keeps it up for reading the values.
-      if(s.done && !s.playing && heroShown){ heroShown = false; o.heroEl.hidden = true; }
+      if(s.done && !s.playing && heroShown){ heroShown = false; o.heroEl.hidden = true; if(camCard) camCard.hidden = true; }
     },
   });
 
@@ -306,6 +339,7 @@ export function mountCurveReplay(o){
       destroyed = true;
       clock.destroy();
       if(audio){ try{ audio.pause(); }catch(_){} audio.src = ''; audio = null; }
+      if(camCard){ camCard.remove(); camCard = null; }
     },
   };
 }

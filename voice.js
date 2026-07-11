@@ -15,6 +15,7 @@ import { supabase } from './db.js';
 const TOKEN_URL = 'https://lhyychkrcrndjptptkii.supabase.co/functions/v1/livekit-token';
 const REC_URL = 'https://lhyychkrcrndjptptkii.supabase.co/functions/v1/voice-rec';
 const SOLO_AUDIO_URL = 'https://lhyychkrcrndjptptkii.supabase.co/functions/v1/solo-audio';
+const SOLO_CAM_URL = 'https://lhyychkrcrndjptptkii.supabase.co/functions/v1/solo-camera';
 
 // F2: server-side recording (LiveKit Egress → Supabase Storage) is live.
 const REC_ENABLED = true;
@@ -558,11 +559,20 @@ export async function fetchRecordingPlayback(id, kind = 'session'){
     if(kind === 'solo'){
       const { data: { session } } = await supabase.auth.getSession();
       if(!session) return null;
-      const r = await fetch(SOLO_AUDIO_URL + '?resultId=' + encodeURIComponent(id), { headers: { authorization: 'Bearer ' + session.access_token } });
+      const hdr = { authorization: 'Bearer ' + session.access_token };
+      // Camera take first (the replay shows the video too); voice-only fallback.
+      try{
+        const rc = await fetch(SOLO_CAM_URL + '?resultId=' + encodeURIComponent(id), { headers: hdr });
+        if(rc.ok){
+          const cb = await rc.json().catch(() => ({}));
+          if(cb.url) return { url: cb.url, duration: cb.duration || null, recStartMs: null, media: 'video' };
+        }
+      }catch(_){}
+      const r = await fetch(SOLO_AUDIO_URL + '?resultId=' + encodeURIComponent(id), { headers: hdr });
       if(!r.ok) return null;
       const b = await r.json().catch(() => ({}));
       if(!b.url) return null;
-      return { url: b.url, duration: b.duration || null, recStartMs: null };
+      return { url: b.url, duration: b.duration || null, recStartMs: null, media: 'audio' };
     }
     const g = async action => {
       const r = await fetch(REC_URL + '?action=' + action + '&room=' + encodeURIComponent(id));
