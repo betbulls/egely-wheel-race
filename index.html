@@ -54,7 +54,6 @@
   @media (max-width:600px){
     body{padding:16px}
     .app-header{gap:8px 10px;padding-bottom:10px;margin-bottom:14px}
-    .wordmark{font-size:13px;letter-spacing:0.18em}
     .nav{gap:4px}
     .nav a{padding:6px 10px;font-size:12px}
     .nav-more{width:32px;height:30px;font-size:16px}
@@ -1339,13 +1338,15 @@
   }
 </style>
 <!-- EWR Live light redesign layer — loads last so it wins the cascade. Remove this line to revert. -->
-<link rel="stylesheet" href="ewr-redesign.css?v=20260707">
+<link rel="stylesheet" href="ewr-redesign.css?v=20260711">
 </head>
 <body>
 
 <header class="app-header">
   <div class="brand">
-    <span class="wordmark">EWR Live</span>
+    <a class="brand-home" href="#/home" aria-label="EWR Live — home">
+      <img class="wordmark-logo" src="assets/ewr-live-logo.png" alt="EWR Live" width="1668" height="220">
+    </a>
   </div>
   <nav class="nav">
     <a href="#/home" data-route="/home">Home</a>
