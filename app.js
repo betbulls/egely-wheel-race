@@ -107,8 +107,8 @@ function router(){
 function mountLogin(el){
   el.innerHTML = `
     <div class="login-wrap">
-      <img class="login-logo" src="assets/ewr-live-logo-tagline.png" alt="EWR Live — Measure. Connect. Elevate." width="1716" height="354">
       <div class="login-card">
+        <img class="login-logo" src="assets/ewr-live-logo-tagline.png" alt="EWR Live — Measure. Connect. Elevate." width="1716" height="354">
         <h1 class="login-title">Log in or sign up</h1>
         <p class="login-sub">Enter your email and we'll send you an 8-digit code — no password to remember.</p>
 

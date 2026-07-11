@@ -2217,8 +2217,8 @@ a.xp-topic:hover{border-color:var(--ewr-accent)}
    ========================================================================== */
 .brand{display:flex;align-items:center;gap:12px;flex-shrink:0}
 .brand-home{display:inline-flex;align-items:center;line-height:0;text-decoration:none}
-.wordmark-logo{display:block;height:30px;width:auto;flex:none}
-@media (max-width:600px){.wordmark-logo{height:23px}}
+.wordmark-logo{display:block;height:24px;width:auto;flex:none}
+@media (max-width:600px){.wordmark-logo{height:20px}}
 .brand-ext{font-family:'Inter',sans-serif;font-size:12px;font-weight:600;color:var(--ewr-text-muted);
   text-decoration:none;padding:5px 11px;border-radius:var(--ewr-radius-pill);
   border:1px solid var(--ewr-border);display:inline-flex;align-items:center;gap:5px;white-space:nowrap;
