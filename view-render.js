@@ -373,12 +373,21 @@ function playSequence(stage, d, paintFrame, defSpeed, setStop) {
       placeCam(stage, d);
       d._cam.layer.classList.add('on');
       const v = d._cam.video;
-      // measure how late the first camera frame actually paints after the cut —
-      // the worker shifts the muxed audio by this much (lip-sync)
-      const t0 = performance.now();
-      v.addEventListener('playing', () => { window.__rvCamLagMs = Math.round(performance.now() - t0); }, { once: true });
-      const pl = v.play();
-      if (pl && pl.catch) pl.catch(() => {});
+      // skew (worker-injected): where the take's t=0 sits vs the event start.
+      // Positive → the recording began after the window opened: delay the
+      // start. Negative → it began early: trim the head. The muxed audio uses
+      // the same offset, so picture and sound stay together.
+      const skew = window.__rvCamSkewMs || 0;
+      const begin = () => {
+        // measure decode lag from the EFFECTIVE start — the worker adds it to
+        // the audio offset (lip-sync)
+        const t0 = performance.now();
+        v.addEventListener('playing', () => { window.__rvCamLagMs = Math.round(performance.now() - t0); }, { once: true });
+        if (skew < -50) { try { v.currentTime = -skew / 1000; } catch (_) {} }
+        const pl = v.play();
+        if (pl && pl.catch) pl.catch(() => {});
+      };
+      if (skew > 50) setTimeout(begin, skew); else begin();
     }
     d._lastOrder = '';
     const start = performance.now();

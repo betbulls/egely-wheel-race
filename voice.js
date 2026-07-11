@@ -63,7 +63,7 @@ async function authJwt(){
 function createVoice(sessionId){
   let room = null, state = 'idle', muted = false, startedAt = 0;
   let raf = 0, ctx = null, wl = null, wlWanted = false;
-  const stateCbs = new Set(), levelCbs = new Set();
+  const stateCbs = new Set(), levelCbs = new Set(), videoCbs = new Set();
   let lastErr = '';
 
   const set = s => { state = s; stateCbs.forEach(cb => { try{ cb(s); }catch(_){} }); };
@@ -141,9 +141,14 @@ function createVoice(sessionId){
     room = new L.Room();
     room.on(L.RoomEvent.Reconnecting, () => set('reconnecting'));
     room.on(L.RoomEvent.Reconnected, () => set(role === 'host' ? (muted ? 'muted' : 'live') : 'listening'));
-    room.on(L.RoomEvent.Disconnected, () => { stopMeter(); if(state !== 'idle') set('ended'); });
+    room.on(L.RoomEvent.Disconnected, () => { stopMeter(); videoCbs.forEach(cb => { try{ cb(null); }catch(_){} }); if(state !== 'idle') set('ended'); });
     if(role !== 'host'){
       room.on(L.RoomEvent.TrackSubscribed, (track) => {
+        if(track.kind === 'video'){
+          // the maker is on camera — hand the track to the dock's video panel
+          videoCbs.forEach(cb => { try{ cb(track); }catch(_){} });
+          return;
+        }
         if(track.kind !== 'audio') return;
         const el = track.attach();
         el.setAttribute('playsinline', '');
@@ -152,6 +157,7 @@ function createVoice(sessionId){
         set('listening');
       });
       room.on(L.RoomEvent.TrackUnsubscribed, (track) => {
+        if(track.kind === 'video'){ videoCbs.forEach(cb => { try{ cb(null); }catch(_){} }); return; }
         if(track.kind !== 'audio') return;
         track.detach().forEach(e => e.remove());
         stopMeter();
@@ -166,28 +172,55 @@ function createVoice(sessionId){
     return L;
   }
 
+  // Camera mode (F4): ONE getUserMedia stream feeds BOTH the LiveKit broadcast
+  // (participants watch live) and the dock's local MediaRecorder (the take that
+  // becomes the share-video composite — better quality than re-encoding the
+  // stream, and the parallel voice egress stays as the audio fallback).
+  let camStream = null;
+
   return {
     get state(){ return state; },
     get muted(){ return muted; },
     get error(){ return lastErr; },
+    get camStream(){ return camStream; },
     elapsed(){ return startedAt ? Math.floor((Date.now() - startedAt) / 1000) : 0; },
     onState(cb){ stateCbs.add(cb); return () => stateCbs.delete(cb); },
     onLevel(cb){ levelCbs.add(cb); return () => levelCbs.delete(cb); },
+    onVideo(cb){ videoCbs.add(cb); return () => videoCbs.delete(cb); },
 
-    async goLive(name){
+    async goLive(name, withCam){
       if(state !== 'idle' && state !== 'ended' && state !== 'error') return;
       set('connecting');
+      let camCreatedHere = false;
       try{
+        // Camera first, so a denial is visible before we touch LiveKit.
+        if(withCam && !camStream){
+          camStream = await navigator.mediaDevices.getUserMedia({
+            audio: true, video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+          });
+          camCreatedHere = true;
+        }
         const L = await connect('host', name);
-        await room.localParticipant.setMicrophoneEnabled(true);
-        const pub = room.localParticipant.getTrackPublication(L.Track.Source.Microphone);
-        if(pub && pub.track) meterFrom(pub.track.mediaStreamTrack);
+        if(camStream){
+          const at = camStream.getAudioTracks()[0], vt = camStream.getVideoTracks()[0];
+          await room.localParticipant.publishTrack(at, { source: L.Track.Source.Microphone });
+          await room.localParticipant.publishTrack(vt, { source: L.Track.Source.Camera });
+          meterFrom(at);
+        } else {
+          await room.localParticipant.setMicrophoneEnabled(true);
+          const pub = room.localParticipant.getTrackPublication(L.Track.Source.Microphone);
+          if(pub && pub.track) meterFrom(pub.track.mediaStreamTrack);
+        }
         muted = false;
         startedAt = Date.now();
         acquireWake();
         set('live');
       }catch(e){
         lastErr = e.message || String(e);
+        // Only drop a camera stream this very call created — a retry after a
+        // network drop must not kill a take that is still recording on the
+        // stream from the previous go-live.
+        if(camStream && camCreatedHere){ try{ camStream.getTracks().forEach(t => t.stop()); }catch(_){} camStream = null; }
         try{ if(room) await room.disconnect(); }catch(_){}
         room = null;
         set('error');
@@ -217,7 +250,11 @@ function createVoice(sessionId){
     async setMuted(m){
       if(!room) return;
       muted = !!m;
-      try{ await room.localParticipant.setMicrophoneEnabled(!muted); }catch(_){}
+      // Camera mode: disabling the shared audio track silences the broadcast
+      // AND the local recording in one move (a silent stretch, like solo);
+      // the camera keeps rolling.
+      if(camStream){ try{ camStream.getAudioTracks().forEach(t => t.enabled = !muted); }catch(_){} }
+      else { try{ await room.localParticipant.setMicrophoneEnabled(!muted); }catch(_){} }
       set(muted ? 'muted' : 'live');
     },
 
@@ -229,6 +266,7 @@ function createVoice(sessionId){
       releaseWake();
       stopMeter();
       startedAt = 0;
+      if(camStream){ try{ camStream.getTracks().forEach(t => t.stop()); }catch(_){} camStream = null; }
       const r = room; room = null;
       set('idle');
       try{ if(r) await r.disconnect(); }catch(_){}
@@ -343,6 +381,10 @@ export function mountVoiceDock(el, opts){
         recState.err = '';
         if(action === 'start'){ recState.started = true; if(j.closed) recState.stopped = true; }
         if(action === 'stop') recState.stopped = true;
+        // The camera take follows the SAME official window as the voice egress:
+        // it starts/stops with the server-confirmed recording.
+        if(action === 'start' && !recState.stopped) camRecStart();
+        if(action === 'stop') camRecFinish();
         if(o.onRecFlag){ try{ o.onRecFlag(recState.started && !recState.stopped); }catch(_){} }
       } else {
         recState.err = j.error || ('rec ' + action + ' failed (' + r.status + ')');
@@ -350,6 +392,101 @@ export function mountVoiceDock(el, opts){
     }catch(_){ recState.err = 'recording service unreachable'; }
     finally{ recState.busy = false; }
   }
+  // ---- Camera take (host only, F4) — the local MediaRecorder side of the ONE
+  // camera stream (the other side is the LiveKit broadcast). Runs exactly the
+  // official window (hooked into recCall above); uploaded via the camera
+  // broker Edge Fn keyed on the sessionId, exactly like a solo take.
+  let wantCam = false, selfVid = null;
+  const camRec = { rec: null, chunks: [], startMs: 0, mime: '', state: 'idle', note: '' };
+  if(!document.getElementById('vdCamStyles')){
+    const s = document.createElement('style');
+    s.id = 'vdCamStyles';
+    s.textContent = '.vd-ring.vd-cam{width:64px;height:64px;padding:3px}'
+      + '.vd-ring.vd-cam .slv-self{width:100%;height:100%;border-radius:50%;overflow:hidden;background:#0b1b28;display:block}'
+      + '.vd-ring.vd-cam video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block}'
+      + '@media (max-width:600px){ .vd-ring.vd-cam{width:48px;height:48px} }'
+      // the listener's host-camera panel, right under the dock
+      + '.vd-campanel{position:relative;margin:10px 0 4px;border-radius:16px;overflow:hidden;background:#011624;'
+      + 'border:1px solid var(--ewr-border,#dfe3e6);box-shadow:0 10px 28px rgba(1,22,36,.08)}'
+      + '.vd-campanel video{display:block;width:100%;max-height:320px;object-fit:contain;background:#011624}'
+      + '.vd-campanel .vd-camtag{position:absolute;left:10px;bottom:10px;padding:5px 12px;border-radius:999px;'
+      + 'background:rgba(1,22,36,.55);color:#fff;font:600 12px Inter,sans-serif}';
+    document.head.appendChild(s);
+  }
+  function bindSelf(){
+    const slot = el.querySelector('[data-selfslot]');
+    const cs = voice.camStream;
+    if(!slot || !cs) return;
+    if(!selfVid){
+      selfVid = document.createElement('video');
+      selfVid.muted = true; selfVid.playsInline = true; selfVid.autoplay = true;
+      selfVid.setAttribute('aria-label', 'Your camera preview');
+    }
+    if(selfVid.srcObject !== cs) selfVid.srcObject = cs;
+    if(selfVid.parentNode !== slot) slot.appendChild(selfVid);
+    const p = selfVid.play(); if(p && p.catch) p.catch(() => {});
+  }
+  function camRecStart(){
+    const cs = voice.camStream;
+    if(camRec.rec || !cs) return;
+    try{
+      const mt = ['video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'].find(t => { try{ return MediaRecorder.isTypeSupported(t); }catch(_){ return false; } }) || '';
+      const opts = { videoBitsPerSecond: 1200000, audioBitsPerSecond: 96000 };
+      if(mt) opts.mimeType = mt;
+      camRec.rec = new MediaRecorder(cs, opts);
+      camRec.mime = camRec.rec.mimeType || mt || 'video/webm';
+      camRec.chunks = [];
+      camRec.rec.ondataavailable = e => { if(e.data && e.data.size) camRec.chunks.push(e.data); };
+      camRec.rec.start(1000);
+      camRec.startMs = Date.now();
+      camRec.state = 'rec';
+    }catch(_){ camRec.rec = null; }
+  }
+  function camRecStop(){
+    const r = camRec.rec;
+    const seal = () => {
+      camRec.rec = null;
+      const blob = new Blob(camRec.chunks, { type: (camRec.mime || 'video/webm').split(';')[0] });
+      camRec.chunks = [];
+      return blob.size ? blob : null;
+    };
+    if(!r) return Promise.resolve(null);
+    // The stream's tracks may already be gone (End stops the voice right after
+    // the recording) — the recorder auto-stopped, but the chunks are still ours.
+    if(r.state === 'inactive') return Promise.resolve(seal());
+    return new Promise(res => {
+      r.onstop = () => res(seal());
+      try{ r.stop(); }catch(_){ res(seal()); }
+    });
+  }
+  async function camRecFinish(){
+    if(camRec.state !== 'rec') return;
+    camRec.state = 'uploading';
+    const stopMs = Date.now();
+    const blob = await camRecStop();
+    render();
+    if(!blob){ camRec.state = 'failed'; camRec.note = 'no video captured'; render(); return; }
+    try{
+      const jwt = await authJwt();
+      if(!jwt) throw new Error('login required');
+      const ext = /mp4/.test(blob.type) ? 'mp4' : 'webm';
+      const call = async body => {
+        const r = await fetch(SOLO_CAM_URL, { method: 'POST', headers: { authorization: 'Bearer ' + jwt, 'content-type': 'application/json' }, body: JSON.stringify(body) });
+        const jj = await r.json().catch(() => ({}));
+        if(!r.ok || !jj.ok) throw new Error(jj.error || ('HTTP ' + r.status));
+        return jj;
+      };
+      const grant = await call({ action: 'start', sessionId: Number(o.sessionId), ext });
+      const up = await supabase.storage.from('session-camera')
+        .uploadToSignedUrl(grant.path, grant.token, blob, { contentType: blob.type || (ext === 'mp4' ? 'video/mp4' : 'video/webm') });
+      if(up.error) throw new Error('upload: ' + up.error.message);
+      await call({ action: 'finalize', sessionId: Number(o.sessionId), path: grant.path,
+        duration: Math.max(1, Math.round((stopMs - camRec.startMs) / 1000)), startedMs: camRec.startMs });
+      camRec.state = 'done';
+    }catch(e){ camRec.state = 'failed'; camRec.note = e.message || String(e); console.error('[voice cam]', e); }
+    render();
+  }
+
   let recCtl = null;
   if(REC_ENABLED && o.canHost && o.schedule){
     recCtl = setInterval(() => {
@@ -357,10 +494,15 @@ export function mountVoiceDock(el, opts){
       const st = voice.state;
       const liveish = st === 'live' || st === 'muted' || st === 'reconnecting';
       if(!recState.started && liveish && (p === 'rec' || p === 'post')) recCall('start');
+      // Re-arm the camera take when the recording is already server-confirmed
+      // but the take has not begun (camera go-live after the window opened, or
+      // the start-hook raced a not-yet-live camStream). Never restarts a
+      // finished/uploading take (state guard).
+      if(recState.started && !recState.stopped && liveish && (p === 'rec' || p === 'post') && voice.camStream && camRec.state === 'idle') camRecStart();
       if(recState.started && !recState.stopped && p === 'off') recCall('stop');
       // Post-roll over → the voice itself closes too (Csaba's rule: after the
       // closing minute the maker speaks in the NEXT session, not this one).
-      if(p === 'off' && (liveish || st === 'connecting')){ voice.stop(); return; }
+      if(p === 'off' && (liveish || st === 'connecting')){ camRecFinish(); voice.stop(); return; }
       // The idle card has no tick of its own — keep its countdown/phase line
       // moving too (the live card updates via its own 1s timer).
       if(st === 'idle' || st === 'ended'){
@@ -396,6 +538,15 @@ export function mountVoiceDock(el, opts){
     // word with End during the closing minute): no more going live — the next
     // word belongs to the next session. Hide the dock once idle.
     if(o.canHost && (recPhase() === 'off' || hostDone) && (st === 'idle' || st === 'ended' || st === 'error')){
+      // The camera take may still be uploading after the voice closed — keep
+      // the maker informed instead of vanishing mid-store.
+      if(camRec.state === 'uploading' || camRec.state === 'done' || camRec.state === 'failed'){
+        el.hidden = false;
+        el.innerHTML = `<div class="vd"><span class="vd-ring">${ringInner(false)}</span>
+          <span class="vd-txt"><b>${camRec.state === 'uploading' ? 'Storing your camera recording…' : camRec.state === 'done' ? 'Camera recording saved ✓' : 'Camera recording could not be stored'}</b>
+          <small>${camRec.state === 'uploading' ? 'Keep this page open until it finishes.' : camRec.state === 'done' ? 'It becomes part of the ' + noun + '’s share video.' : esc(camRec.note || 'Please try the next ' + noun + ' again.')}</small></span></div>`;
+        return;
+      }
       el.hidden = true; el.innerHTML = ''; return;
     }
     el.hidden = false;
@@ -406,14 +557,15 @@ export function mountVoiceDock(el, opts){
           <div class="vd vd-idle">
             <span class="vd-ring">${ringInner(false)}</span>
             <span class="vd-txt">
-              <b>Guide this ${noun} with your voice</b>
+              <b>Guide this ${noun} live</b>
               <small>${st === 'error' ? esc(voice.error || 'Could not start — try again.') : esc(hostIdleLine())}</small>
             </span>
-            <button type="button" class="vd-btn" data-golive>Go live</button>
+            <button type="button" class="vd-btn" data-golive-cam>With camera</button>
+            <button type="button" class="vd-btn ghost" data-golive>Voice only</button>
           </div>`;
       } else if(st === 'connecting'){
         el.innerHTML = `<div class="vd"><span class="vd-ring vd-on">${ringInner(false)}</span>
-          <span class="vd-txt"><b>Connecting…</b><small>Allow the microphone when asked.</small></span></div>`;
+          <span class="vd-txt"><b>Connecting…</b><small>Allow the ${wantCam ? 'camera and microphone' : 'microphone'} when asked.</small></span></div>`;
       } else {
         const m = voice.muted;
         // Mute-only during the recorded window (Csaba, 2026-07-05): the maker
@@ -422,16 +574,22 @@ export function mountVoiceDock(el, opts){
         // (that is the "I am done" gesture that closes the recording).
         const pAtRender = recPhase();
         const canEnd = !(REC_ENABLED && pAtRender === 'rec');
+        // Camera mode: the breathing ring is a live mirrored self-view — the
+        // maker sees themselves exactly while on camera (the solo pattern).
+        const camRing = voice.camStream
+          ? '<span class="vd-ring vd-cam vd-on" data-ring><span class="slv-self" data-selfslot></span></span>'
+          : `<span class="vd-ring vd-on" data-ring>${ringInner(false)}</span>`;
         el.innerHTML = `
           <div class="vd vd-live">
-            <span class="vd-ring vd-on" data-ring>${ringInner(false)}</span>
+            ${camRing}
             <span class="vd-txt">
-              <b><span class="vd-dot"></span>${st === 'reconnecting' ? 'Reconnecting…' : (m ? 'Muted' : 'You are live')} · <span data-el>${fmtElapsed()}</span>${recChip()}</b>
+              <b><span class="vd-dot"></span>${st === 'reconnecting' ? 'Reconnecting…' : (m ? 'Muted' : (voice.camStream ? 'You are live on camera' : 'You are live'))} · <span data-el>${fmtElapsed()}</span>${recChip()}</b>
               <small data-recline>${esc(hostRecLine())}</small>
             </span>
             <button type="button" class="vd-btn ghost" data-mute>${m ? 'Unmute' : 'Mute'}</button>
             ${canEnd ? '<button type="button" class="vd-btn ghost danger" data-end>End</button>' : ''}
           </div>`;
+        bindSelf();
         tickTimer = setInterval(() => {
           if(recPhase() !== pAtRender){ render(); return; }   // End (dis)appears with the phase
           const t = el.querySelector('[data-el]');
@@ -470,7 +628,8 @@ export function mountVoiceDock(el, opts){
     }
 
     const q = sel => el.querySelector(sel);
-    q('[data-golive]')?.addEventListener('click', () => voice.goLive(auth_name()));
+    q('[data-golive]')?.addEventListener('click', () => { wantCam = false; voice.goLive(auth_name()); });
+    q('[data-golive-cam]')?.addEventListener('click', () => { wantCam = true; voice.goLive(auth_name(), true); });
     q('[data-mute]')?.addEventListener('click', () => voice.setMuted(!voice.muted));
     q('[data-end]')?.addEventListener('click', () => {
       // In the post-roll, End is the maker's "I am done" gesture: it closes the
@@ -481,6 +640,7 @@ export function mountVoiceDock(el, opts){
         hostDone = true;
         if(recState.started && !recState.stopped) recCall('stop');
       }
+      camRecFinish();   // seal the camera take BEFORE stop() drops the stream
       voice.stop();
     });
     q('[data-listen]')?.addEventListener('click', () => voice.listen(auth_name()));
@@ -509,6 +669,23 @@ export function mountVoiceDock(el, opts){
     if(o.canHost) flag(st === 'live' || st === 'muted' || st === 'reconnecting');
     render();
   });
+  // Listener: the maker's camera track arrives → a video panel appears right
+  // under the dock; it leaves with the track (camera off / disconnect).
+  let camPanel = null;
+  voice.onVideo(track => {
+    if(camPanel){ camPanel.remove(); camPanel = null; }
+    if(!track || !el.isConnected) return;
+    camPanel = document.createElement('div');
+    camPanel.className = 'vd-campanel';
+    const v = track.attach();
+    v.setAttribute('playsinline', '');
+    v.muted = true;   // the sound rides the audio track — never double it
+    const tag = document.createElement('div');
+    tag.className = 'vd-camtag';
+    tag.textContent = '🎥 ' + (o.hostName || 'The maker') + ' · live';
+    camPanel.appendChild(v); camPanel.appendChild(tag);
+    el.parentNode.insertBefore(camPanel, el.nextSibling);
+  });
 
   render();
 
@@ -534,6 +711,11 @@ export function mountVoiceDock(el, opts){
       if(tickTimer) clearInterval(tickTimer);
       if(recCtl) clearInterval(recCtl);
       if(dockRefresh) clearInterval(dockRefresh);
+      if(camPanel){ camPanel.remove(); camPanel = null; }
+      if(selfVid){ try{ selfVid.srcObject = null; }catch(_){} selfVid = null; }
+      // A route change mid-take must not discard the camera recording: seal +
+      // upload in the background (SPA — the JS context survives navigation).
+      camRecFinish();
       // NOTE: destroy() does NOT stop the recording — it belongs to the session,
       // not to this page view. The post-roll deadline / finalize path closes it.
       voice.stop();
@@ -574,6 +756,19 @@ export async function fetchRecordingPlayback(id, kind = 'session'){
       if(!b.url) return null;
       return { url: b.url, duration: b.duration || null, recStartMs: null, media: 'audio' };
     }
+    // Session/race: a camera take beats the voice egress for the replay (the
+    // maker's video plays in sync). Signed playback needs a login — anonymous
+    // viewers fall through to the public voice audio below.
+    try{
+      const { data: { session } } = await supabase.auth.getSession();
+      if(session){
+        const rc = await fetch(SOLO_CAM_URL + '?sessionId=' + encodeURIComponent(id), { headers: { authorization: 'Bearer ' + session.access_token } });
+        if(rc.ok){
+          const cb = await rc.json().catch(() => ({}));
+          if(cb.url) return { url: cb.url, duration: cb.duration || null, recStartMs: cb.startedMs || null, media: 'video' };
+        }
+      }
+    }catch(_){}
     const g = async action => {
       const r = await fetch(REC_URL + '?action=' + action + '&room=' + encodeURIComponent(id));
       return { ok: r.ok, body: await r.json().catch(() => ({})) };

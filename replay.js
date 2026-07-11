@@ -39,6 +39,25 @@ function injectCamCss(){
   document.head.appendChild(s);
 }
 
+// Camera-take media for the race/session replays: the sync engine drives a
+// visible <video> exactly like a bare Audio (same HTMLMediaElement API); the
+// card sits inside the replay board and leaves with it on close/teardown.
+function camReplayMedia(el, url, beforeSel){
+  injectCamCss();
+  const card = document.createElement('div');
+  card.className = 'rp-camcard';
+  const v = document.createElement('video');
+  v.playsInline = true; v.preload = 'auto'; v.src = url;
+  const tag = document.createElement('div');
+  tag.className = 'rp-camtag';
+  tag.textContent = '🎥 Recorded on camera';
+  card.appendChild(v); card.appendChild(tag);
+  const anchor = el.querySelector(beforeSel);
+  if(anchor && anchor.parentNode) anchor.parentNode.insertBefore(card, anchor);
+  else el.appendChild(card);
+  return v;
+}
+
 const fmt = ms => {
   const s = Math.max(0, Math.round(ms / 1000));
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = String(s % 60).padStart(2, '0');
@@ -495,7 +514,10 @@ export function mountRaceReplay(el, o){
     if(audioInfo && audioInfo.url){
       const off = (audioInfo.recStartMs != null && o.raceStartMs) ? (audioInfo.recStartMs - o.raceStartMs) : 0;
       if(off < durationMs){
-        audio = new Audio(audioInfo.url);
+        // Camera take → the maker's video plays above the lanes, in sync.
+        audio = audioInfo.media === 'video'
+          ? camReplayMedia(el, audioInfo.url, '.rr-list')
+          : new Audio(audioInfo.url);
         audio.preload = 'auto';
         offsetMs = off;
         // If the commentary starts by ANY route, a stale "Enable commentary"
@@ -506,7 +528,7 @@ export function mountRaceReplay(el, o){
         });
         const chip = document.createElement('span');
         chip.className = 'voice-chip';
-        chip.textContent = '🎙 Commentary';
+        chip.textContent = audioInfo.media === 'video' ? '🎥 On camera' : '🎙 Commentary';
         barEl.appendChild(chip);
         if(o.onAudioTakeover){ try{ o.onAudioTakeover(); }catch(_){} }
       }
@@ -744,13 +766,16 @@ export function mountSessionReplay(el, o){
     if(audioInfo && audioInfo.url){
       const off = (audioInfo.recStartMs != null && o.eventStartMs) ? (audioInfo.recStartMs - o.eventStartMs) : 0;
       if(off < durationMs){
-        audio = new Audio(audioInfo.url);
+        // Camera take → the maker's video plays under the replay chrome, in sync.
+        audio = audioInfo.media === 'video'
+          ? camReplayMedia(el, audioInfo.url, '[data-rp-bar]')
+          : new Audio(audioInfo.url);
         audio.preload = 'auto';
         offsetMs = off;
         audio.addEventListener('play', () => { const fx = el.querySelector('[data-rp-audiofix]'); if(fx) fx.remove(); });
         const chip = document.createElement('span');
         chip.className = 'voice-chip';
-        chip.textContent = '🎙 Voice guidance';
+        chip.textContent = audioInfo.media === 'video' ? '🎥 Camera guidance' : '🎙 Voice guidance';
         barEl.appendChild(chip);
         if(o.onTakeover){ try{ o.onTakeover(); }catch(_){} }
       }
