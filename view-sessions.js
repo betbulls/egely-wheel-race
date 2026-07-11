@@ -114,7 +114,7 @@ export function mount(el, eventType = 'session'){
         ? supabase.from('profiles').select('id, display_name, avatar_url, approved_maker, practitioner_handle').in('id', organizerIds)
         : Promise.resolve({ data: [] }),
       recIds.length
-        ? supabase.from('session_recordings').select('session_id, duration_seconds').eq('status', 'ready').in('session_id', recIds)
+        ? supabase.from('session_recordings').select('session_id, duration_seconds, media').eq('status', 'ready').in('session_id', recIds)
         : Promise.resolve({ data: [] }),
     ]);
     for(const p of (profQ.data || [])) organizersById.set(p.id, p);
@@ -228,8 +228,11 @@ export function mount(el, eventType = 'session'){
     const isPract = !!(prof && prof.approved_maker);
     // Finished + ready voice recording → gold chip (the player lives on the results page).
     const rec = base === 'finished' ? recBySession.get(s.id) : null;
+    const recMin = rec && rec.duration_seconds ? ' · ' + Math.max(1, Math.round(rec.duration_seconds / 60)) + ' min' : '';
     const voiceChip = rec
-      ? `<span class="voice-chip" title="Voice recording — open the results to listen">🎙 ${isRace ? 'Race commentary' : 'Voice session'}${rec.duration_seconds ? ' · ' + Math.max(1, Math.round(rec.duration_seconds / 60)) + ' min' : ''}</span>`
+      ? (rec.media === 'video'
+        ? `<span class="voice-chip" title="Camera recording — open the results to watch">🎥 ${isRace ? 'Race camera' : 'Camera session'}${recMin}</span>`
+        : `<span class="voice-chip" title="Voice recording — open the results to listen">🎙 ${isRace ? 'Race commentary' : 'Voice session'}${recMin}</span>`)
       : '';
     const nameRow = `<div class="session-name">${esc(s.name || 'Untitled session')}${s.verified_only ? '<span class="sess-verified">✓ Verified</span>' : ''}${accessBadgeHtml(s.access_mode)}</div>`;
     const leftHtml = base === 'finished'

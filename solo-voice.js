@@ -6,8 +6,10 @@
 // recording spans the measurement window PLUS a 1-minute post-roll for the
 // closing words — exactly like the session/race REC_POSTROLL_MS. During the
 // measurement the dock offers Mute only (no End); when the measurement ends the
-// dock RELOCATES into the results panel and shows the closing-words phase with a
-// live countdown and an End button (End = "I'm done", the post-roll gesture).
+// dock STAYS PUT (Csaba: a jumping bar loses the user mid-sentence) and shows
+// the closing-words phase with a live countdown and an End button. Ending the
+// take (End / timeout / Save) RELEASES the devices immediately — the camera
+// light goes off the moment the recording stops.
 //
 // Two modes, chosen at arm time:
 //   audio — voice only (the original path, unchanged): one audio/webm blob,
@@ -209,16 +211,14 @@ export function createSoloVoice(mountEl) {
           </span>
           <button type="button" class="vd-btn ghost danger" data-end>End</button>
         </div>`;
-    } else {   // done — recording finalized; a live camera keeps its self-view + an Off control
-      const camHot = mode === 'video' && stream;
+    } else {   // done — recording finalized, devices already released (LED off)
       row.innerHTML = `
         <div class="vd">
-          ${camHot ? ringHtml(false) : `<span class="vd-ring">${micRing()}</span>`}
+          <span class="vd-ring">${micRing()}</span>
           <span class="vd-txt">
-            <b>${takeMode === 'video' ? 'Camera captured ✓' : 'Voice captured ✓'}</b>
+            <b>${takeMode === 'video' ? 'Camera captured ✓ · camera off' : 'Voice captured ✓'}</b>
             <small>${takeMode === 'video' ? 'Save your measurement to attach it to your share video.' : 'It plays on your share video — save your measurement to keep it.'}</small>
           </span>
-          ${camHot ? '<button type="button" class="vd-btn ghost" data-off>Turn off camera</button>' : ''}
         </div>`;
     }
     const q = sel => row.querySelector(sel);
@@ -299,11 +299,12 @@ export function createSoloVoice(mountEl) {
     return stopping;
   }
 
-  // After the measurement ends: keep recording for the closing words, and show
-  // the post-roll bar (with the End button) inside the results panel.
-  function beginPostRoll(evalMount) {
+  // After the measurement ends: keep recording for the closing words. The bar
+  // does NOT move — it switches to the countdown phase right where it is
+  // (the evalMount arg is accepted for the view's sake and ignored: a bar that
+  // jumped into the results panel made the user scroll to find it — Csaba).
+  function beginPostRoll(_evalMount) {
     if (!armed || !rec || rec.state === 'inactive') return false;   // nothing recording
-    if (evalMount) evalMount.appendChild(row);   // relocate the bar under the results
     if (elTimer) { clearInterval(elTimer); elTimer = null; }
     phase = 'post';
     postDeadline = Date.now() + REC_POSTROLL_MS;
@@ -316,11 +317,24 @@ export function createSoloVoice(mountEl) {
     return true;
   }
 
+  // Drop the hardware without dropping the take: the finished blob still
+  // counts as "armed" (getter) so Save can store it, but the camera light and
+  // the mic indicator go off the moment the recording ends.
+  function releaseDevices() {
+    armed = false;
+    stopMeter();
+    if (stream) { try { stream.getTracks().forEach(tr => tr.stop()); } catch (_) {} stream = null; }
+    if (selfVid) { try { selfVid.srcObject = null; } catch (_) {} selfVid = null; }
+  }
+
   // End the recording for good (End button, post-roll timeout, or Save).
   function endPostRoll() {
     if (postTimer) { clearInterval(postTimer); postTimer = null; }
     if (rec && rec.state !== 'inactive') {
       const p = stopRecorder();
+      // release the hardware once the blob is sealed (killing tracks before
+      // onstop can drop the final chunk in some browsers)
+      p.then(() => releaseDevices());
       phase = 'done';
       render();
       return p;

@@ -46,7 +46,15 @@ function sparkSvg(curve){
     </svg>`;
 }
 
-function cardHtml(r, sessMap, hostFor, recMap){
+// Recording chip: 🎥 for a camera take, 🎙 for voice — the same everywhere.
+function recChip(media, kind){
+  if(!media) return '';
+  return media === 'video'
+    ? `<span class="voice-chip mini" title="This ${kind} has a camera recording — open it to watch">🎥 Camera</span>`
+    : `<span class="voice-chip mini" title="This ${kind} has a voice recording — open its results to listen">🎙 Voice</span>`;
+}
+
+function cardHtml(r, sessMap, hostFor, recMap, soloRecMap){
   const kind = kindOf(r);
   const kindLabel = kind === 'race' ? 'Race' : kind === 'experiment' ? 'Experiment' : kind === 'session' ? 'Session' : 'Solo';
   const lvl = vitalityLevel(r.avg || 0);
@@ -62,7 +70,7 @@ function cardHtml(r, sessMap, hostFor, recMap){
             <span class="me-kind ${kind}">${kindLabel}</span>
             <span class="me-title">${esc(title)}</span>
             ${r.verified ? '<span class="v-badge verified">✓</span>' : '<span class="v-badge unverified">unverified</span>'}
-            ${(usesSession && recMap && recMap.has(r.session_id)) ? `<span class="voice-chip mini" title="This ${kind} has a voice recording — open its results to listen">🎙 Voice</span>` : ''}
+            ${recChip(usesSession ? (recMap && recMap.get(r.session_id)) : (soloRecMap && soloRecMap.get(r.id)), kind)}
           </div>
           <div class="me-meta">${when} · <span style="color:${zText(r.avg || 0)}">${esc(lvl.name)}</span>${hostChipHtml(host)}</div>
         </div>
@@ -156,17 +164,24 @@ export function mount(el){
     const hostIds = [...new Set((sessR.data || []).map(s => s.created_by_user_id).filter(Boolean))];
     const hostsById = new Map();
     const recIds = [...new Set(rows.map(r => r.session_id).filter(v => v != null))];
-    const recMap = new Map();
-    const [profQ, recQ] = await Promise.all([
+    const soloIds = rows.filter(r => r.session_id == null).map(r => r.id);
+    const recMap = new Map();       // session_id -> 'audio' | 'video'
+    const soloRecMap = new Map();   // result_id  -> 'audio' | 'video'
+    const [profQ, recQ, soloRecQ] = await Promise.all([
       hostIds.length
         ? supabase.from('profiles').select('id, display_name, avatar_url').in('id', hostIds)
         : Promise.resolve({ data: [] }),
       recIds.length
-        ? supabase.from('session_recordings').select('session_id').eq('status', 'ready').in('session_id', recIds)
+        ? supabase.from('session_recordings').select('session_id, media').eq('status', 'ready').in('session_id', recIds)
+        : Promise.resolve({ data: [] }),
+      soloIds.length
+        ? supabase.from('session_recordings').select('result_id, media').eq('status', 'ready').eq('kind', 'solo').in('result_id', soloIds)
         : Promise.resolve({ data: [] }),
     ]);
     for(const p of (profQ.data || [])) hostsById.set(p.id, p);
-    for(const x of (recQ.data || [])) recMap.set(x.session_id, true);
+    // a video row wins if an event somehow has both kinds
+    for(const x of (recQ.data || [])) if(x.media === 'video' || !recMap.has(x.session_id)) recMap.set(x.session_id, x.media === 'video' ? 'video' : 'audio');
+    for(const x of (soloRecQ.data || [])) if(x.media === 'video' || !soloRecMap.has(x.result_id)) soloRecMap.set(x.result_id, x.media === 'video' ? 'video' : 'audio');
     const hostFor = sess => {
       if(!sess) return null;
       const p = sess.created_by_user_id ? hostsById.get(sess.created_by_user_id) : null;
@@ -185,7 +200,7 @@ export function mount(el){
     const paint = () => {
       const shown = rows.filter(r => matches(r, filter));
       rowsHost.innerHTML = shown.length
-        ? shown.map(r => cardHtml(r, sessMap, hostFor, recMap)).join('')
+        ? shown.map(r => cardHtml(r, sessMap, hostFor, recMap, soloRecMap)).join('')
         : '<div class="panel"><p class="placeholder">No measurements match this filter.</p></div>';
     };
 

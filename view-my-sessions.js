@@ -250,7 +250,7 @@ export function mount(el, eventType = 'session'){
       // the recordings query degrades silently to "no chips" without the policy).
       const [{ data: res }, { data: recs }] = await Promise.all([
         supabase.from('results').select(sel).in('session_id', ids),
-        supabase.from('session_recordings').select('session_id, duration_seconds').eq('status', 'ready').in('session_id', ids),
+        supabase.from('session_recordings').select('session_id, duration_seconds, media').eq('status', 'ready').in('session_id', ids),
       ]);
       for(const r of (recs || [])) recReady.set(r.session_id, r);
       for(const r of (res || [])){ if(r.session_id != null) haveResults.add(r.session_id); }
@@ -305,8 +305,11 @@ export function mount(el, eventType = 'session'){
     const id = s.id;
     const verified = s.verified_only ? '<span class="mys-verified">✓ Verified</span>' : '';
     const rec = st === 'finished' ? recReady.get(id) : null;
+    const recMin = rec && rec.duration_seconds ? ' · ' + Math.max(1, Math.round(rec.duration_seconds / 60)) + ' min' : '';
     const voice = rec
-      ? `<span class="voice-chip" title="Voice recording — open View results to listen">🎙 Voice${rec.duration_seconds ? ' · ' + Math.max(1, Math.round(rec.duration_seconds / 60)) + ' min' : ''}</span>`
+      ? (rec.media === 'video'
+        ? `<span class="voice-chip" title="Camera recording — open View results to watch">🎥 Camera${recMin}</span>`
+        : `<span class="voice-chip" title="Voice recording — open View results to listen">🎙 Voice${recMin}</span>`)
       : '';
     const mode = s.access_mode || 'public';
     const access = mode === 'invite' ? '<span class="mys-access invite">Invite link</span>'

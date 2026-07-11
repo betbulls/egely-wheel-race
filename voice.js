@@ -607,6 +607,7 @@ export function mountVoicePlayer(el, opts){
   let serverDur = null, fetchingUrl = false;
   let seenExisting = false;   // a sync already confirmed the recording exists
   let pendingSeek = 0;        // fraction dragged before the audio was fetched
+  let mediaKind = 'audio';    // solo camera takes flip this to 'video' → the card plays the VIDEO
 
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   const noun = o.mode === 'race' ? 'race' : 'session';
@@ -657,7 +658,16 @@ export function mountVoicePlayer(el, opts){
   }
 
   function bindAudio(url){
-    audio = new Audio(url);
+    if(mediaKind === 'video'){
+      // camera take: the media element is a visible <video> inside the card
+      const slot = el.querySelector('[data-camslot]');
+      const v = document.createElement('video');
+      v.playsInline = true; v.preload = 'auto'; v.src = url;
+      if(slot){ slot.appendChild(v); slot.hidden = false; }
+      audio = v;
+    } else {
+      audio = new Audio(url);
+    }
     audio.preload = 'auto';
     // A drag made before the first Play must not be thrown away: apply it as
     // soon as the media can seek.
@@ -707,13 +717,24 @@ export function mountVoicePlayer(el, opts){
 
   function renderReady(){
     if(destroyed) return;
+    const vid = mediaKind === 'video';
+    if(vid && !document.getElementById('vpCamStyles')){
+      const s = document.createElement('style');
+      s.id = 'vpCamStyles';
+      s.textContent = '.vp-camslot{margin:10px 0 4px;border-radius:14px;overflow:hidden;background:#011624;border:1px solid var(--ewr-border,#dfe3e6)}'
+        + '.vp-camslot video{display:block;width:100%;max-height:280px;object-fit:contain;background:#011624}';
+      document.head.appendChild(s);
+    }
     el.hidden = false;
     el.innerHTML = `
       <div class="vp-card">
         ${ringHtml()}
         <div class="vp-main">
-          <div class="vp-head"><b>${title} · Listen again</b><span class="voice-chip">🎙 Recorded live</span></div>
-          <small>${esc(o.hostName)} guided this ${noun} by voice${serverDur ? ' · ' + fmt(serverDur) : ''}.</small>
+          <div class="vp-head"><b>${vid ? 'Camera recording · Watch again' : title + ' · Listen again'}</b><span class="voice-chip">${vid ? '🎥 Recorded on camera' : '🎙 Recorded live'}</span></div>
+          <small>${vid
+            ? `${esc(o.hostName)} recorded this measurement on camera${serverDur ? ' · ' + fmt(serverDur) : ''} — closing words included.`
+            : `${esc(o.hostName)} guided this ${noun} by voice${serverDur ? ' · ' + fmt(serverDur) : ''}.`}</small>
+          ${vid ? '<div class="vp-camslot" data-camslot hidden></div>' : ''}
           <div class="vp-ctl">
             <button type="button" class="vp-play" data-play aria-label="Play recording">${PLAY_SVG}</button>
             <input type="range" class="vp-seek" data-seek min="0" max="1000" value="0" step="1" disabled aria-label="Seek in the recording">
@@ -757,7 +778,7 @@ export function mountVoicePlayer(el, opts){
     if(o.mode === 'solo'){
       const i = await fetchRecordingPlayback(o.sessionId, 'solo').catch(() => null);
       if(destroyed || !el.isConnected){ hide(); return; }
-      if(i && i.url){ serverDur = i.duration || null; renderReady(); } else hide();
+      if(i && i.url){ serverDur = i.duration || null; mediaKind = i.media === 'video' ? 'video' : 'audio'; renderReady(); } else hide();
       return;
     }
     const r = await recGet('sync').catch(() => null);
