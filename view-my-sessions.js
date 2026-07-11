@@ -308,7 +308,7 @@ export function mount(el, eventType = 'session'){
     const recMin = rec && rec.duration_seconds ? ' · ' + Math.max(1, Math.round(rec.duration_seconds / 60)) + ' min' : '';
     const voice = rec
       ? (rec.media === 'video'
-        ? `<span class="voice-chip" title="Camera recording — open View results to watch">🎥 Camera${recMin}</span>`
+        ? `<span class="voice-chip" title="Camera recording — open View results to watch">🎥 Camera</span>`
         : `<span class="voice-chip" title="Voice recording — open View results to listen">🎙 Voice${recMin}</span>`)
       : '';
     const mode = s.access_mode || 'public';

@@ -144,7 +144,7 @@ function introHtml(d, label, nounCount) {
       <div class="rv-in-name">${esc(d.title)}</div>
       <div class="rv-in-meta">${esc(fmtWhen(d.session.scheduled_start))}${d.kind === 'solo' ? '' : ` · ${d.count} ${nounCount}`} · ${d.durText || d.session.duration_minutes + ' min'}</div>
       ${d.cam ? '<div class="rv-pill gold rv-camchip"><i class="rv-dot"></i>🎥&nbsp; FILMED LIVE</div>' : ''}
-      ${pucks ? `<div class="rv-mini-track"><span class="rv-finish"></span>${pucks}</div>` : ''}
+      ${d.kind === 'race' && pucks ? `<div class="rv-mini-track"><span class="rv-finish"></span>${pucks}</div>` : ''}
     </div>
     <div class="rv-ft"><div class="rv-url">▶ replayed on <b>live.egelywheel.com</b></div></div>`;
 }

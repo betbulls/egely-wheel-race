@@ -354,8 +354,8 @@ export function mountVoiceDock(el, opts){
   // The idle card's helper line — the maker always knows what recording would do.
   function hostIdleLine(){
     const p = recPhase();
-    if(!p) return 'Participants hear you live — no camera, just your voice.';
-    if(p === 'pre') return 'Participants hear you live. Warm-up talk is never recorded — recording starts with the ' + noun + '.';
+    if(!p) return 'Participants hear you live — and see you too, if you go live with the camera.';
+    if(p === 'pre') return 'Participants hear — and see — you live. Warm-up is never recorded; recording starts with the ' + noun + '.';
     if(p === 'rec') return 'The ' + noun + ' is being recorded — going live again will be part of the recording.';
     if(p === 'post') return 'The recording is still open for closing words (' + postLeft() + ' left).';
     return 'The recording has ended — going live now is live-only.';
@@ -404,6 +404,18 @@ export function mountVoiceDock(el, opts){
   // anonymous visitors watch the replay instead). Client-side gate for now.
   let loggedIn = false;
   supabase.auth.getSession().then(({ data }) => { loggedIn = !!(data && data.session); render(); }).catch(() => {});
+  // A logout mid-listen drops the live connection right away (the member gate
+  // must not depend on a page refresh — Csaba's Tuurex test).
+  let authSub = null;
+  try{
+    authSub = supabase.auth.onAuthStateChange((_ev, session) => {
+      const now = !!session;
+      if(now === loggedIn) return;
+      loggedIn = now;
+      if(!now && !o.canHost && ['listening', 'waiting', 'tap', 'connecting', 'reconnecting'].includes(voice.state)) voice.stop();
+      render();
+    });
+  }catch(_){}
   const camRec = { rec: null, chunks: [], startMs: 0, mime: '', state: 'idle', note: '' };
   if(!document.getElementById('vdCamStyles')){
     const s = document.createElement('style');
@@ -573,7 +585,7 @@ export function mountVoiceDock(el, opts){
             <span class="vd-ring">${ringInner(false)}</span>
             <span class="vd-txt">
               <b>Guide this ${noun} live</b>
-              <small>${st === 'error' ? esc(voice.error || 'Could not start — try again.') : (tooEarly ? 'Going live opens 10 minutes before the start.' : esc(hostIdleLine()))}</small>
+              <small>${st === 'error' ? esc(voice.error || 'Could not start — try again.') : (tooEarly ? 'Voice or camera broadcast opens 10 minutes before the start.' : esc(hostIdleLine()))}</small>
             </span>
             ${tooEarly ? '' : `<button type="button" class="vd-btn" data-golive-cam>With camera</button>
             <button type="button" class="vd-btn ghost" data-golive>Voice only</button>`}
@@ -749,6 +761,7 @@ export function mountVoiceDock(el, opts){
       if(dockRefresh) clearInterval(dockRefresh);
       if(camPanel){ camPanel.remove(); camPanel = null; }
       if(selfVid){ try{ selfVid.srcObject = null; }catch(_){} selfVid = null; }
+      try{ if(authSub && authSub.data && authSub.data.subscription) authSub.data.subscription.unsubscribe(); }catch(_){}
       // A route change mid-take must not discard the camera recording: seal +
       // upload in the background (SPA — the JS context survives navigation).
       camRecFinish();
@@ -1005,8 +1018,8 @@ export function mountVoicePlayer(el, opts){
       <div class="vp-card">
         ${ringHtml()}
         <div class="vp-main">
-          <div class="vp-head"><b>${title}</b><span class="voice-chip">🎙 Recording</span></div>
-          <small>The voice recording is being prepared — it appears here shortly after the ${noun} closes.</small>
+          <div class="vp-head"><b>Recording</b><span class="voice-chip">● Preparing</span></div>
+          <small>The recording is being prepared — it appears here shortly after the ${noun} closes.</small>
         </div>
       </div>`;
   }

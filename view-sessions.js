@@ -231,7 +231,7 @@ export function mount(el, eventType = 'session'){
     const recMin = rec && rec.duration_seconds ? ' · ' + Math.max(1, Math.round(rec.duration_seconds / 60)) + ' min' : '';
     const voiceChip = rec
       ? (rec.media === 'video'
-        ? `<span class="voice-chip" title="Camera recording — open the results to watch">🎥 ${isRace ? 'Race camera' : 'Camera session'}${recMin}</span>`
+        ? `<span class="voice-chip" title="Camera recording — open the results to watch">🎥 ${isRace ? 'Race camera' : 'Camera session'}</span>`
         : `<span class="voice-chip" title="Voice recording — open the results to listen">🎙 ${isRace ? 'Race commentary' : 'Voice session'}${recMin}</span>`)
       : '';
     const nameRow = `<div class="session-name">${esc(s.name || 'Untitled session')}${s.verified_only ? '<span class="sess-verified">✓ Verified</span>' : ''}${accessBadgeHtml(s.access_mode)}</div>`;
