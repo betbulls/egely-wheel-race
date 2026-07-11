@@ -35,7 +35,7 @@ function injectCss() {
   document.head.appendChild(s);
 }
 
-export function mountVideoShare(el, { kind, targetId }) {
+export function mountVideoShare(el, { kind, targetId, notBeforeMs = 0 }) {
   injectCss();
   let destroyed = false, timer = 0;
   const stop = () => { if (timer) { clearInterval(timer); timer = 0; } };
@@ -67,6 +67,13 @@ export function mountVideoShare(el, { kind, targetId }) {
       el.innerHTML = `<div class="vs-wrap"><span class="vs-note"><span class="vs-dot"></span><b>Preparing your video…</b>
         usually 1–2 minutes${kind !== 'solo' ? ' (longer with a voice recording)' : ''}. We'll email the link too.</span></div>`;
       if (!timer) timer = setInterval(async () => { const j = await latestJob(); if (j && j.status !== (job && job.status)) paint(j); else if (j && j.status === 'ready') paint(j); }, 5000);
+    } else if (notBeforeMs && Date.now() < notBeforeMs) {
+      // The maker's closing words + the recording upload are still in flight —
+      // a render started NOW would miss them and get cached for a year.
+      stop();
+      el.innerHTML = `<div class="vs-wrap"><span class="vs-note"><span class="vs-dot"></span><b>The recording is being stored…</b>
+        the video button opens in a moment.</span></div>`;
+      timer = setTimeout(() => { timer = 0; latestJob().then(paint); }, Math.min(30000, Math.max(2000, notBeforeMs - Date.now() + 500)));
     } else {
       stop();
       const failed = job && job.status === 'failed';

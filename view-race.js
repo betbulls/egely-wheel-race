@@ -1207,7 +1207,8 @@ export function mount(el, raceId, inviteToken = null){
     const vidslot = body.querySelector('#rrVideo');
     if(vidslot){
       if(videoShare) videoShare.destroy();
-      videoShare = mountVideoShare(vidslot, { kind: 'race', targetId: Number(raceId) });
+      // hold the button until the closing words + the camera upload settle
+      videoShare = mountVideoShare(vidslot, { kind: 'race', targetId: Number(raceId), notBeforeMs: endMs + 180000 });
     }
   }
 

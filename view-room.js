@@ -1545,7 +1545,8 @@ export function mount(el, sessionId, inviteToken = null){
     const vslot = body.querySelector('#resVideo');
     if(vslot){
       if(videoShare) videoShare.destroy();
-      videoShare = mountVideoShare(vslot, { kind: 'session', targetId: Number(sessionId) });
+      // hold the button until the closing words + the camera upload settle
+      videoShare = mountVideoShare(vslot, { kind: 'session', targetId: Number(sessionId), notBeforeMs: endMs + 180000 });
     }
   }
   let videoShare = null;

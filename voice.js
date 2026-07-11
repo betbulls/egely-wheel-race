@@ -397,6 +397,13 @@ export function mountVoiceDock(el, opts){
   // official window (hooked into recCall above); uploaded via the camera
   // broker Edge Fn keyed on the sessionId, exactly like a solo take.
   let wantCam = false, selfVid = null;
+  // Self-view size: big for the first moments (line yourself up), then small;
+  // a tap toggles it any time. null = automatic, true/false = user preference.
+  let camRingPref = null;
+  // Live listening needs an account (Csaba: streaming bandwidth is paid —
+  // anonymous visitors watch the replay instead). Client-side gate for now.
+  let loggedIn = false;
+  supabase.auth.getSession().then(({ data }) => { loggedIn = !!(data && data.session); render(); }).catch(() => {});
   const camRec = { rec: null, chunks: [], startMs: 0, mime: '', state: 'idle', note: '' };
   if(!document.getElementById('vdCamStyles')){
     const s = document.createElement('style');
@@ -404,7 +411,9 @@ export function mountVoiceDock(el, opts){
     s.textContent = '.vd-ring.vd-cam{width:64px;height:64px;padding:3px}'
       + '.vd-ring.vd-cam .slv-self{width:100%;height:100%;border-radius:50%;overflow:hidden;background:#0b1b28;display:block}'
       + '.vd-ring.vd-cam video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block}'
-      + '@media (max-width:600px){ .vd-ring.vd-cam{width:48px;height:48px} }'
+      + '.vd-ring.vd-cam[data-camring]{cursor:pointer}'
+      + '.vd-ring.vd-cam.slv-setup-ring{width:128px;height:128px;padding:4px}'
+      + '@media (max-width:600px){ .vd-ring.vd-cam{width:48px;height:48px} .vd-ring.vd-cam.slv-setup-ring{width:96px;height:96px} }'
       // the listener's host-camera panel, right under the dock
       + '.vd-campanel{position:relative;margin:10px 0 4px;border-radius:16px;overflow:hidden;background:#011624;'
       + 'border:1px solid var(--ewr-border,#dfe3e6);box-shadow:0 10px 28px rgba(1,22,36,.08)}'
@@ -487,7 +496,7 @@ export function mountVoiceDock(el, opts){
     render();
   }
 
-  let recCtl = null;
+  let recCtl = null, lastEarly = null;
   if(REC_ENABLED && o.canHost && o.schedule){
     recCtl = setInterval(() => {
       const p = recPhase();
@@ -508,6 +517,9 @@ export function mountVoiceDock(el, opts){
       if(st === 'idle' || st === 'ended'){
         const sm = el.querySelector('.vd-idle .vd-txt small');
         if(sm){ const line = hostIdleLine(); if(sm.textContent !== line) sm.textContent = line; }
+        // the go-live buttons appear when the 10-minute gate opens
+        const early = !!(o.schedule && Date.now() < o.schedule.startMs - 600000);
+        if(early !== lastEarly){ lastEarly = early; render(); }
         if(p === 'off') render();   // hides the dock for good
       }
     }, 1000);
@@ -553,15 +565,18 @@ export function mountVoiceDock(el, opts){
 
     if(o.canHost){
       if(st === 'idle' || st === 'ended' || st === 'error'){
+        // Streaming costs bandwidth — going live opens 10 minutes before the
+        // start (voice and camera alike), not hours ahead (Csaba's rule).
+        const tooEarly = !!(o.schedule && Date.now() < o.schedule.startMs - 600000);
         el.innerHTML = `
           <div class="vd vd-idle">
             <span class="vd-ring">${ringInner(false)}</span>
             <span class="vd-txt">
               <b>Guide this ${noun} live</b>
-              <small>${st === 'error' ? esc(voice.error || 'Could not start — try again.') : esc(hostIdleLine())}</small>
+              <small>${st === 'error' ? esc(voice.error || 'Could not start — try again.') : (tooEarly ? 'Going live opens 10 minutes before the start.' : esc(hostIdleLine()))}</small>
             </span>
-            <button type="button" class="vd-btn" data-golive-cam>With camera</button>
-            <button type="button" class="vd-btn ghost" data-golive>Voice only</button>
+            ${tooEarly ? '' : `<button type="button" class="vd-btn" data-golive-cam>With camera</button>
+            <button type="button" class="vd-btn ghost" data-golive>Voice only</button>`}
           </div>`;
       } else if(st === 'connecting'){
         el.innerHTML = `<div class="vd"><span class="vd-ring vd-on">${ringInner(false)}</span>
@@ -574,10 +589,12 @@ export function mountVoiceDock(el, opts){
         // (that is the "I am done" gesture that closes the recording).
         const pAtRender = recPhase();
         const canEnd = !(REC_ENABLED && pAtRender === 'rec');
-        // Camera mode: the breathing ring is a live mirrored self-view — the
-        // maker sees themselves exactly while on camera (the solo pattern).
+        // Camera mode: the breathing ring is a live mirrored self-view — BIG
+        // for the first moments so the maker can line themselves up (the solo
+        // pattern), then small; a tap toggles the size any time.
+        const ringBig = camRingPref == null ? voice.elapsed() < 12 : camRingPref;
         const camRing = voice.camStream
-          ? '<span class="vd-ring vd-cam vd-on" data-ring><span class="slv-self" data-selfslot></span></span>'
+          ? `<span class="vd-ring vd-cam vd-on ${ringBig ? 'slv-setup-ring' : ''}" data-ring data-camring role="button" tabindex="0" title="Tap to resize your preview"><span class="slv-self" data-selfslot></span></span>`
           : `<span class="vd-ring vd-on" data-ring>${ringInner(false)}</span>`;
         el.innerHTML = `
           <div class="vd vd-live">
@@ -596,6 +613,11 @@ export function mountVoiceDock(el, opts){
           if(t) t.textContent = fmtElapsed();
           const rl = el.querySelector('[data-recline]');
           if(rl){ const line = hostRecLine(); if(rl.textContent !== line) rl.textContent = line; }
+          // the setup-size self-view shrinks by itself once the maker settled
+          if(camRingPref == null && voice.elapsed() >= 12){
+            const r = el.querySelector('[data-camring].slv-setup-ring');
+            if(r) r.classList.remove('slv-setup-ring');
+          }
         }, 1000);
       }
     } else {
@@ -605,8 +627,8 @@ export function mountVoiceDock(el, opts){
           <div class="vd vd-live">
             <span class="vd-ring vd-on" data-ring>${ringInner(true)}</span>
             <span class="vd-txt">
-              <b><span class="vd-dot"></span>${st === 'listening' ? esc(o.hostName) + ' is speaking' : st === 'reconnecting' ? 'Reconnecting…' : st === 'tap' ? 'Audio is blocked' : 'Voice connected'}${recChip()}</b>
-              <small>${st === 'tap' ? 'Your browser needs one tap to play sound.' : st === 'waiting' ? 'Waiting for the maker’s voice…' : 'Live voice guidance — relax and listen.'}</small>
+              <b><span class="vd-dot"></span>${st === 'listening' ? esc(o.hostName) + (camPanel ? ' is live on camera' : ' is speaking') : st === 'reconnecting' ? 'Reconnecting…' : st === 'tap' ? 'Audio is blocked' : 'Connected'}${recChip()}</b>
+              <small>${st === 'tap' ? 'Your browser needs one tap to play sound.' : st === 'waiting' ? 'Waiting for the maker…' : camPanel ? 'Live video guidance — watch and listen.' : 'Live voice guidance — relax and listen.'}</small>
             </span>
             ${st === 'tap' ? '<button type="button" class="vd-btn" data-unlock>Enable audio</button>' : ''}
             <button type="button" class="vd-btn ghost" data-leave>Leave</button>
@@ -615,14 +637,22 @@ export function mountVoiceDock(el, opts){
         el.innerHTML = `<div class="vd"><span class="vd-ring vd-on">${ringInner(true)}</span>
           <span class="vd-txt"><b>Connecting…</b><small>Joining the live voice.</small></span></div>`;
       } else {
-        el.innerHTML = `
+        el.innerHTML = loggedIn ? `
           <div class="vd vd-idle">
             <span class="vd-ring vd-invite">${ringInner(true)}</span>
             <span class="vd-txt">
               <b>${esc(o.hostName)} is live</b>
-              <small>Voice guidance is on — join in, close your eyes, listen.</small>
+              <small>Live guidance is on — join in, listen, watch.</small>
             </span>
-            <button type="button" class="vd-btn" data-listen>Listen live</button>
+            <button type="button" class="vd-btn" data-listen>Join live</button>
+          </div>` : `
+          <div class="vd vd-idle">
+            <span class="vd-ring vd-invite">${ringInner(true)}</span>
+            <span class="vd-txt">
+              <b>${esc(o.hostName)} is live</b>
+              <small>Live guidance is for members — create a free account to join in.</small>
+            </span>
+            <button type="button" class="vd-btn" data-login>Log in</button>
           </div>`;
       }
     }
@@ -630,6 +660,11 @@ export function mountVoiceDock(el, opts){
     const q = sel => el.querySelector(sel);
     q('[data-golive]')?.addEventListener('click', () => { wantCam = false; voice.goLive(auth_name()); });
     q('[data-golive-cam]')?.addEventListener('click', () => { wantCam = true; voice.goLive(auth_name(), true); });
+    q('[data-login]')?.addEventListener('click', () => { location.hash = '#/login'; });
+    q('[data-camring]')?.addEventListener('click', ev => {
+      const big = ev.currentTarget.classList.toggle('slv-setup-ring');
+      camRingPref = big;
+    });
     q('[data-mute]')?.addEventListener('click', () => voice.setMuted(!voice.muted));
     q('[data-end]')?.addEventListener('click', () => {
       // In the post-roll, End is the maker's "I am done" gesture: it closes the
@@ -674,7 +709,7 @@ export function mountVoiceDock(el, opts){
   let camPanel = null;
   voice.onVideo(track => {
     if(camPanel){ camPanel.remove(); camPanel = null; }
-    if(!track || !el.isConnected) return;
+    if(!track || !el.isConnected){ render(); return; }   // copy flips back to voice-only
     camPanel = document.createElement('div');
     camPanel.className = 'vd-campanel';
     const v = track.attach();
@@ -685,6 +720,7 @@ export function mountVoiceDock(el, opts){
     tag.textContent = '🎥 ' + (o.hostName || 'The maker') + ' · live';
     camPanel.appendChild(v); camPanel.appendChild(tag);
     el.parentNode.insertBefore(camPanel, el.nextSibling);
+    render();   // the listening copy flips to "live on camera / watch and listen"
   });
 
   render();
@@ -802,7 +838,7 @@ export function mountVoicePlayer(el, opts){
   let serverDur = null, fetchingUrl = false;
   let seenExisting = false;   // a sync already confirmed the recording exists
   let pendingSeek = 0;        // fraction dragged before the audio was fetched
-  let mediaKind = 'audio';    // solo camera takes flip this to 'video' → the card plays the VIDEO
+  let mediaKind = 'audio';    // camera takes flip this to 'video' → the card plays the VIDEO
 
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   const noun = o.mode === 'race' ? 'race' : 'session';
@@ -894,7 +930,17 @@ export function mountVoicePlayer(el, opts){
       try{
         const r = o.mode === 'solo'
           ? await fetchRecordingPlayback(o.sessionId, 'solo').then(i => i && i.url ? { ok: true, body: { url: i.url } } : { ok: false, body: {} }).catch(() => null)
-          : await recGet('play').catch(() => null);
+          : mediaKind === 'video'
+            ? await (async () => {   // fresh signed URL for the session camera take
+                try{
+                  const { data: { session } } = await supabase.auth.getSession();
+                  if(!session) return { ok: false, body: {} };
+                  const rc = await fetch(SOLO_CAM_URL + '?sessionId=' + encodeURIComponent(o.sessionId), { headers: { authorization: 'Bearer ' + session.access_token } });
+                  const cb = await rc.json().catch(() => ({}));
+                  return { ok: rc.ok && !!cb.url, body: { url: cb.url } };
+                }catch(_){ return { ok: false, body: {} }; }
+              })()
+            : await recGet('play').catch(() => null);
         if(destroyed) return;
         if(!r || !r.ok || !r.body.url){ showErr((r && r.body.error) || 'The recording is not available right now.'); return; }
         bindAudio(r.body.url);
@@ -927,7 +973,7 @@ export function mountVoicePlayer(el, opts){
         <div class="vp-main">
           <div class="vp-head"><b>${vid ? 'Camera recording · Watch again' : title + ' · Listen again'}</b><span class="voice-chip">${vid ? '🎥 Recorded on camera' : '🎙 Recorded live'}</span></div>
           <small>${vid
-            ? `${esc(o.hostName)} recorded this measurement on camera${serverDur ? ' · ' + fmt(serverDur) : ''} — closing words included.`
+            ? `${esc(o.hostName)} recorded this ${o.mode === 'solo' ? 'measurement' : noun} on camera${serverDur ? ' · ' + fmt(serverDur) : ''} — closing words included.`
             : `${esc(o.hostName)} guided this ${noun} by voice${serverDur ? ' · ' + fmt(serverDur) : ''}.`}</small>
           ${vid ? '<div class="vp-camslot" data-camslot hidden></div>' : ''}
           <div class="vp-ctl">
@@ -976,6 +1022,21 @@ export function mountVoicePlayer(el, opts){
       if(i && i.url){ serverDur = i.duration || null; mediaKind = i.media === 'video' ? 'video' : 'audio'; renderReady(); } else hide();
       return;
     }
+    // Session/race: a camera take beats the voice egress — the results page
+    // shows the same "Watch again" card the solo flow has (closing words
+    // included). Needs a login for the signed URL; anonymous viewers get the
+    // public voice card below.
+    try{
+      const { data: { session } } = await supabase.auth.getSession();
+      if(session){
+        const rc = await fetch(SOLO_CAM_URL + '?sessionId=' + encodeURIComponent(o.sessionId), { headers: { authorization: 'Bearer ' + session.access_token } });
+        if(!destroyed && el.isConnected && rc.ok){
+          const cb = await rc.json().catch(() => ({}));
+          if(cb.url){ mediaKind = 'video'; serverDur = cb.duration || null; renderReady(); return; }
+        }
+      }
+    }catch(_){}
+    if(destroyed || !el.isConnected){ hide(); return; }
     const r = await recGet('sync').catch(() => null);
     if(destroyed || !el.isConnected){ hide(); return; }
     if(r && r.ok && r.body.status === 'ready'){
