@@ -31,6 +31,7 @@ import { createAddToCalendar } from './calendar.js';
 import { computeStats, downsample } from './analytics.js';
 import * as wakeLock from './wake-lock.js';
 import { mountVoiceDock, mountVoicePlayer, fetchRecordingPlayback, REC_POSTROLL_MS } from './voice.js';
+import { mountEventPromo } from './event-promo.js';
 import { mountRaceReplay } from './replay.js';
 import { mountVideoShare } from './video-share.js';
 
@@ -341,9 +342,10 @@ export function mount(el, raceId, inviteToken = null){
   const curSlot = () => Math.floor((Date.now() - startMs) / SLOT_MS);
   const progressOf = cum => TOTAL_SLOTS ? Math.max(0, Math.min(1, (cum || 0) / (24 * TOTAL_SLOTS))) : 0;
 
-  el.innerHTML = `<div class="rl-wrap"><div class="rl-head" id="rlHead"><div class="rl-title">Loading…</div></div><div class="voice-dock" id="voiceDock" hidden></div><div id="rlBody"></div></div>`;
+  el.innerHTML = `<div class="rl-wrap"><div class="rl-head" id="rlHead"><div class="rl-title">Loading…</div></div><div class="voice-dock" id="voiceDock" hidden></div><div id="promoDock" hidden></div><div id="rlBody"></div></div>`;
   const $ = id => el.querySelector('#' + id);
   let voiceDock = null, voiceLive = false;   // Live Voice: dock UI + my "I am speaking" presence flag
+  let promoDock = null;                      // maker announcement toolkit (G3)
   let voicePlayer = null;                    // "Listen again" card on the results screen
   let racePlayback = null;                   // race replay (R2) on the results screen
   let videoShare = null;                     // "Share as video" block on the results screen
@@ -402,6 +404,11 @@ export function mount(el, raceId, inviteToken = null){
         voiceDock = mountVoiceDock($('voiceDock'), dockOpts(ch));
       });
     }
+
+    // Maker announcement toolkit (G3) — the host's shareable promo images,
+    // shown until the race starts. The module gates itself (host + approved
+    // maker) and follows the async maker-flag the same way the dock does.
+    if(Date.now() < startMs) promoDock = mountEventPromo($('promoDock'), { session, sessionId: raceId, kind: 'race' });
 
     renderHead();
     enter();
@@ -1218,6 +1225,7 @@ export function mount(el, raceId, inviteToken = null){
   return () => {
     if(unsubVoiceAuth) unsubVoiceAuth();
     if(voiceDock) voiceDock.destroy();
+    if(promoDock) promoDock.destroy();
     if(voicePlayer) voicePlayer.destroy();
     if(racePlayback) racePlayback.destroy();
     if(videoShare) videoShare.destroy();

@@ -41,8 +41,22 @@ function injectCss(){
 .sc-check{color:#0f8a52;font-size:12px;flex:none}
 .sc-media{flex:none;padding:4px 11px;border-radius:999px;font:600 11.5px Inter,sans-serif;letter-spacing:.02em;
   border:1px solid rgba(184,134,11,.35);color:#8a6508;background:rgba(232,184,75,.1);white-space:nowrap}
+.sc-maker{flex:none;padding:3px 10px;border-radius:999px;font:700 10px Inter,sans-serif;letter-spacing:.08em;text-transform:uppercase;
+  border:1px solid rgba(184,134,11,.4);color:#8a6508;background:linear-gradient(135deg,rgba(232,184,75,.16),rgba(232,184,75,.06))}
 .sc-title{margin:0;font:600 16.5px Montserrat,Inter,sans-serif;color:var(--ewr-text,#011624);line-height:1.3;
   overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.sc-spark{display:block;width:100%;height:44px;border-radius:10px;background:linear-gradient(180deg,rgba(82,48,218,.045),rgba(82,48,218,.015));padding:4px 6px;box-sizing:border-box}
+.sc-spark.big{height:60px}
+/* Spiritual Maker hero card: the wheel photo fills the left edge */
+.sc-card.hero{grid-column:1/-1;flex-direction:row;padding:0;overflow:hidden}
+.sc-hero-photo{width:236px;flex:none;position:relative;background:#eef2f5}
+.sc-hero-photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 18%}
+.sc-hero-body{flex:1;min-width:0;padding:18px 22px;display:flex;flex-direction:column;gap:10px}
+.sc-card.hero .sc-title{font-size:19px}
+@media (max-width:620px){
+  .sc-card.hero{flex-direction:column}
+  .sc-hero-photo{width:100%;height:190px}
+}
 .sc-stats{display:flex;gap:22px;align-items:baseline}
 .sc-stat b{font:700 20px Montserrat,sans-serif}
 .sc-stat small{font:600 10.5px Inter,sans-serif;letter-spacing:.08em;color:var(--ewr-text-muted,#67737c);margin-left:5px}
@@ -65,6 +79,30 @@ function avaHtml(url, name){
 }
 const fmtWhen = iso => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 const fmtDur = s => !s ? '' : s >= 60 ? Math.round(s / 60) + ' min' : s + ' s';
+
+// The reading's curve as a small sparkline — the card must SHOW the
+// measurement, not just talk about it (Csaba, 2026-07-12). Pen-up across
+// nulls; long curves are downsampled.
+const zVivid = v => v < 6 ? '#e14b64' : v < 13 ? '#eab308' : '#10b981';
+function sparkSvg(curve, cls){
+  if(!Array.isArray(curve) || curve.length < 2) return '';
+  const n = curve.length, W = 100, H = 32, step = Math.max(1, Math.ceil(n / 140));
+  let d = '', pen = false, last = null, lastV = 0;
+  for(let i = 0; i < n; i += step){
+    const raw = curve[i];
+    const v = raw == null ? null : Number(raw);
+    if(v == null || !Number.isFinite(v)){ pen = false; continue; }
+    const x = (i / (n - 1)) * W;
+    const y = H - 2 - (Math.max(0, Math.min(24, v)) / 24) * (H - 6);
+    d += (pen ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1) + ' ';
+    pen = true; last = [x, y]; lastV = v;
+  }
+  if(!d) return '';
+  return `<svg class="${cls || 'sc-spark'}" viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true">
+    <path d="${d.trim()}" fill="none" stroke="#5230da" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+    ${last ? `<circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="2.4" fill="${zVivid(lastV)}"/>` : ''}
+  </svg>`;
+}
 
 export function mount(el){
   injectCss();
@@ -100,27 +138,39 @@ export function mount(el){
     const own = !!(u && r.user_id === u.id);
     const name = r.racer_name || (it.prof && it.prof.display_name) || 'Member';
     const media = it.media === 'video' ? '🎥 On camera' : it.media === 'audio' ? '🎙 With voice' : '';
+    const isMaker = !!(it.prof && it.prof.approved_maker);
+    const heroPhoto = isMaker ? ((it.prof.wheel_photo_url || '').trim()) : '';
     const likeInner = `♥ ${it.likes}`;
     const like = u
       ? `<button type="button" class="sc-like ${it.liked ? 'on' : ''}" data-like="${r.id}" ${own ? 'disabled title="Your own reading"' : ''}>${likeInner}</button>`
       : `<a class="sc-like" href="#/login" title="Log in to applaud" data-stop>${likeInner}</a>`;
-    return `
-      <article class="sc-card" data-open="${r.id}">
+    const who = `
         <div class="sc-top">
           ${avaHtml(it.prof && it.prof.avatar_url, name)}
           <div class="sc-who">
-            <b>${esc(name)}${it.prof && it.prof.country ? `<img class="sc-flag" src="${esc(flagUrl(it.prof.country))}" alt="">` : ''}${r.verified ? '<span class="sc-check">✓</span>' : ''}</b>
+            <b>${esc(name)}${it.prof && it.prof.country ? `<img class="sc-flag" src="${esc(flagUrl(it.prof.country))}" alt="">` : ''}${r.verified ? '<span class="sc-check">✓</span>' : ''}${isMaker ? '<span class="sc-maker">Spiritual Maker</span>' : ''}</b>
             <small>${esc(fmtWhen(r.created_at))}${r.duration_seconds ? ' · ' + fmtDur(r.duration_seconds) : ''}</small>
           </div>
           ${media ? `<span class="sc-media">${media}</span>` : ''}
-        </div>
+        </div>`;
+    const body = `
+        ${who}
         <h3 class="sc-title">${esc(r.label || 'Vitality reading')}</h3>
+        ${sparkSvg(r.curve, heroPhoto ? 'sc-spark big' : 'sc-spark')}
         <div class="sc-stats">
           <span class="sc-stat"><b style="color:${zText(r.avg || 0)}">${(r.avg || 0).toFixed(1)}</b><small>AVG</small></span>
           <span class="sc-stat"><b style="color:${zText(r.peak || 0)}">${r.peak || 0}</b><small>PEAK</small></span>
         </div>
-        <div class="sc-foot">${like}<span class="sc-watch">Watch the replay →</span></div>
+        <div class="sc-foot">${like}<span class="sc-watch">Watch the replay →</span></div>`;
+    // A Spiritual Maker with a wheel photo gets the HERO treatment: the photo
+    // fills the card's left edge, the reading breathes next to it.
+    if(heroPhoto) return `
+      <article class="sc-card hero" data-open="${r.id}">
+        <div class="sc-hero-photo"><img src="${esc(heroPhoto)}" alt="${esc(name)} holding the Egely Wheel" loading="lazy" onerror="this.closest('.sc-hero-photo').style.display='none'"></div>
+        <div class="sc-hero-body">${body}</div>
       </article>`;
+    return `
+      <article class="sc-card" data-open="${r.id}">${body}</article>`;
   }
 
   function paint(){
@@ -164,7 +214,7 @@ export function mount(el){
     // Published solos (newest first). Degrades to the empty state if the
     // published column / policies are not deployed yet.
     const { data: rows, error } = await supabase.from('results')
-      .select('id, user_id, racer_name, label, avg, peak, verified, duration_seconds, created_at')
+      .select('id, user_id, racer_name, label, avg, peak, verified, duration_seconds, created_at, curve')
       .eq('published', true).is('session_id', null)
       .order('created_at', { ascending: false }).limit(60);
     if(disposed) return;
@@ -173,7 +223,7 @@ export function mount(el){
     const ids = rows.map(r => r.id);
     const uids = [...new Set(rows.map(r => r.user_id).filter(Boolean))];
     const [profs, recs, likes] = await Promise.all([
-      uids.length ? supabase.from('profiles').select('id, display_name, avatar_url, country').in('id', uids) : { data: [] },
+      uids.length ? supabase.from('profiles').select('id, display_name, avatar_url, country, approved_maker, wheel_photo_url').in('id', uids) : { data: [] },
       supabase.from('session_recordings').select('result_id, media').eq('kind', 'solo').eq('status', 'ready').in('result_id', ids),
       supabase.from('solo_likes').select('result_id, user_id').in('result_id', ids),
     ]);

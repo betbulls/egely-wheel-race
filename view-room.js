@@ -8,6 +8,7 @@ import { flagUrl } from './countries.js';
 import { createAddToCalendar } from './calendar.js';
 import * as wakeLock from './wake-lock.js';
 import { mountVoiceDock, mountVoicePlayer, fetchRecordingPlayback, REC_POSTROLL_MS } from './voice.js';
+import { mountEventPromo } from './event-promo.js';
 import { mountSessionReplay } from './replay.js';
 import { mountVideoShare } from './video-share.js';
 
@@ -184,6 +185,7 @@ export function mount(el, sessionId, inviteToken = null){
       <div class="room-actions" id="roomActions"></div>
       <p class="room-practice-note" id="roomPracticeNote" hidden>This room is open for practice now — official results are recorded once the session begins.</p>
       <div class="voice-dock" id="voiceDock" hidden></div>
+      <div id="promoDock" hidden></div>
     </div>
 
     <div class="panel name-gate" id="nameGate" hidden>
@@ -246,6 +248,7 @@ export function mount(el, sessionId, inviteToken = null){
   let hostHandle = null, hostIsMaker = false;   // approved-maker host → racer card links to their invite page
   let hostAvatarUrl = null;                     // maker photo → the voice dock's breathing ring
   let voiceDock = null, voiceLive = false;      // Live Voice: dock UI + my "I am speaking" presence flag
+  let promoDock = null;                         // maker announcement toolkit (G3)
   let voicePlayer = null;                       // "Listen again" card on the results screen
   let sessReplay = null;                        // session replay (R3) on the results screen
   let recLive = false;                          // host only: server-confirmed "recording is running"
@@ -345,6 +348,11 @@ export function mount(el, sessionId, inviteToken = null){
         voiceDock = mountVoiceDock($('voiceDock'), dockOpts(ch));
       });
     }
+
+    // Maker announcement toolkit (G3) — the host's shareable promo images,
+    // shown until the session starts. The module gates itself (host + approved
+    // maker) and follows the async maker-flag the same way the dock does.
+    if(Date.now() < startMs) promoDock = mountEventPromo($('promoDock'), { session, sessionId, kind: 'session' });
 
     if(Date.now() > endMs){
       renderResults(); resultsShown = true;   // build once; a later resize must not wipe an expanded chart
@@ -1556,6 +1564,7 @@ export function mount(el, sessionId, inviteToken = null){
   return () => {
     if(unsubVoiceAuth) unsubVoiceAuth();
     if(voiceDock) voiceDock.destroy();
+    if(promoDock) promoDock.destroy();
     if(voicePlayer) voicePlayer.destroy();
     if(sessReplay) sessReplay.destroy();
     if(videoShare) videoShare.destroy();
