@@ -132,6 +132,12 @@ function headerHtml(d, label) {
 // hiccups when the board frame swaps to the finale — the boards change UNDER it.
 const camSpace = d => d.cam ? '<div class="rv-camspace"></div>' : '';
 
+// Chart geometry per output format. 9:16 keeps its exact historical numbers
+// (camera shrinks the chart); in the 16:9 studio layout the camera lives in the
+// left identity column, so the chart never pays for it.
+const heroDims = d => d._fmt === '169' ? { W: 1140, H: 290 } : { W: 888, H: d.cam ? 230 : 330 };
+const soloDims = d => d._fmt === '169' ? { W: 1140, H: 520 } : { W: 888, H: d.cam ? 300 : 430 };
+
 function introHtml(d, label, nounCount) {
   const pucks = (d.racers || d.members || []).slice(0, 3).map((r, i) =>
     `<span class="rv-puck" style="left:${18 + i * 19}%">${avatarHtml(r.avatar, r.name, 'pk')}</span>`).join('');
@@ -196,7 +202,7 @@ function raceLaneHtml(r, rank, pos, live, isLeader) {
     </div>`;
 }
 
-function finalHtml(d) {
+function raceWinWrapHtml(d) {
   const ranked = d.racers.filter(r => r.finalRank != null).sort((a, b) => a.finalRank - b.finalRank);
   const win = ranked[0] || d.racers.slice().sort((a, b) => b.raceScore - a.raceScore)[0];
   const others = ranked.slice(1, 3);
@@ -206,9 +212,6 @@ function finalHtml(d) {
       <div><div class="rv-pod-nm">${esc(r.name)}</div><div class="rv-pod-pts">${r.raceScore} pts</div></div>
     </div>`;
   return `
-    ${headerHtml(d, { text: 'RACE FINISHED', gold: true })}
-    ${camSpace(d)}
-    <div class="rv-confetti" id="rvConfetti"></div>
     <div class="rv-win-wrap">
       <div class="rv-win-pill">🏆&nbsp; WINNER</div>
       ${avatarHtml(win.avatar, win.name, 'win goldring')}
@@ -219,6 +222,14 @@ function finalHtml(d) {
       <div class="rv-win-count">${ranked.length} finisher${ranked.length === 1 ? '' : 's'} · ${esc(d.title)} · ${esc(fmtWhen(d.session.scheduled_start).split(' · ')[0])}</div>
       <div class="rv-cta">Race with us → live.egelywheel.com</div>
     </div>`;
+}
+
+function finalHtml(d) {
+  return `
+    ${headerHtml(d, { text: 'RACE FINISHED', gold: true })}
+    ${camSpace(d)}
+    <div class="rv-confetti" id="rvConfetti"></div>
+    ${raceWinWrapHtml(d)}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -304,6 +315,15 @@ function paintRaceFrame(stage, d, t) {
   if (clockEl) clockEl.innerHTML = fmtClock(left) + '<small>left</small>';
   const progEl = stage.querySelector('#rvProg');
   if (progEl) progEl.style.width = Math.max(0, Math.min(100, (t / dur) * 100)).toFixed(1) + '%';
+
+  // 16:9 identity-card live stats (both frame copies — the finale keeps the
+  // end state the last board paint left there).
+  if (d._fmt === '169') {
+    let topLive = 0;
+    shown.forEach(r => { const v = r.curve[k] || 0; if (v > topLive) topLive = v; });
+    stage.querySelectorAll('[data-rv-stat-a]').forEach(e => { e.textContent = leaderScore || '–'; });
+    stage.querySelectorAll('[data-rv-stat-b]').forEach(e => { e.textContent = topLive; e.style.color = zCol(topLive); });
+  }
 }
 
 // Classic FLIP: measure → reorder DOM → invert with a transform → play to zero.
@@ -360,6 +380,12 @@ function placeCam(stage, d) {
   const r = slot.getBoundingClientRect();              // stage is fixed at (0,0) → page coords
   d._cam.layer.style.top = r.top + 'px';
   d._cam.layer.style.height = r.height + 'px';
+  // Horizontal geometry from the slot too — in 9:16 this equals the CSS
+  // left/right:64px it replaces; in 16:9 the slot lives inside the identity
+  // column. (left+width set → the CSS 'right' is ignored per the absolute-
+  // positioning over-constraint rule.)
+  d._cam.layer.style.left = r.left + 'px';
+  d._cam.layer.style.width = r.width + 'px';
 }
 
 // Auto sequence: intro hold (~2.5s) → board (sped up so the clip stays social-
@@ -375,6 +401,15 @@ function playSequence(stage, d, paintFrame, defSpeed, setStop) {
   const HOLD = window.__rvHoldMs || 3000;
   const spd = stage.querySelector('#rvSpd');
   if (spd) spd.textContent = 'REPLAY · ' + SPEED + '×' + (d.cam ? ' · 🎥 ON CAMERA' : window.__rvVoice ? ' · 🎙 LIVE VOICE' : '');
+  // 16:9 identity-card bits that depend on play-time flags: the REC chip and
+  // the LIVE VOICE badge/wave (the worker sets __rvVoice after __rvReady, so
+  // the build could not know). Both frames carry a copy — update them all.
+  stage.querySelectorAll('[data-rv-spdchip]').forEach(e => { e.textContent = 'REPLAY · ' + SPEED + '×'; });
+  if (d.cam || window.__rvVoice) stage.querySelectorAll('[data-rv-rec]').forEach(e => { e.hidden = false; });
+  if (!d.cam && window.__rvVoice) {
+    stage.querySelectorAll('[data-rv-badge]').forEach(e => { e.hidden = false; e.innerHTML = '<i class="rv-dot"></i>🎙&nbsp; LIVE VOICE'; });
+    stage.querySelectorAll('[data-rv-wave]').forEach(e => { e.hidden = false; });
+  }
   let raf = 0, stopped = false;
   setStop(() => { stopped = true; if (raf) cancelAnimationFrame(raf); if (d._cam) { try { d._cam.video.pause(); } catch (_) {} } });
   // Prime the video decoder during the intro (play→pause→rewind) so playback
@@ -434,10 +469,13 @@ function paintConfetti(stage) {
   let s = 0, h = '';
   const rnd = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
   // with the camera band on stage the winner area sits lower — drop the
-  // confetti below the camera so it isn't hidden behind the video layer
-  const yBase = stage.classList.contains('rv-with-cam') ? 770 : 140;
+  // confetti below the camera so it isn't hidden behind the video layer.
+  // 16:9: the ceremony lives in the right column — spread the confetti there.
+  const wide = stage.classList.contains('rv-169');
+  const yBase = wide ? 170 : stage.classList.contains('rv-with-cam') ? 770 : 140;
+  const xBase = wide ? 720 : 60, xSpan = wide ? 1060 : 960, ySpan = wide ? 640 : 520;
   for (let i = 0; i < 16; i++) {
-    const x = 60 + rnd() * 960, y = yBase + rnd() * 520, w = 10 + rnd() * 12, hh = 16 + rnd() * 14, rot = rnd() * 90 - 45;
+    const x = xBase + rnd() * xSpan, y = yBase + rnd() * ySpan, w = 10 + rnd() * 12, hh = 16 + rnd() * 14, rot = rnd() * 90 - 45;
     h += `<span style="left:${x}px;top:${y}px;width:${w}px;height:${hh}px;background:${cols[i % 4]};transform:rotate(${rot}deg);opacity:${(.4 + rnd() * .45).toFixed(2)}"></span>`;
   }
   el.innerHTML = h;
@@ -534,7 +572,7 @@ function sessionBoardHtml(d) {
         </div>
         <div class="rv-hc-avg"><div class="lbl">GROUP AVG</div><div class="val" id="rvGavg">–</div></div>
       </div>
-      <svg id="rvHero" width="888" height="${d.cam ? 230 : 330}" viewBox="0 0 888 ${d.cam ? 230 : 330}"></svg>
+      <svg id="rvHero" width="${heroDims(d).W}" height="${heroDims(d).H}" viewBox="0 0 ${heroDims(d).W} ${heroDims(d).H}"></svg>
     </div>
     <div class="rv-rows" id="rvRows"></div>
     <div class="rv-more" id="rvMore" hidden></div>
@@ -583,7 +621,7 @@ function prefixPath(curve, kmax, W, H) {
 }
 
 function heroChartSvg(d, t) {
-  const W = 888, H = d.cam ? 230 : 330, y = v => H - (v / 24) * H;
+  const { W, H } = heroDims(d), y = v => H - (v / 24) * H;
   const frac = Math.max(0, Math.min(1, t / d.durationMs));
   let s = '';
   s += `<rect x="0" y="0" width="${W}" height="${y(13)}" fill="#3ddc8e" opacity=".05"/>`;
@@ -654,16 +692,22 @@ function paintSessionFrame(stage, d, t) {
   if (clockEl) clockEl.innerHTML = fmtClock(Math.max(0, dur - t)) + '<small>left</small>';
   const progEl = stage.querySelector('#rvProg');
   if (progEl) progEl.style.width = (frac * 100).toFixed(1) + '%';
+
+  // 16:9 identity-card live stats (both frame copies — the finale keeps the
+  // end state the last board paint left there).
+  if (d._fmt === '169') {
+    const ta = topAvg ? ravgAt(topAvg, frac) : 0;
+    stage.querySelectorAll('[data-rv-stat-a]').forEach(e => { e.textContent = gAvg ? gAvg.toFixed(1) : '–'; e.style.color = zCol(gAvg); });
+    stage.querySelectorAll('[data-rv-stat-b]').forEach(e => { e.textContent = ta ? ta.toFixed(1) : '–'; e.style.color = zCol(ta); });
+  }
 }
 
-function sessionFinalHtml(d) {
+function sessionWinWrapHtml(d) {
   const topAvg = d.members[0];
   const topPeak = d.members.slice().sort((a, b) => b.peak - a.peak)[0];
   const steadiest = d.members.slice().sort((a, b) => b.steadiness - a.steadiness)[0];
   const hl = (l, m, v) => m ? `<div class="rv-hl"><div class="rv-hl-l">${l}</div><div class="rv-hl-w">${avatarHtml(m.avatar, m.name, 'pod')}<span>${esc(m.name)}</span></div><div class="rv-hl-v">${v}</div></div>` : '';
   return `
-    ${headerHtml(d, { text: 'SESSION COMPLETE', gold: true })}
-    ${camSpace(d)}
     <div class="rv-win-wrap">
       <div class="rv-sfin-avg"><div class="rv-sfin-num">${d.groupAvg.toFixed(1)}</div><div class="rv-sfin-lbl">GROUP AVERAGE</div></div>
       <div class="rv-hls">
@@ -674,6 +718,13 @@ function sessionFinalHtml(d) {
       <div class="rv-win-count">${d.count} in the circle · ${esc(d.title)} · ${esc(fmtWhen(d.session.scheduled_start).split(' · ')[0])}</div>
       <div class="rv-cta">Join the circle → live.egelywheel.com</div>
     </div>`;
+}
+
+function sessionFinalHtml(d) {
+  return `
+    ${headerHtml(d, { text: 'SESSION COMPLETE', gold: true })}
+    ${camSpace(d)}
+    ${sessionWinWrapHtml(d)}`;
 }
 
 const sessionSpeed = () => 1;
@@ -725,7 +776,7 @@ function soloBoardHtml(d) {
       </div>
     </div>
     <div class="rv-hero-card rv-solo-card">
-      <svg id="rvHero" width="888" height="${d.cam ? 300 : 430}" viewBox="0 0 888 ${d.cam ? 300 : 430}"></svg>
+      <svg id="rvHero" width="${soloDims(d).W}" height="${soloDims(d).H}" viewBox="0 0 ${soloDims(d).W} ${soloDims(d).H}"></svg>
     </div>
     <div class="rv-ft">
       <div class="rv-clockrow"><div class="rv-clock" id="rvClock">0:00<small>left</small></div><div class="rv-spd" id="rvSpd">REPLAY</div></div>
@@ -735,7 +786,7 @@ function soloBoardHtml(d) {
 }
 
 function soloHeroSvg(d, t) {
-  const W = 888, H = d.cam ? 300 : 430, y = v => H - (v / 24) * H;
+  const { W, H } = soloDims(d), y = v => H - (v / 24) * H;
   const frac = Math.max(0, Math.min(1, t / d.durationMs));
   const k = kAt(d.n, frac);
   let s = '';
@@ -778,11 +829,9 @@ function paintSoloFrame(stage, d, t) {
   if (progEl) progEl.style.width = (frac * 100).toFixed(1) + '%';
 }
 
-function soloFinalHtml(d) {
+function soloWinWrapHtml(d) {
   const hl = (l, v) => `<div class="rv-hl"><div class="rv-hl-l">${l}</div><div></div><div class="rv-hl-v">${v}</div></div>`;
   return `
-    ${headerHtml(d, { text: 'READING COMPLETE', gold: true })}
-    ${camSpace(d)}
     <div class="rv-win-wrap">
       <div class="rv-sfin-avg"><div class="rv-sfin-num">${d.stats.avg.toFixed(1)}</div><div class="rv-sfin-lbl">AVERAGE VITALITY</div></div>
       <div class="rv-hls">
@@ -792,6 +841,125 @@ function soloFinalHtml(d) {
       </div>
       <div class="rv-win-count">${d.verified ? 'Verified reading · ' : ''}${esc(d.title)} · ${esc(fmtWhen(d.session.scheduled_start).split(' · ')[0])}</div>
       <div class="rv-cta">Measure with us → live.egelywheel.com</div>
+    </div>`;
+}
+
+function soloFinalHtml(d) {
+  return `
+    ${headerHtml(d, { text: 'READING COMPLETE', gold: true })}
+    ${camSpace(d)}
+    ${soloWinWrapHtml(d)}`;
+}
+
+// ---------------------------------------------------------------------------
+// YouTube 16:9 (F6) — the "broadcast studio" composition: a left IDENTITY
+// column (camera box / avatar + voice wave / avatar + live stat cards) next to
+// the measurement in the right column. Same story, same phases (intro → board
+// → finale), wide canvas. Everything hangs off window.__rvFormat === '169';
+// without it the 9:16 output is untouched.
+// ---------------------------------------------------------------------------
+function brandrow169(d, pillTxt, gold) {
+  return `
+    <div class="rv-brandrow">
+      <div class="rv-brand">EWR <span>LIVE</span></div>
+      <div class="rv-pill ${gold ? 'gold' : ''}"><i class="rv-dot"></i>${esc(pillTxt)}</div>
+      <span class="rv-sp"></span>
+      <div class="rv-pill gold" data-rv-badge ${d.cam ? '' : 'hidden'}><i class="rv-dot"></i>${d.cam ? '🎥&nbsp; FILMED LIVE' : ''}</div>
+    </div>`;
+}
+
+// The identity card. With a camera: the camera box leads. Without: a large
+// centered avatar (the voice wave slot unhides when the worker flags a voice
+// recording — that is only known at play time, not at build time).
+function idCardHtml(d) {
+  const label = d.kind === 'solo' ? 'Measured by' : 'Hosted by';
+  const meta = `${esc(fmtWhen(d.session.scheduled_start))}${d.kind === 'solo' ? '' : ` · ${d.count} ${d.kind === 'race' ? (d.count === 1 ? 'racer' : 'racers') : 'in the circle'}`} · ${d.durText || d.session.duration_minutes + ' min'}`;
+  const stats = d.kind === 'race'
+    ? `<div class="rv-idstats"><div class="rv-idstat"><small>LEADER</small><b data-rv-stat-a class="gold">–</b></div><div class="rv-idstat"><small>TOP LIVE</small><b data-rv-stat-b>–</b></div></div>`
+    : d.kind === 'session'
+      ? `<div class="rv-idstats"><div class="rv-idstat"><small>GROUP AVG</small><b data-rv-stat-a>–</b></div><div class="rv-idstat"><small>TOP AVG</small><b data-rv-stat-b>–</b></div></div>`
+      : '';
+  const chips = `<div class="rv-idchips"><span class="rv-idchip gold" data-rv-rec hidden>● REC</span><span class="rv-idchip dim" data-rv-spdchip>REPLAY</span></div>`;
+  const wave = `<div class="rv-idwave" data-rv-wave hidden aria-hidden="true">${'<i></i>'.repeat(11)}</div>`;
+  if (d.cam) return `
+    <div class="rv-idcard">
+      <div class="rv-camspace"></div>
+      <div class="rv-idhost">${avatarHtml(d.host.avatar, d.host.name, 'big')}<span class="rv-idhost-t"><small>${label}</small><b>${esc(d.host.name)}</b></span></div>
+      <div class="rv-idtitle">${esc(d.title)}</div>
+      <div class="rv-idmeta">${meta}</div>
+      ${stats}${chips}
+    </div>`;
+  return `
+    <div class="rv-idcard center">
+      <div class="rv-idhero">${avatarHtml(d.host.avatar, d.host.name, 'hero')}</div>
+      <div class="rv-idhost-t"><small>${label}</small><b>${esc(d.host.name)}</b></div>
+      ${wave}
+      <div class="rv-idtitle">${esc(d.title)}</div>
+      <div class="rv-idmeta">${meta}</div>
+      ${stats}${chips}
+    </div>`;
+}
+
+function ft169Html() {
+  return `
+    <div class="rv-ft">
+      <div class="rv-clockrow"><div class="rv-clock" id="rvClock">0:00<small>left</small></div><div class="rv-spd" id="rvSpd">REPLAY · 1×</div></div>
+      <div class="rv-prog"><i id="rvProg" style="width:0%"></i></div>
+      <div class="rv-url">⚡ <b>live.egelywheel.com</b></div>
+    </div>`;
+}
+
+// board169: pill + identity column + the kind's own right column + footer.
+function board169Html(d, pillTxt, colR) {
+  return `
+    ${brandrow169(d, pillTxt)}
+    <div class="rv-bd">
+      <div class="rv-colL">${idCardHtml(d)}</div>
+      <div class="rv-colR">${colR}</div>
+    </div>
+    ${ft169Html()}`;
+}
+
+const raceColR = () => `<div class="rv-lanes" id="rvLanes"></div><div class="rv-more" id="rvMore" hidden></div>`;
+const sessionColR = d => `
+  ${SVG_DEFS}
+  <div class="rv-hero-card">
+    <div class="rv-hc-head">
+      <div>
+        <div class="rv-hc-title">GROUP PULSE</div>
+        <div class="rv-legend">
+          <div class="rv-lg"><i style="background:linear-gradient(90deg,#37dbff,#7a5cff)"></i>Group average</div>
+          <div class="rv-lg"><i style="background:#e8b84b"></i>Host</div>
+          <div class="rv-lg"><i style="background:rgba(255,255,255,.28)"></i>everyone</div>
+        </div>
+      </div>
+      <div class="rv-hc-avg"><div class="lbl">GROUP AVG</div><div class="val" id="rvGavg">–</div></div>
+    </div>
+    <svg id="rvHero" width="${heroDims(d).W}" height="${heroDims(d).H}" viewBox="0 0 ${heroDims(d).W} ${heroDims(d).H}"></svg>
+  </div>
+  <div class="rv-rows" id="rvRows"></div>
+  <div class="rv-more" id="rvMore" hidden></div>`;
+const soloColR = d => `
+  ${SVG_DEFS}
+  <div class="rv-solo-hero">
+    <div class="rv-solo-val"><div class="v" id="rvSoloV">–</div><div class="l">VITALITY</div></div>
+    <div class="rv-solo-side">
+      <div class="rv-sstat"><div class="v" id="rvSoloAvg">–</div><div class="l">AVG</div></div>
+      <div class="rv-sstat"><div class="v" id="rvSoloPeak">–</div><div class="l">PEAK</div></div>
+    </div>
+  </div>
+  <div class="rv-hero-card rv-solo-card">
+    <svg id="rvHero" width="${soloDims(d).W}" height="${soloDims(d).H}" viewBox="0 0 ${soloDims(d).W} ${soloDims(d).H}"></svg>
+  </div>`;
+
+// finale169: the identity column stays (with the camera playing the closing
+// words under a gold frame), the ceremony fills the right column.
+function final169Html(d, pillTxt, winWrap, confetti) {
+  return `
+    ${brandrow169(d, pillTxt, true)}
+    <div class="rv-bd">
+      <div class="rv-colL">${idCardHtml(d)}</div>
+      <div class="rv-colR">${confetti ? '<div class="rv-confetti" id="rvConfetti"></div>' : ''}${winWrap}</div>
     </div>`;
 }
 
@@ -818,24 +986,42 @@ export function mount(el, kind, id) {
     if (!d.count) { stage.innerHTML = `<div class="rv-loading">No measurements saved for ${esc(kind)} ${esc(id)}.</div>`; window.__rvReady = true; return; }
 
     const K = d.kind;
+    // Output format (F6): the worker injects __rvFormat='169' for the YouTube
+    // render (1920×1080 studio layout); anything else is the classic 9:16.
+    const FMT = window.__rvFormat === '169' ? '169' : '916';
+    d._fmt = FMT;
     // Camera composite (Broadcast layout): the worker injects __rvCamUrl when the
     // event has a camera recording. Without it every layout is byte-identical to
     // the voice-only render — all camera styling hangs off .rv-with-cam.
     d.cam = window.__rvCamUrl ? { url: String(window.__rvCamUrl) } : null;
     stage.dataset.kind = K;
-    if (d.cam) stage.classList.add('rv-with-cam');
-    // The camera band costs vertical room: fewer list rows, same podium math
-    // (rows are score-sorted, so 1st–3rd can never scroll out of frame).
-    d._top = K === 'race' ? (d.cam ? 5 : TOP_LANES) : (d.cam ? 4 : TOP_ROWS);
+    if (FMT === '169') stage.classList.add('rv-169');
+    // 16:9 keeps the camera in the identity column — the 9:16 .rv-with-cam
+    // shrink-rules must not fire there.
+    if (d.cam) stage.classList.add(FMT === '169' ? 'rv-cam169' : 'rv-with-cam');
+    // The camera band costs vertical room in 9:16: fewer list rows, same podium
+    // math (rows are score-sorted, so 1st–3rd can never scroll out of frame).
+    // In 16:9 the camera never eats board height: race 5 lanes, session 3 rows.
+    d._top = FMT === '169'
+      ? (K === 'race' ? 5 : 3)
+      : K === 'race' ? (d.cam ? 5 : TOP_LANES) : (d.cam ? 4 : TOP_ROWS);
     const pillTxt = K === 'race' ? 'RACE REPLAY' : K === 'solo' ? 'SOLO REPLAY' : 'SESSION REPLAY';
     const paintFrame = K === 'race' ? paintRaceFrame : K === 'solo' ? paintSoloFrame : paintSessionFrame;
     const defSpeed = K === 'session' ? sessionSpeed : raceSpeed;
+    const boardHtml = FMT === '169'
+      ? board169Html(d, pillTxt, K === 'race' ? raceColR() : K === 'solo' ? soloColR(d) : sessionColR(d))
+      : (K === 'race' ? raceBoardHtml(d) : K === 'solo' ? soloBoardHtml(d) : sessionBoardHtml(d));
+    const finaleHtml = FMT === '169'
+      ? (K === 'race' ? final169Html(d, 'RACE FINISHED', raceWinWrapHtml(d), true)
+        : K === 'solo' ? final169Html(d, 'READING COMPLETE', soloWinWrapHtml(d))
+          : final169Html(d, 'SESSION COMPLETE', sessionWinWrapHtml(d)))
+      : (K === 'race' ? finalHtml(d) : K === 'solo' ? soloFinalHtml(d) : sessionFinalHtml(d));
     try {
       stage.innerHTML = `
         <div class="rv-hair"></div>
         <div class="rv-frame" data-phase="intro">${introHtml(d, { text: pillTxt }, K === 'race' ? (d.count === 1 ? 'racer' : 'racers') : 'in the circle')}</div>
-        <div class="rv-frame" data-phase="board" hidden>${K === 'race' ? raceBoardHtml(d) : K === 'solo' ? soloBoardHtml(d) : sessionBoardHtml(d)}</div>
-        <div class="rv-frame" data-phase="final" hidden>${K === 'race' ? finalHtml(d) : K === 'solo' ? soloFinalHtml(d) : sessionFinalHtml(d)}</div>`;
+        <div class="rv-frame" data-phase="board" hidden>${boardHtml}</div>
+        <div class="rv-frame" data-phase="final" hidden>${finaleHtml}</div>`;
       if (K === 'race') { buildRaceLanes(stage, d); paintConfetti(stage); }
       else if (K === 'session') buildSessionRows(stage, d);
       if (d.cam) buildCamLayer(stage, d);
@@ -851,7 +1037,7 @@ export function mount(el, kind, id) {
     // __rvPlay(), then waits for __rvDone. __rvShow is a manual phase switch.
     window.__rvShow = ph => showPhase(stage, ph);
     window.__rvPlay = () => playSequence(stage, d, paintFrame, defSpeed, fn => { stopSeq = fn; });
-    window.__rvData = { kind: d.kind, id, count: d.count, durationMs: d.durationMs, speed: defSpeed(d.durationMs), cam: !!d.cam };
+    window.__rvData = { kind: d.kind, id, count: d.count, durationMs: d.durationMs, speed: defSpeed(d.durationMs), cam: !!d.cam, fmt: FMT };
     window.__rvReady = true;
     window.__rvDone = false;
   })();
@@ -1116,6 +1302,150 @@ body.rv-mode > header, body.rv-mode #navMoreMenu, body.rv-mode .fab, body.rv-mod
 .rv-with-cam .rv-cta{margin-top:22px;padding:20px 46px;font-size:28px}
 .rv-with-cam .rv-sfin-avg{margin:0 0 14px}
 .rv-with-cam .rv-sfin-num{font-size:96px}
+
+/* ── YouTube 16:9 (F6) — "broadcast studio" ──────────────────────────────
+   1920×1080 canvas: identity column left, measurement right. Scoped under
+   .rv-169 so the 9:16 output stays untouched. */
+.rv-169 .rv-frame{padding:26px 56px 30px}
+.rv-169 .rv-brandrow{gap:24px;justify-content:flex-start}
+.rv-169 .rv-sp{flex:1}
+.rv-169 .rv-brand{font-size:30px}
+.rv-169 .rv-pill{padding:9px 20px;font-size:17px;gap:10px}
+.rv-169 .rv-pill .rv-dot{width:10px;height:10px}
+.rv-169 .rv-bd{flex:1;display:flex;gap:32px;min-height:0;margin-top:18px}
+.rv-169 .rv-colL{width:600px;flex:none;display:flex;min-height:0}
+.rv-169[data-kind="solo"] .rv-colL{width:740px}
+.rv-169 .rv-colR{flex:1;display:flex;flex-direction:column;gap:12px;min-width:0;min-height:0;position:relative}
+
+/* identity card */
+.rv-idcard{flex:1;background:var(--card);border:1.5px solid var(--cardb);border-radius:24px;padding:24px 26px;display:flex;flex-direction:column;gap:12px;min-height:0}
+.rv-idcard.center{align-items:center;text-align:center;justify-content:center;gap:14px}
+.rv-169 .rv-camspace{height:auto;aspect-ratio:16/9;width:100%;margin:0 0 8px;flex:none}
+.rv-idhero{margin:2px 0 4px}
+.rv-169 .rv-idcard .rv-ava.hero{width:150px;height:150px}
+.rv-169 .rv-idcard .rv-ava.hero>span{font-size:54px}
+.rv-idhost{display:flex;align-items:center;gap:14px}
+.rv-169 .rv-idhost .rv-ava.big{width:64px;height:64px;padding:3px}
+.rv-169 .rv-idhost .rv-ava.big>span{font-size:24px}
+.rv-idhost-t small{display:block;font:500 16px Inter;color:var(--muted)}
+.rv-idhost-t b{font:600 22px Inter;color:#fff}
+.rv-idtitle{font:700 34px Montserrat;line-height:1.12;color:#fff}
+.rv-idcard.center .rv-idtitle{font-size:38px;max-width:520px}
+.rv-idmeta{font:500 18px Inter;color:var(--muted)}
+.rv-idstats{display:flex;gap:12px;margin-top:6px;width:100%}
+.rv-idstat{flex:1;background:rgba(255,255,255,.045);border:1.5px solid var(--cardb);border-radius:14px;padding:12px 16px;text-align:left}
+.rv-idstat small{display:block;font:700 13px Inter;letter-spacing:.16em;color:var(--faint)}
+.rv-idstat b{font:800 30px Montserrat;color:#fff}
+.rv-idstat b.gold{color:var(--gold)}
+.rv-idchips{display:flex;gap:10px;margin-top:auto;flex-wrap:wrap}
+.rv-idcard.center .rv-idchips{justify-content:center}
+.rv-idchip{display:inline-flex;align-items:center;gap:8px;padding:8px 18px;border-radius:999px;font:700 14px Inter;letter-spacing:.14em}
+.rv-idchip.gold{border:1.5px solid rgba(232,184,75,.5);background:rgba(232,184,75,.09);color:var(--gold)}
+.rv-idchip.dim{border:1.5px solid var(--cardb);background:rgba(255,255,255,.05);color:var(--muted)}
+.rv-idwave{display:flex;align-items:center;gap:6px;height:48px;margin:0 0 2px}
+.rv-idwave i{width:7px;border-radius:4px;background:var(--grad);animation:rvWave 1.6s ease-in-out infinite}
+.rv-idwave i:nth-child(1){height:14px;animation-delay:0s}.rv-idwave i:nth-child(2){height:30px;animation-delay:.12s}
+.rv-idwave i:nth-child(3){height:46px;animation-delay:.24s}.rv-idwave i:nth-child(4){height:24px;animation-delay:.36s}
+.rv-idwave i:nth-child(5){height:40px;animation-delay:.48s}.rv-idwave i:nth-child(6){height:16px;animation-delay:.6s}
+.rv-idwave i:nth-child(7){height:34px;animation-delay:.72s}.rv-idwave i:nth-child(8){height:22px;animation-delay:.84s}
+.rv-idwave i:nth-child(9){height:44px;animation-delay:.96s}.rv-idwave i:nth-child(10){height:18px;animation-delay:1.08s}
+.rv-idwave i:nth-child(11){height:28px;animation-delay:1.2s}
+@keyframes rvWave{0%,100%{transform:scaleY(.6)}50%{transform:scaleY(1.1)}}
+
+/* footer */
+.rv-169 .rv-clock{font-size:42px}
+.rv-169 .rv-clock small{font-size:18px;margin-left:10px}
+.rv-169 .rv-spd{font-size:16px}
+.rv-169 .rv-prog{height:8px;margin-top:10px}
+.rv-169 .rv-url{margin-top:10px;font-size:19px}
+
+/* race lanes fill the right column */
+.rv-169 .rv-lanes{margin-top:0;gap:12px;flex:1;min-height:0;display:flex;flex-direction:column}
+.rv-169 .rv-lane{flex:1;max-height:152px;grid-template-columns:52px 1fr 190px;gap:18px;padding:12px 26px;border-radius:20px}
+.rv-169 .rv-rank{font-size:38px}
+.rv-169 .rv-nm{font-size:25px}
+.rv-169 .rv-nrow{gap:12px}
+.rv-169 .rv-flag{width:30px;height:23px}
+.rv-169 .rv-tag{padding:4px 12px;font-size:15px}
+.rv-169 .rv-track{height:16px;margin-top:12px;background-size:40px 16px}
+.rv-169 .rv-ava.pk{width:48px;height:48px}
+.rv-169 .rv-ava.pk>span{font-size:19px}
+.rv-169 .rv-puck:before{width:100px;height:10px}
+.rv-169 .rv-lv{font-size:38px}
+.rv-169 .rv-lvl{font-size:14px;margin:2px 0 6px}
+.rv-169 .rv-sc{font-size:19px}
+.rv-169 .rv-sc b{margin-top:3px;font-size:17px}
+.rv-169 .rv-more{margin-top:0;padding:14px 26px;font-size:20px;border-radius:16px;flex:none}
+
+/* session right column */
+.rv-169 .rv-hero-card{margin-top:0;padding:18px 24px 12px}
+.rv-169 .rv-hc-title{font-size:18px}
+.rv-169 .rv-legend{gap:16px;margin-top:6px}
+.rv-169 .rv-lg{font-size:16px}
+.rv-169 .rv-lg i{width:20px;height:6px}
+.rv-169 .rv-hc-avg .lbl{font-size:15px}
+.rv-169 .rv-hc-avg .val{font-size:44px}
+.rv-169 #rvHero{margin-top:10px}
+.rv-169 .rv-rows{gap:11px;margin-top:0}
+.rv-169 .rv-row{grid-template-columns:36px 62px 1fr 240px 150px;gap:16px;padding:11px 22px;border-radius:18px}
+.rv-169 .rv-ava.row{width:56px;height:56px}
+.rv-169 .rv-ava.row>span{font-size:22px}
+.rv-169 .rv-idx{font-size:26px}
+.rv-169 .rv-rname .rv-nm{font-size:23px;margin-bottom:4px}
+.rv-169 .rv-livechip{font-size:16px;padding:2px 10px}
+.rv-169 .rv-spark{width:240px;height:50px}
+.rv-169 .rv-ravg{font-size:34px}
+.rv-169 .rv-rlbl{font-size:13px;margin-top:2px}
+
+/* solo right column */
+.rv-169 .rv-solo-hero{margin-top:0;padding:0 6px}
+.rv-169 .rv-solo-val .v{font-size:110px}
+.rv-169 .rv-solo-val .l{font-size:18px;letter-spacing:.24em;margin-top:4px}
+.rv-169 .rv-sstat .v{font-size:44px}
+.rv-169 .rv-sstat .l{font-size:14px;margin-top:5px}
+.rv-169 .rv-solo-side{gap:34px;padding-bottom:8px}
+.rv-169 .rv-solo-card{margin-top:0;flex:1;display:flex;padding:20px 24px}
+.rv-169 .rv-solo-card #rvHero{margin:auto 0;flex:1;height:auto}
+
+/* finale in the right column */
+.rv-169 .rv-win-wrap{flex:1;justify-content:center}
+.rv-169 .rv-win-pill{margin-bottom:22px;padding:11px 24px;font-size:20px}
+.rv-169 .rv-ava.win{width:150px;height:150px}
+.rv-169 .rv-ava.win>span{font-size:54px}
+.rv-169 .rv-win-name{margin-top:18px;font-size:56px}
+.rv-169 .rv-win-pts{margin-top:8px;font-size:38px}
+.rv-169 .rv-win-meta{margin-top:8px;font-size:22px}
+.rv-169 .rv-podium{margin-top:30px;gap:16px}
+.rv-169 .rv-pod-card{padding:14px 24px;border-radius:18px}
+.rv-169 .rv-ava.pod{width:66px;height:66px}
+.rv-169 .rv-ava.pod>span{font-size:24px}
+.rv-169 .rv-pod-nm{font-size:22px}
+.rv-169 .rv-pod-pts{font-size:18px;margin-top:2px}
+.rv-169 .rv-win-count{margin-top:26px;font-size:20px}
+.rv-169 .rv-cta{margin-top:20px;padding:18px 42px;font-size:24px}
+.rv-169 .rv-sfin-avg{margin:0 0 16px}
+.rv-169 .rv-sfin-num{font-size:104px}
+.rv-169 .rv-sfin-lbl{font-size:19px;margin-top:6px}
+.rv-169 .rv-hls{max-width:700px;gap:12px}
+.rv-169 .rv-hl{padding:13px 24px;border-radius:16px}
+.rv-169 .rv-hl-l{font-size:16px}
+.rv-169 .rv-hl-w{font-size:22px;gap:12px}
+.rv-169 .rv-hl-v{font-size:26px}
+.rv-169 .rv-camlayer{border-radius:26px;padding:3px}
+.rv-169 .rv-camin{border-radius:23px}
+.rv-169 .rv-camtag{left:14px;bottom:12px;padding:7px 16px;font-size:17px}
+
+/* intro on the wide canvas */
+.rv-169 .rv-center .rv-pill{margin-bottom:26px}
+.rv-169 .rv-ava.hero{width:150px;height:150px}
+.rv-169 .rv-ava.hero>span{font-size:54px}
+.rv-169 .rv-in-host{margin-top:22px;font-size:24px}
+.rv-169 .rv-in-name{margin-top:14px;font-size:64px;max-width:1400px}
+.rv-169 .rv-in-meta{margin-top:14px;font-size:22px}
+.rv-169 .rv-camchip{margin-top:22px}
+.rv-169 .rv-mini-track{margin-top:52px}
+.rv-169 .rv-mini-pulse{margin-top:44px}
+.rv-169 .rv-frame[data-phase="intro"] .rv-ft .rv-url{font-size:19px}
 .rv-with-cam .rv-sfin-lbl{font-size:21px;margin-top:6px}
 .rv-with-cam .rv-hls{gap:11px;max-width:700px;margin-top:6px}
 .rv-with-cam .rv-hl{padding:13px 24px;border-radius:18px}
