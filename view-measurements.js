@@ -71,6 +71,7 @@ function cardHtml(r, sessMap, hostFor, recMap, soloRecMap){
             <span class="me-title">${esc(title)}</span>
             ${r.verified ? '<span class="v-badge verified">✓</span>' : '<span class="v-badge unverified">unverified</span>'}
             ${recChip(usesSession ? (recMap && recMap.get(r.session_id)) : (soloRecMap && soloRecMap.get(r.id)), kind)}
+            ${r.published ? '<span class="voice-chip mini" title="Public on the Showcase">🌟 Showcased</span>' : ''}
           </div>
           <div class="me-meta">${when} · <span style="color:${zText(r.avg || 0)}">${esc(lvl.name)}</span>${hostChipHtml(host)}</div>
         </div>
@@ -90,11 +91,13 @@ const FILTERS = [
   { id: 'race',       label: 'Race' },
   { id: 'experiment', label: 'Experiment' },
   { id: 'verified',   label: 'Verified' },
+  { id: 'showcased',  label: '🌟 Showcased' },
 ];
 
 function matches(r, filter){
   if(filter === 'all') return true;
   if(filter === 'verified') return !!r.verified;
+  if(filter === 'showcased') return !!r.published;
   return kindOf(r) === filter;
 }
 

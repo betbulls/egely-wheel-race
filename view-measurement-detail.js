@@ -342,7 +342,12 @@ export function mount(el, id){
     // takes this card over the moment playback starts there (session pattern).
     if(solo){
       const vslot = el.querySelector('#dVoice');
-      if(vslot) voicePlayer = mountVoicePlayer(vslot, { sessionId: Number(id), mode: 'solo', hostName: r.racer_name || (publicView ? 'The measurer' : 'You') });
+      if(vslot) voicePlayer = mountVoicePlayer(vslot, {
+        sessionId: Number(id), mode: 'solo',
+        hostName: r.racer_name || (publicView ? 'The measurer' : 'You'),
+        // the measurer's face in the ring when we loaded their profile
+        hostAvatar: (clientProf && clientProf.avatar_url) || null,
+      });
     }
   })();
 

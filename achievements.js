@@ -347,6 +347,19 @@ export const ACHIEVEMENTS = [
     title: 'Crowd Leader', description: 'Host a session with 20+ participants.',
     progress: d => ({ current: d.hostedParticipantsMax || 0, target: 20 })},
 
+  // Showcase applause (G2, 2026-07-12) — likes received across the member's
+  // showcased readings (d.likesReceivedCount, counted over ALL their solo
+  // results so an unpublish never takes an earned badge's progress away).
+  { id: 'likes-1', category: 'social', tier: T.bronze, icon: '👏',
+    title: 'First Applause', description: 'Receive your first applause on a showcased reading.',
+    progress: d => ({ current: Math.min(d.likesReceivedCount || 0, 1), target: 1 })},
+  { id: 'likes-10', category: 'social', tier: T.silver, icon: '💜',
+    title: 'Crowd Favorite', description: 'Collect 10 applause across your showcased readings.',
+    progress: d => ({ current: d.likesReceivedCount || 0, target: 10 })},
+  { id: 'likes-50', category: 'social', tier: T.gold, icon: '🌠',
+    title: 'Community Star', description: 'Collect 50 applause across your showcased readings.',
+    progress: d => ({ current: d.likesReceivedCount || 0, target: 50 })},
+
   // Races (competitive). Win/Podium need ≥2 officially-ranked racers — a solo race
   // never grants them (raceWin / racePodium are computed with that rule upstream).
   { id: 'first-race', category: 'race', tier: T.bronze, icon: '🏁',
@@ -422,7 +435,8 @@ export const ACHIEVEMENTS = [
 
 // Build the full state list from a data bundle.
 //   data = { results, hostedSessionsCount, connectedPractitionersCount,
-//            isPractitioner, clientsCount, clientFirstMeasurementSeen, guidedSession }
+//            isPractitioner, clientsCount, clientFirstMeasurementSeen,
+//            guidedSession, likesReceivedCount }
 export function computeAchievements(data){
   const results = data.results || [];
   const resultsAsc = [...results].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));

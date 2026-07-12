@@ -247,7 +247,7 @@ function levelsMedia(){
       <div class="sw-lvl-track"><div class="sw-lvl-fill" data-fx="lvl-fill" style="width:57.6%"></div>${marks}</div>
       <div class="sw-lvl-ends"><span>Explorer</span><span>Luminary</span></div>
     </div>
-    <div class="sw-badges-head"><span class="sw-badges-lbl">Badges</span><span class="sw-badges-meta" data-fx="badge-meta">3 of 53 earned</span></div>
+    <div class="sw-badges-head"><span class="sw-badges-lbl">Badges</span><span class="sw-badges-meta" data-fx="badge-meta">3 of 59 earned</span></div>
     <div class="sw-badges">${badges}</div>
   </div>`;
 }
@@ -384,7 +384,7 @@ function startLandingFx(root){
       if(lvlNext) lvlNext.textContent = nextTh != null ? `Next · ${NAMES[idx + 1]}` : 'Max level ✨';
       lvMarks.forEach((m, i) => { m.classList.toggle('reached', xp >= TH[i]); m.classList.toggle('cur', i === idx); });
       const got = Math.min(lvBadges.length, Math.max(1, Math.round(xp / 180)));
-      if(badgeMeta) badgeMeta.textContent = got + ' of 53 earned';
+      if(badgeMeta) badgeMeta.textContent = got + ' of 59 earned';
       lvBadges.forEach((b, i) => {
         const on = i < got;
         if(on){ if(!b.classList.contains('got')) b.classList.add('got', 'pop'); }
@@ -809,6 +809,20 @@ export function mount(el){
       }
     }
 
+    // Applause received on my showcased readings (Showcase, G2) — counted over
+    // ALL my solo results, so unpublishing never rolls badge progress back.
+    // Degrades to 0 while the solo_likes table isn't deployed yet.
+    let likesReceivedCount = 0;
+    {
+      const mySoloIds = results.filter(r => r.session_id == null && r.experiment_id == null).map(r => r.id);
+      if(mySoloIds.length){
+        try{
+          const { data: ls } = await supabase.from('solo_likes').select('result_id').in('result_id', mySoloIds);
+          likesReceivedCount = (ls || []).length;
+        }catch(_){}
+      }
+    }
+
     const data = {
       results,
       raceCount, hostedRacesCount, raceWin, racePodium,
@@ -817,7 +831,7 @@ export function mount(el){
       isPractitioner: !!a.isPractitioner,
       clientsCount, clientFirstMeasurementSeen, guidedSession,
       hostedParticipantsMax, practitionerCircleCount,
-      experimentsCompleted,
+      experimentsCompleted, likesReceivedCount,
     };
     const achievements = computeAchievements(data);
 

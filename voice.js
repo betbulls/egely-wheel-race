@@ -878,9 +878,12 @@ export function mountVoicePlayer(el, opts){
     const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = String(t % 60).padStart(2, '0');
     return h ? h + ':' + String(m).padStart(2, '0') + ':' + s : m + ':' + s;
   };
+  // Ring: the maker's face when we have it; otherwise a glyph that matches the
+  // recording — camera for a video take, mic for voice (Csaba, 2026-07-12: the
+  // mic icon next to "Camera recording" read wrong).
   const ringHtml = () => '<span class="vd-ring vp-ring">' + (o.hostAvatar
     ? '<img src="' + esc(o.hostAvatar) + '" alt="" onerror="this.remove()">'
-    : '<span class="vd-mic">' + MIC_SVG + '</span>') + '</span>';
+    : '<span class="vd-mic">' + (mediaKind === 'video' ? CAM_SVG : MIC_SVG) + '</span>') + '</span>';
 
   async function recGet(action){
     const r = await fetch(REC_URL + '?action=' + action + '&room=' + encodeURIComponent(o.sessionId));
