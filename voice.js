@@ -35,6 +35,10 @@ let lkPromise = null;
 const loadLk = () => (lkPromise ||= import('https://esm.sh/livekit-client@2'));
 
 const MIC_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"/><path d="M12 18v3"/></svg>';
+// Video-camera glyph in the same stroke language as MIC_SVG — the host's
+// broadcast ring shows this now that going live means camera OR voice
+// (a mic-only glyph read as "voice only" — Csaba, 2026-07-12).
+const CAM_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6.5" width="13" height="11" rx="2.5"/><path d="M15.5 10.6 21 7.6v8.8l-5.5-3"/></svg>';
 const PLAY_SVG = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.4v13.2c0 .8.9 1.3 1.6.9l10.2-6.6c.6-.4.6-1.4 0-1.8L9.6 4.5c-.7-.4-1.6.1-1.6.9z"/></svg>';
 const PAUSE_SVG = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6.5" y="5" width="4" height="14" rx="1.3"/><rect x="13.5" y="5" width="4" height="14" rx="1.3"/></svg>';
 
@@ -303,12 +307,13 @@ export function mountVoiceDock(el, opts){
   }
 
   // Ring content: the maker's face for listeners (the voice made visible), a
-  // clean mic glyph for the host's own controls / avatar-less makers.
-  function ringInner(preferAvatar){
+  // clean glyph for the host's own controls / avatar-less makers. glyph='cam'
+  // → video-camera (host cards where the camera is on the table); default mic.
+  function ringInner(preferAvatar, glyph){
     if(preferAvatar && o.hostAvatar){
       return '<img src="' + esc(o.hostAvatar) + '" alt="" onerror="this.remove()">';
     }
-    return '<span class="vd-mic">' + MIC_SVG + '</span>';
+    return '<span class="vd-mic">' + (glyph === 'cam' ? CAM_SVG : MIC_SVG) + '</span>';
   }
 
   // Recording phase, purely from the official window (F2 turns the copy on).
@@ -359,6 +364,15 @@ export function mountVoiceDock(el, opts){
     if(p === 'rec') return 'The ' + noun + ' is being recorded — going live again will be part of the recording.';
     if(p === 'post') return 'The recording is still open for closing words (' + postLeft() + ' left).';
     return 'The recording has ended — going live now is live-only.';
+  }
+  // The idle card's <small> — the ONE source of truth for both render() and the
+  // 1s controller tick. Before the 10-minute gate opens it is the gate copy;
+  // the tick used to overwrite that with hostIdleLine() a second after render
+  // (the flicker Csaba caught, 2026-07-12).
+  function idleSmall(){
+    if(o.schedule && Date.now() < o.schedule.startMs - 600000)
+      return 'Voice or camera broadcast opens 10 minutes before the start.';
+    return hostIdleLine();
   }
 
   // ---- Recording engine (host only) — the session-owned model, enforced by a
@@ -528,7 +542,7 @@ export function mountVoiceDock(el, opts){
       // moving too (the live card updates via its own 1s timer).
       if(st === 'idle' || st === 'ended'){
         const sm = el.querySelector('.vd-idle .vd-txt small');
-        if(sm){ const line = hostIdleLine(); if(sm.textContent !== line) sm.textContent = line; }
+        if(sm){ const line = idleSmall(); if(sm.textContent !== line) sm.textContent = line; }
         // the go-live buttons appear when the 10-minute gate opens
         const early = !!(o.schedule && Date.now() < o.schedule.startMs - 600000);
         if(early !== lastEarly){ lastEarly = early; render(); }
@@ -566,7 +580,7 @@ export function mountVoiceDock(el, opts){
       // the maker informed instead of vanishing mid-store.
       if(camRec.state === 'uploading' || camRec.state === 'done' || camRec.state === 'failed'){
         el.hidden = false;
-        el.innerHTML = `<div class="vd"><span class="vd-ring">${ringInner(false)}</span>
+        el.innerHTML = `<div class="vd"><span class="vd-ring">${ringInner(false, 'cam')}</span>
           <span class="vd-txt"><b>${camRec.state === 'uploading' ? 'Storing your camera recording…' : camRec.state === 'done' ? 'Camera recording saved ✓' : 'Camera recording could not be stored'}</b>
           <small>${camRec.state === 'uploading' ? 'Keep this page open until it finishes.' : camRec.state === 'done' ? 'It becomes part of the ' + noun + '’s share video.' : esc(camRec.note || 'Please try the next ' + noun + ' again.')}</small></span></div>`;
         return;
@@ -582,16 +596,16 @@ export function mountVoiceDock(el, opts){
         const tooEarly = !!(o.schedule && Date.now() < o.schedule.startMs - 600000);
         el.innerHTML = `
           <div class="vd vd-idle">
-            <span class="vd-ring">${ringInner(false)}</span>
+            <span class="vd-ring">${ringInner(false, 'cam')}</span>
             <span class="vd-txt">
               <b>Guide this ${noun} live</b>
-              <small>${st === 'error' ? esc(voice.error || 'Could not start — try again.') : (tooEarly ? 'Voice or camera broadcast opens 10 minutes before the start.' : esc(hostIdleLine()))}</small>
+              <small>${st === 'error' ? esc(voice.error || 'Could not start — try again.') : esc(idleSmall())}</small>
             </span>
             ${tooEarly ? '' : `<button type="button" class="vd-btn" data-golive-cam>With camera</button>
             <button type="button" class="vd-btn ghost" data-golive>Voice only</button>`}
           </div>`;
       } else if(st === 'connecting'){
-        el.innerHTML = `<div class="vd"><span class="vd-ring vd-on">${ringInner(false)}</span>
+        el.innerHTML = `<div class="vd"><span class="vd-ring vd-on">${ringInner(false, wantCam ? 'cam' : '')}</span>
           <span class="vd-txt"><b>Connecting…</b><small>Allow the ${wantCam ? 'camera and microphone' : 'microphone'} when asked.</small></span></div>`;
       } else {
         const m = voice.muted;
@@ -806,16 +820,18 @@ export async function fetchRecordingPlayback(id, kind = 'session'){
       return { url: b.url, duration: b.duration || null, recStartMs: null, media: 'audio' };
     }
     // Session/race: a camera take beats the voice egress for the replay (the
-    // maker's video plays in sync). Signed playback needs a login — anonymous
-    // viewers fall through to the public voice audio below.
+    // maker's video plays in sync). Playback is as PUBLIC as the voice card
+    // (Csaba, 2026-07-12): the replay is stored media served from Storage
+    // behind a short signed URL — it is not the paid live stream. The JWT is
+    // attached only when present; the Edge Fn requires it solely for
+    // invite/followers sessions.
     try{
-      const { data: { session } } = await supabase.auth.getSession();
-      if(session){
-        const rc = await fetch(SOLO_CAM_URL + '?sessionId=' + encodeURIComponent(id), { headers: { authorization: 'Bearer ' + session.access_token } });
-        if(rc.ok){
-          const cb = await rc.json().catch(() => ({}));
-          if(cb.url) return { url: cb.url, duration: cb.duration || null, recStartMs: cb.startedMs || null, media: 'video' };
-        }
+      const jwt = await authJwt();
+      const rc = await fetch(SOLO_CAM_URL + '?sessionId=' + encodeURIComponent(id),
+        jwt ? { headers: { authorization: 'Bearer ' + jwt } } : undefined);
+      if(rc.ok){
+        const cb = await rc.json().catch(() => ({}));
+        if(cb.url) return { url: cb.url, duration: cb.duration || null, recStartMs: cb.startedMs || null, media: 'video' };
       }
     }catch(_){}
     const g = async action => {
@@ -944,11 +960,11 @@ export function mountVoicePlayer(el, opts){
         const r = o.mode === 'solo'
           ? await fetchRecordingPlayback(o.sessionId, 'solo').then(i => i && i.url ? { ok: true, body: { url: i.url } } : { ok: false, body: {} }).catch(() => null)
           : mediaKind === 'video'
-            ? await (async () => {   // fresh signed URL for the session camera take
+            ? await (async () => {   // fresh signed URL for the session camera take (public playback — JWT only if present)
                 try{
-                  const { data: { session } } = await supabase.auth.getSession();
-                  if(!session) return { ok: false, body: {} };
-                  const rc = await fetch(SOLO_CAM_URL + '?sessionId=' + encodeURIComponent(o.sessionId), { headers: { authorization: 'Bearer ' + session.access_token } });
+                  const jwt = await authJwt();
+                  const rc = await fetch(SOLO_CAM_URL + '?sessionId=' + encodeURIComponent(o.sessionId),
+                    jwt ? { headers: { authorization: 'Bearer ' + jwt } } : undefined);
                   const cb = await rc.json().catch(() => ({}));
                   return { ok: rc.ok && !!cb.url, body: { url: cb.url } };
                 }catch(_){ return { ok: false, body: {} }; }
@@ -1037,16 +1053,16 @@ export function mountVoicePlayer(el, opts){
     }
     // Session/race: a camera take beats the voice egress — the results page
     // shows the same "Watch again" card the solo flow has (closing words
-    // included). Needs a login for the signed URL; anonymous viewers get the
-    // public voice card below.
+    // included). Public playback (Csaba, 2026-07-12): stored media from
+    // Storage, not the live stream — anonymous viewers watch it too. The JWT
+    // rides along only when present (invite/followers sessions need it).
     try{
-      const { data: { session } } = await supabase.auth.getSession();
-      if(session){
-        const rc = await fetch(SOLO_CAM_URL + '?sessionId=' + encodeURIComponent(o.sessionId), { headers: { authorization: 'Bearer ' + session.access_token } });
-        if(!destroyed && el.isConnected && rc.ok){
-          const cb = await rc.json().catch(() => ({}));
-          if(cb.url){ mediaKind = 'video'; serverDur = cb.duration || null; renderReady(); return; }
-        }
+      const jwt = await authJwt();
+      const rc = await fetch(SOLO_CAM_URL + '?sessionId=' + encodeURIComponent(o.sessionId),
+        jwt ? { headers: { authorization: 'Bearer ' + jwt } } : undefined);
+      if(!destroyed && el.isConnected && rc.ok){
+        const cb = await rc.json().catch(() => ({}));
+        if(cb.url){ mediaKind = 'video'; serverDur = cb.duration || null; renderReady(); return; }
       }
     }catch(_){}
     if(destroyed || !el.isConnected){ hide(); return; }

@@ -135,6 +135,24 @@ const camSpace = d => d.cam ? '<div class="rv-camspace"></div>' : '';
 function introHtml(d, label, nounCount) {
   const pucks = (d.racers || d.members || []).slice(0, 3).map((r, i) =>
     `<span class="rv-puck" style="left:${18 + i * 19}%">${avatarHtml(r.avatar, r.name, 'pk')}</span>`).join('');
+  // Session intro decoration: a calm "group pulse" wave — same people as the
+  // race track, but a shared breathing curve instead of a finish line, so the
+  // two intros read differently at a glance (Csaba, 2026-07-12). The avatars
+  // sit ON the curve (x/y pairs match the path knots below).
+  const folks = (d.members || d.racers || []).slice(0, 3);
+  const PW_PATH = 'M0 60 C 37 52, 75 42, 112 38 C 151 34, 191 54, 230 58 C 263 61, 297 51, 330 46 C 367 40, 403 26, 440 24 C 476 22, 512 31, 548 34 C 585 37, 622 42, 660 44';
+  const pwDots = [[17, 38], [50, 46], [83, 34]];
+  const pulse = folks.length ? `
+      <div class="rv-mini-pulse" aria-hidden="true">
+        <svg viewBox="0 0 660 96" preserveAspectRatio="none">
+          <defs><linearGradient id="rvpw" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#37dbff"/><stop offset="1" stop-color="#8a63ff"/>
+          </linearGradient></defs>
+          <path class="pw-glow" d="${PW_PATH}"/>
+          <path class="pw-line" d="${PW_PATH}"/>
+        </svg>
+        ${folks.map((r, i) => `<span class="rv-pw-dot" style="left:${pwDots[i][0]}%;top:${pwDots[i][1]}px">${avatarHtml(r.avatar, r.name, 'pk')}</span>`).join('')}
+      </div>` : '';
   return `
     <div class="rv-brandrow"><div class="rv-brand">EWR <span>LIVE</span></div></div>
     <div class="rv-center">
@@ -145,6 +163,7 @@ function introHtml(d, label, nounCount) {
       <div class="rv-in-meta">${esc(fmtWhen(d.session.scheduled_start))}${d.kind === 'solo' ? '' : ` · ${d.count} ${nounCount}`} · ${d.durText || d.session.duration_minutes + ' min'}</div>
       ${d.cam ? '<div class="rv-pill gold rv-camchip"><i class="rv-dot"></i>🎥&nbsp; FILMED LIVE</div>' : ''}
       ${d.kind === 'race' && pucks ? `<div class="rv-mini-track"><span class="rv-finish"></span>${pucks}</div>` : ''}
+      ${d.kind === 'session' ? pulse : ''}
     </div>
     <div class="rv-ft"><div class="rv-url">▶ replayed on <b>live.egelywheel.com</b></div></div>`;
 }
@@ -943,6 +962,14 @@ body.rv-mode > header, body.rv-mode #navMoreMenu, body.rv-mode .fab, body.rv-mod
 .rv-mini-track{position:relative;width:660px;height:20px;border-radius:12px;margin-top:96px;background:rgba(255,255,255,.07)}
 .rv-mini-track .rv-finish{right:4px}
 .rv-mini-track .rv-ava.pk{width:46px;height:46px}.rv-mini-track .rv-ava.pk>span{font-size:18px}
+
+/* session intro: group-pulse wave (the race track's calm sibling) */
+.rv-mini-pulse{position:relative;width:660px;height:96px;margin-top:90px}
+.rv-mini-pulse svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.rv-mini-pulse .pw-line{fill:none;stroke:url(#rvpw);stroke-width:5;stroke-linecap:round}
+.rv-mini-pulse .pw-glow{fill:none;stroke:url(#rvpw);stroke-width:16;stroke-linecap:round;opacity:.22;filter:blur(6px)}
+.rv-pw-dot{position:absolute;transform:translate(-50%,-50%);z-index:2}
+.rv-mini-pulse .rv-ava.pk{width:46px;height:46px}.rv-mini-pulse .rv-ava.pk>span{font-size:18px}
 
 .rv-win-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
 .rv-win-pill{display:inline-flex;align-items:center;gap:14px;padding:16px 34px;border-radius:999px;border:1.5px solid rgba(232,184,75,.55);background:rgba(232,184,75,.12);font:700 28px Inter;letter-spacing:.22em;color:var(--gold);margin-bottom:48px}

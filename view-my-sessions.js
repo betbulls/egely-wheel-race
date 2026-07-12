@@ -615,7 +615,7 @@ export function mount(el, eventType = 'session'){
         <div class="mys-msg" id="mysDelMsg"></div>
         <div class="mys-modal-actions">
           <button type="button" class="mys-btn ghost" data-close>Cancel</button>
-          <button type="button" class="mys-btn danger" id="mysConfirmDel">Delete session</button>
+          <button type="button" class="mys-btn danger" id="mysConfirmDel">Delete ${noun}</button>
         </div>
       </div>
     </div>`;
