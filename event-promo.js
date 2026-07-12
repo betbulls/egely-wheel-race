@@ -107,17 +107,19 @@ function brandRow(ctx, W, y, kindLabel){
 }
 
 function linkChip(ctx, cx, y, text, center){
+  // Measure the WHOLE label — bolt icon included (the icon pushed the text
+  // past the pill's edge when only `text` was measured; Csaba caught it).
+  const label = '⚡ ' + text;
   ctx.font = '600 26px Inter, sans-serif';
-  let tw = ctx.measureText(text).width;
-  let size = 26;
-  while(tw > 620 && size > 18){ size -= 2; ctx.font = `600 ${size}px Inter, sans-serif`; tw = ctx.measureText(text).width; }
-  const w = tw + 64, h = 58;
+  let size = 26, tw = ctx.measureText(label).width;
+  while(tw > 620 && size > 18){ size -= 2; ctx.font = `600 ${size}px Inter, sans-serif`; tw = ctx.measureText(label).width; }
+  const w = tw + 56, h = 58;
   const x = center ? cx - w / 2 : cx;
   ctx.beginPath(); ctx.roundRect(x, y, w, h, 29);
   ctx.fillStyle = 'rgba(255,255,255,.07)'; ctx.fill();
   ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 2; ctx.stroke();
   ctx.fillStyle = '#9fe8ff'; ctx.textAlign = 'left';
-  ctx.fillText('⚡ ' + text, x + 26, y + 39);
+  ctx.fillText(label, x + 28, y + 39);
   return h;
 }
 

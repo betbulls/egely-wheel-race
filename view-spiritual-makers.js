@@ -235,9 +235,10 @@ function styles(){
 
   /* ============ motion control ============ */
   .sm-anim:not(.in-view) *,.sm-anim.sm-hidden *{animation-play-state:paused!important}
-  /* On-camera band — Abi's real clip in a framed player */
-  .sm-cam-wrap{position:relative;border-radius:16px;overflow:hidden;background:#0b1b28;box-shadow:0 18px 44px rgba(1,22,36,.18)}
-  .sm-cam-clip{display:block;width:100%;height:100%;min-height:230px;object-fit:cover}
+  /* On-camera band — a REAL 9:16 session share video in a framed player */
+  .sm-cam-wrap{position:relative;border-radius:16px;overflow:hidden;background:#0b1b28;box-shadow:0 18px 44px rgba(1,22,36,.18);
+    display:flex;justify-content:center}
+  .sm-cam-clip{display:block;max-height:500px;width:auto;max-width:100%;object-fit:contain}
   .sm-cam-tag{position:absolute;left:12px;bottom:12px;display:inline-flex;align-items:center;gap:7px;padding:5px 12px;
     border-radius:999px;background:rgba(4,15,25,.62);border:1px solid rgba(255,255,255,.18);color:#fff;font-size:11.5px;font-weight:600}
   .sm-cam-tag i{width:7px;height:7px;border-radius:50%;background:#3ddc8e;box-shadow:0 0 8px rgba(61,220,142,.9)}
@@ -416,13 +417,12 @@ function pageHtml(){
         <span class="sm-eyebrow">On camera</span>
         <h2>Go live on camera — and keep the video</h2>
         <p>Turn your camera on inside your own sessions and races: your circle watches you guide the whole practice, live. Afterwards the recording is composed into a share-ready video — your face and the group’s energy in one frame, in 9:16 for TikTok and Reels or 16:9 for YouTube.</p>
-        <p class="sm-fine">Camera hosting is a Spiritual Maker feature. Shown here: Abi, live on camera.</p>
+        <p class="sm-fine">Shown here: a real session share video — the maker on camera above the group’s live pulse. Camera hosting is a Spiritual Maker feature.</p>
       </div>
       <div class="sm-band-media">
         <div class="sm-cam-wrap" aria-hidden="true">
-          <video class="sm-cam-clip" src="assets/makers/abi-guides.mp4" muted loop playsinline preload="metadata"></video>
-          <span class="sm-cam-rec">● REC</span>
-          <span class="sm-cam-tag"><i></i>Abi · live on camera</span>
+          <video class="sm-cam-clip" src="assets/session-share-demo.mp4" muted loop playsinline preload="metadata"></video>
+          <span class="sm-cam-tag"><i></i>Share-ready · 9:16</span>
         </div>
       </div>
     </section>

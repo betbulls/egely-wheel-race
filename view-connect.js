@@ -87,22 +87,23 @@ export function mount(el, handle){
     const [memberCountR, sessionsR, resultsR, stored] = await Promise.all([
       supabase.rpc('practitioner_member_count', { pid: pr.id }),
       supabase.from('sessions')
-        .select('id, name, scheduled_start, duration_minutes, verified_only, access_mode')
-        .eq('created_by_user_id', pr.id).eq('event_type', 'session'),
+        .select('id, name, scheduled_start, duration_minutes, verified_only, access_mode, event_type')
+        .eq('created_by_user_id', pr.id),   // sessions AND races — both belong on the page
       supabase.from('results').select('verified').eq('user_id', pr.id),
       fetchUserAchievements(pr.id),
     ]);
 
     const connectedMembers = memberCountR && typeof memberCountR.data === 'number' ? memberCountR.data : 0;
-    const allSessions = sessionsR.data || [];
+    const allEvents = sessionsR.data || [];
+    const allSessions = allEvents.filter(s => s.event_type !== 'race');   // the Community stat stays sessions-only
     const results = resultsR.data || [];
     const verifiedRate = results.length
       ? Math.round(results.filter(r => r.verified).length / results.length * 100)
       : null;
     const levelState = computeLevelState(ACHIEVEMENTS.map(a => ({ ...a, unlocked: stored.has(a.id) })));
 
-    // Upcoming (live or future) hosted sessions — up to 3, with participant counts.
-    const upcoming = allSessions
+    // Upcoming (live or future) hosted sessions AND races — up to 3, with counts.
+    const upcoming = allEvents
       .filter(s => now <= new Date(s.scheduled_start).getTime() + (s.duration_minutes || 0) * 60000)
       .sort((a, b) => new Date(a.scheduled_start) - new Date(b.scheduled_start))
       .slice(0, 3);
@@ -138,8 +139,8 @@ export function mount(el, handle){
           ? renderMakerHero(pr, name, socials, connectedMembers)
           : renderMemberHero(pr, name, connectedMembers)}
         ${renderWhat(name)}
-        ${renderUpcoming(upcoming, now, name)}
-        ${renderSharedReadings(sharedReadings, name)}
+        ${renderUpcoming(upcoming, now, name, pr)}
+        ${renderSharedReadings(sharedReadings, name, pr)}
         ${renderCommunity({ connectedMembers, hostedSessions: allSessions.length, level: levelState.level, verifiedRate })}
         ${hasReferral ? renderMakerOffer(pr, name) : renderPlainOffer()}
         ${renderFinal(name)}
@@ -333,27 +334,38 @@ function fmtWhen(iso){
   return new Date(iso).toLocaleString('en-US', { weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
 }
 
-function renderUpcoming(upcoming, now, name){
+// The host's face in a gradient ring — the connection page must SELL the
+// person, not list rows (Csaba, 2026-07-12).
+function cnAva(pr, name){
+  const url = (pr && pr.avatar_url) || null;
+  return `<span class="cn-ev-ava">${url
+    ? `<img src="${esc(url)}" alt="" onerror="this.style.display='none'">`
+    : `<span>${esc((name || '?').charAt(0).toUpperCase())}</span>`}</span>`;
+}
+
+function renderUpcoming(upcoming, now, name, pr){
   const body = upcoming.length
     ? `<div class="cn-sessions">
         ${upcoming.map(s => {
+          const isRace = s.event_type === 'race';
           const start = new Date(s.scheduled_start).getTime();
           const live = now >= start && now <= start + (s.duration_minutes || 0) * 60000;
-          const parts = s._participants > 0 ? ` · ${s._participants} measuring` : '';
+          const parts = s._participants > 0 ? ` · ${s._participants} ${isRace ? 'racing' : 'measuring'}` : '';
           return `
-            <a class="cn-session" href="#/room/${esc(String(s.id))}">
-              <div class="cn-session-main">
-                <div class="cn-session-name">${esc(s.name || 'Untitled session')}${s.verified_only ? ' <span class="sess-verified">✓ Verified</span>' : ''}${s.access_mode === 'invite' ? ` <span style="display:inline-block;margin-left:4px;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#5230da;background:rgba(82,48,218,.1);border-radius:999px;padding:2px 7px;vertical-align:middle">Invite link</span>` : s.access_mode === 'followers' ? ` <span style="display:inline-block;margin-left:4px;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#0e7490;background:rgba(14,116,144,.1);border-radius:999px;padding:2px 7px;vertical-align:middle">Followers only</span>` : ''}</div>
-                <div class="cn-session-meta">${live ? '<span class="hs-live">● Live now</span>' : esc(fmtWhen(s.scheduled_start))}${parts}</div>
+            <a class="cn-ev" href="#/${isRace ? 'race' : 'room'}/${esc(String(s.id))}">
+              ${cnAva(pr, name)}
+              <div class="cn-ev-main">
+                <div class="cn-ev-name"><span class="cn-ev-kind ${isRace ? 'race' : 'sess'}">${isRace ? 'Race' : 'Session'}</span>${esc(s.name || (isRace ? 'Untitled race' : 'Untitled session'))}${s.verified_only ? ' <span class="sess-verified">✓ Verified</span>' : ''}${s.access_mode === 'invite' ? ' <span class="cn-ev-acc inv">Invite link</span>' : s.access_mode === 'followers' ? ' <span class="cn-ev-acc fol">Followers only</span>' : ''}</div>
+                <div class="cn-ev-meta">${live ? '<span class="hs-live">● Live now</span>' : esc(fmtWhen(s.scheduled_start))}${parts} · with ${esc(name)}</div>
               </div>
               <span class="cn-session-pill ${live ? 'live' : 'up'}">${live ? 'Join' : 'View'} →</span>
             </a>`;
         }).join('')}
       </div>`
-    : `<div class="cn-empty">No upcoming sessions yet. Connect to be notified when ${esc(name)} hosts one.</div>`;
+    : `<div class="cn-empty">No upcoming sessions or races yet. Connect to be notified when ${esc(name)} hosts one.</div>`;
   return `
     <section class="cn-card">
-      <h2 class="cn-h">Upcoming sessions</h2>
+      <h2 class="cn-h">Upcoming sessions / races</h2>
       ${body}
     </section>`;
 }
@@ -381,7 +393,7 @@ function cnSpark(curve){
   </svg>`;
 }
 
-function renderSharedReadings(readings, name){
+function renderSharedReadings(readings, name, pr){
   if(!readings.length) return '';
   const fmtDay = iso => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   const fmtDur = s => !s ? '' : s >= 60 ? Math.round(s / 60) + ' min' : s + ' s';
@@ -391,14 +403,21 @@ function renderSharedReadings(readings, name){
       <div class="cn-reads">
         ${readings.map(r => `
           <a class="cn-read" href="#/m/${esc(String(r.id))}">
-            <div class="cn-read-main">
-              <div class="cn-read-name">${esc(r.label || 'Vitality reading')}</div>
-              <div class="cn-read-meta">${esc(fmtDay(r.created_at))}${r.duration_seconds ? ' · ' + fmtDur(r.duration_seconds) : ''}</div>
+            <div class="cn-read-top">
+              ${cnAva(pr, name)}
+              <div class="cn-read-who">
+                <b>${esc(name)}</b>
+                <small>${esc(fmtDay(r.created_at))}${r.duration_seconds ? ' · ' + fmtDur(r.duration_seconds) : ''}</small>
+              </div>
             </div>
+            <div class="cn-read-name">${esc(r.label || 'Vitality reading')}</div>
             ${cnSpark(r.curve)}
-            <div class="cn-read-stats">
-              <span style="color:${cnZText(r.avg || 0)}">${(r.avg || 0).toFixed(1)}<small>AVG</small></span>
-              <span style="color:${cnZText(r.peak || 0)}">${r.peak || 0}<small>PEAK</small></span>
+            <div class="cn-read-foot">
+              <div class="cn-read-stats">
+                <span style="color:${cnZText(r.avg || 0)}">${(r.avg || 0).toFixed(1)}<small>AVG</small></span>
+                <span style="color:${cnZText(r.peak || 0)}">${r.peak || 0}<small>PEAK</small></span>
+              </div>
+              <span class="cn-read-watch">Watch the replay →</span>
             </div>
           </a>`).join('')}
       </div>
