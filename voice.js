@@ -801,19 +801,20 @@ export async function fetchRecordingPlayback(id, kind = 'session'){
     // Solo: the recording lives in session_recordings(kind='solo', result_id).
     // The solo-audio Edge Function returns a fresh signed URL server-side
     // (service role) — it starts with the measurement, so offset is 0.
+    // PUBLISHED solos (Showcase) play for anyone: the JWT rides along only
+    // when present, the Fns gate private solos to their owner.
     if(kind === 'solo'){
-      const { data: { session } } = await supabase.auth.getSession();
-      if(!session) return null;
-      const hdr = { authorization: 'Bearer ' + session.access_token };
+      const jwt = await authJwt();
+      const opt = jwt ? { headers: { authorization: 'Bearer ' + jwt } } : undefined;
       // Camera take first (the replay shows the video too); voice-only fallback.
       try{
-        const rc = await fetch(SOLO_CAM_URL + '?resultId=' + encodeURIComponent(id), { headers: hdr });
+        const rc = await fetch(SOLO_CAM_URL + '?resultId=' + encodeURIComponent(id), opt);
         if(rc.ok){
           const cb = await rc.json().catch(() => ({}));
           if(cb.url) return { url: cb.url, duration: cb.duration || null, recStartMs: null, media: 'video' };
         }
       }catch(_){}
-      const r = await fetch(SOLO_AUDIO_URL + '?resultId=' + encodeURIComponent(id), { headers: hdr });
+      const r = await fetch(SOLO_AUDIO_URL + '?resultId=' + encodeURIComponent(id), opt);
       if(!r.ok) return null;
       const b = await r.json().catch(() => ({}));
       if(!b.url) return null;

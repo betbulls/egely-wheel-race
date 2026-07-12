@@ -47,21 +47,26 @@ export function mount(el, id){
     if(error || !r){ el.querySelector('#dBody').innerHTML = '<div class="empty">Measurement not found.</div>'; return; }
 
     // Set the back link in context: own measurement → My measurements;
-    // a client's measurement (viewed by their practitioner) → that client.
+    // a PUBLISHED reading viewed by anyone else → the Showcase gallery;
+    // a private client measurement (viewed by their practitioner) → that client.
     const me = auth.getState();
-    const isClientView = !!(me.user && r.user_id && r.user_id !== me.user.id);
+    const isOwner = !!(me.user && r.user_id && r.user_id === me.user.id);
+    const publicView = !isOwner && !!r.published;
+    const isClientView = !!(me.user && r.user_id && !isOwner && !publicView);
     let clientProf = null;
-    if(isClientView){
+    if(publicView || isClientView){
       const { data: prof } = await supabase.from('profiles')
         .select('id, display_name, avatar_url').eq('id', r.user_id).maybeSingle();
       if(disposed) return;
       clientProf = prof || null;
-      const cname = (clientProf && clientProf.display_name) || 'Member';
-      el.querySelector('#dBack').innerHTML = `<a href="#/clients/${esc(r.user_id)}" class="link">← ${esc(cname)}</a>`;
+      const cname = r.racer_name || (clientProf && clientProf.display_name) || 'Member';
+      el.querySelector('#dBack').innerHTML = publicView
+        ? `<a href="#/showcase" class="link">← Showcase</a>`
+        : `<a href="#/clients/${esc(r.user_id)}" class="link">← ${esc(cname)}</a>`;
       el.querySelector('#dClient').innerHTML = `
         <div class="d-client-chip">
           <span class="d-client-avatar">${avatarHtml(clientProf && clientProf.avatar_url, cname)}</span>
-          <span class="d-client-name">${esc(cname)}'s measurement</span>
+          <span class="d-client-name">${esc(cname)}'s ${publicView ? 'reading' : 'measurement'}</span>
         </div>`;
     } else {
       el.querySelector('#dBack').innerHTML = `<a href="#/me" class="link">← My measurements</a>`;
@@ -200,6 +205,7 @@ export function mount(el, id){
         <div class="me-title-row" style="margin-bottom:10px">
           <span class="me-kind ${isRace ? 'race' : (solo ? 'solo' : 'session')}">${isRace ? 'Race' : (solo ? 'Solo' : 'Session')}</span>
           ${r.verified ? '<span class="v-badge verified">✓ Verified</span>' : '<span class="v-badge unverified">unverified</span>'}
+          <span id="dLike" style="margin-left:auto"></span>
         </div>
         <div class="d-meta">${esc(when)} · ${esc(dur)}</div>
 
@@ -227,13 +233,91 @@ export function mount(el, id){
         </div>
 
         ${r.comment ? `<div class="d-comment"><div class="d-comment-lbl">Comment</div><p>${esc(r.comment)}</p></div>` : ''}
-        ${solo ? '<div id="dVideo"></div>' : ''}
+        ${solo ? '<div id="dVideo"></div><div id="dShow"></div>' : ''}
       </div>
     `;
-    // "Share as video" — solo social clip via the render worker (owner only:
-    // the RLS already gates who can load this row at all).
+    // "Share as video" — solo social clip via the render worker. Owner (and the
+    // practitioner client-view, where RLS gates the row anyway) — but never a
+    // stranger browsing a PUBLISHED reading from the Showcase.
     const vslot = el.querySelector('#dVideo');
-    if(vslot) videoShare = mountVideoShare(vslot, { kind: 'solo', targetId: Number(id) });
+    if(vslot && me.user && !publicView) videoShare = mountVideoShare(vslot, { kind: 'solo', targetId: Number(id) });
+
+    // ---- Showcase: the owner's publish panel + everyone's applause ----------
+    if(solo){
+      if(!document.getElementById('dShowStyles')){
+        const st = document.createElement('style'); st.id = 'dShowStyles';
+        st.textContent = `
+.d-show{margin-top:14px;border:1px solid var(--ewr-border,#dfe3e6);border-radius:16px;padding:13px 17px;
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:linear-gradient(135deg,rgba(55,219,255,.05),rgba(82,48,218,.06))}
+.d-show-t{flex:1;min-width:220px}
+.d-show-t b{display:block;font:600 14px Montserrat,Inter,sans-serif;color:var(--ewr-text,#011624)}
+.d-show-t small{font:500 12.5px Inter,sans-serif;color:var(--ewr-text-muted,#67737c)}
+.d-show .btn-p{padding:9px 20px;border-radius:999px;border:none;background:var(--ewr-accent-strong,#401d91);color:#fff;font:600 13px Inter,sans-serif;cursor:pointer}
+.d-show .btn-g{padding:9px 18px;border-radius:999px;border:1px solid var(--ewr-border,#dfe3e6);background:#fff;color:var(--ewr-text-muted,#67737c);font:600 13px Inter,sans-serif;cursor:pointer}
+.d-show .d-show-msg{font:500 12px Inter,sans-serif;color:#c2415b;width:100%}
+.d-like{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;border:1px solid var(--ewr-border,#dfe3e6);
+  background:#fff;color:var(--ewr-text-muted,#67737c);font:600 13px Inter,sans-serif;cursor:pointer;text-decoration:none}
+.d-like.on{background:rgba(82,48,218,.08);border-color:rgba(82,48,218,.4);color:var(--ewr-accent-strong,#401d91)}
+.d-like:disabled{opacity:.55;cursor:default}`;
+        document.head.appendChild(st);
+      }
+      const showSlot = el.querySelector('#dShow');
+      const likeSlot = el.querySelector('#dLike');
+      let likes = 0, liked = false, busy = false;
+
+      const loadLikes = async () => {
+        if(!r.published){ likes = 0; liked = false; return; }
+        try{
+          const { data: ls } = await supabase.from('solo_likes').select('user_id').eq('result_id', r.id);
+          likes = (ls || []).length;
+          liked = !!(me.user && (ls || []).some(l => l.user_id === me.user.id));
+        }catch(_){}
+      };
+      const paintLike = () => {
+        if(!likeSlot) return;
+        if(!r.published){ likeSlot.innerHTML = ''; return; }
+        likeSlot.innerHTML = me.user
+          ? `<button type="button" class="d-like ${liked ? 'on' : ''}" ${isOwner ? 'disabled title="Your own reading"' : ''}>♥ ${likes}</button>`
+          : `<a class="d-like" href="#/login" title="Log in to applaud">♥ ${likes}</a>`;
+        const b = likeSlot.querySelector('button.d-like');
+        if(b && !isOwner) b.addEventListener('click', async () => {
+          if(busy) return; busy = true; b.disabled = true;
+          try{
+            if(liked){ const { error } = await supabase.from('solo_likes').delete().eq('result_id', r.id).eq('user_id', me.user.id); if(!error){ liked = false; likes = Math.max(0, likes - 1); } }
+            else { const { error } = await supabase.from('solo_likes').insert({ result_id: r.id, user_id: me.user.id }); if(!error){ liked = true; likes++; } }
+          }catch(_){}
+          busy = false; paintLike();
+        });
+      };
+      const paintPanel = () => {
+        if(!showSlot || !isOwner){ if(showSlot) showSlot.innerHTML = ''; return; }
+        showSlot.innerHTML = r.published
+          ? `<div class="d-show"><div class="d-show-t"><b>🌟 On the Showcase</b>
+              <small>This reading is public — anyone can watch the replay${likes ? ` · ♥ ${likes} so far` : ''}.</small></div>
+              <a class="btn-g" href="#/showcase" style="text-decoration:none">View on Showcase</a>
+              <button type="button" class="btn-g" data-show-off>Remove</button><span class="d-show-msg" data-show-msg hidden></span></div>`
+          : `<div class="d-show"><div class="d-show-t"><b>🌟 Share on the Showcase</b>
+              <small>Publish this reading to the public gallery — visitors can watch the replay and your recording, members can applaud it.</small></div>
+              <button type="button" class="btn-p" data-show-on>Publish to Showcase</button><span class="d-show-msg" data-show-msg hidden></span></div>`;
+        const go = async on => {
+          const msg = showSlot.querySelector('[data-show-msg]');
+          try{
+            const { error } = await supabase.rpc('set_solo_published', { p_result_id: Number(r.id), p_published: on });
+            if(error) throw error;
+            r.published = on;
+            await loadLikes();
+            paintPanel(); paintLike();
+          }catch(e){
+            if(msg){ msg.hidden = false; msg.textContent = 'Could not update: ' + ((e && e.message) || 'the Showcase is not enabled yet.'); }
+          }
+        };
+        showSlot.querySelector('[data-show-on]')?.addEventListener('click', () => go(true));
+        showSlot.querySelector('[data-show-off]')?.addEventListener('click', () => go(false));
+      };
+      await loadLikes();
+      if(disposed) return;
+      paintPanel(); paintLike();
+    }
 
     // Replay cockpit (replay.js) — owns all drawing on #dChart: idle = the
     // full curve (same as the old static draw), ▶ re-plays it in time with
@@ -258,7 +342,7 @@ export function mount(el, id){
     // takes this card over the moment playback starts there (session pattern).
     if(solo){
       const vslot = el.querySelector('#dVoice');
-      if(vslot) voicePlayer = mountVoicePlayer(vslot, { sessionId: Number(id), mode: 'solo', hostName: r.racer_name || 'You' });
+      if(vslot) voicePlayer = mountVoicePlayer(vslot, { sessionId: Number(id), mode: 'solo', hostName: r.racer_name || (publicView ? 'The measurer' : 'You') });
     }
   })();
 
