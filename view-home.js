@@ -160,6 +160,18 @@ const rpClock = frac => { const s = Math.round(frac * 60); return `${Math.floor(
 // circle into an ellipse. left% is clamped so the dot never clips at the edges.
 const rpDotLeft = frac => Math.max(3, Math.min(97, frac * 100)).toFixed(1);
 
+// Video-guided sessions — a REAL maker camera clip (session #317, muted, 10s
+// loop). No autoplay attribute: startLandingFx starts it only while the card
+// is on screen; reduced motion keeps the poster frame.
+function videoMedia(){
+  return `
+    <div class="sw sw-vid">
+      <video data-fx="vclip" src="assets/video-guided-demo.mp4" poster="assets/video-guided-demo.jpg" muted loop playsinline preload="metadata" aria-hidden="true"></video>
+      <span class="sw-vid-rec">● REC</span>
+      <span class="sw-vid-tag"><i></i>LIVE · maker on camera</span>
+    </div>`;
+}
+
 function replayMedia(){
   const n = RP_SERIES.length, k = RP_INIT_K, v = RP_SERIES[k];
   const frac = k / (n - 1);
@@ -317,6 +329,15 @@ function startLandingFx(root){
   // Session room count — drifts gently.
   const room = root.querySelector('[data-fx="room"]');
   if(room) every(3200, () => { room.textContent = 5 + Math.floor(Math.random() * 4); }, cardOf('.svc-sess'));
+
+  // Video-guided card — the maker clip runs only while the card is on screen
+  // (reduced motion never reaches here: the poster frame stands in).
+  const vclip = root.querySelector('[data-fx="vclip"]');
+  if(vclip){
+    const vcard = cardOf('.svc-video');
+    every(600, () => { if(vclip.paused) vclip.play().catch(() => {}); }, vcard);
+    timers.push(setInterval(() => { if(!live(vcard) && !vclip.paused) vclip.pause(); }, 600));
+  }
 
   // Experiments — day cycles 1..7, nodes fill in, path grows.
   const dayEl = root.querySelector('[data-fx="day"]');
@@ -548,7 +569,15 @@ function publicLandingHtml(){
         media: replayMedia(),
       })}
       ${svcCard({
-        mod: 'exp', alt: true, eyebrow: 'Experiments',
+        mod: 'video', alt: true, eyebrow: 'On Camera',
+        h: 'Video-guided sessions, face to face',
+        lead: 'Spiritual Makers can go live on camera — you see them guide the whole session while every wheel measures along. Afterwards the recording becomes a share-ready video with their face and the group’s energy in one frame.',
+        points: ['Watch your maker live on camera in sessions and races', 'Replays play the camera back in perfect sync', 'One tap turns it into a TikTok, Reels or YouTube video'],
+        ctas: [{ cls: 'svc-go', href: '#/sessions', label: 'Find a live session' }, { cls: 'svc-ghost', href: '#/spiritual-makers', label: 'Maker features' }],
+        media: videoMedia(),
+      })}
+      ${svcCard({
+        mod: 'exp', eyebrow: 'Experiments',
         h: 'Guided, day-by-day practice',
         lead: 'Follow structured experiments that build a habit. Finish each day with a measurement and a short reflection, and watch your progress fill in.',
         points: ['Multi-day guided programmes', 'A measurement to close every day', 'Track completion and growth over time'],
@@ -556,7 +585,7 @@ function publicLandingHtml(){
         media: expMedia(),
       })}
       ${svcCard({
-        mod: 'members', eyebrow: 'Members',
+        mod: 'members', alt: true, eyebrow: 'Members',
         h: 'Build your circle. Share your energy.',
         lead: 'Share your connect link to gather members, watch their readings arrive live, and share your own measurements back with the people you trust.',
         points: ['Gather followers with your connect link', 'See your members’ live measurements and results', 'Share your own readings with people you choose'],
@@ -564,7 +593,7 @@ function publicLandingHtml(){
         media: membersMedia(),
       })}
       ${svcCard({
-        mod: 'levels', alt: true, eyebrow: 'Levels & Badges',
+        mod: 'levels', eyebrow: 'Levels & Badges',
         h: 'Level up your practice',
         lead: 'Every saved measurement earns XP. Climb from Explorer to Luminary and unlock badges for streaks, milestones and breakthroughs along the way.',
         points: ['Earn XP from every measurement', 'Climb 6 levels — Explorer to Luminary', 'Unlock 50+ badges across 11 categories'],

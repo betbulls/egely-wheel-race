@@ -250,6 +250,7 @@ export function mount(el){
       <div class="pfs-chips">
         <div class="pfs-chip${isMaker ? '' : ' locked'}"><span class="ic">◎</span>Live Wall Spotlight</div>
         <div class="pfs-chip${isMaker ? '' : ' locked'}"><span class="ic">🎙</span>Voice-guided sessions</div>
+        <div class="pfs-chip${isMaker ? '' : ' locked'}"><span class="ic">🎥</span>Camera &amp; share videos</div>
         <div class="pfs-chip${isMaker ? '' : ' locked'}"><span class="ic">📸</span>Maker photo</div>
         <div class="pfs-chip${isMaker ? '' : ' locked'}"><span class="ic">🌐</span>Bio &amp; social links</div>
         <div class="pfs-chip${isMaker ? '' : ' locked'}"><span class="ic">🏷️</span>Promotion &amp; coupon</div>
@@ -280,6 +281,18 @@ export function mount(el){
         <span class="pfs-voice-note">${isMaker
           ? 'No setup needed — the “Go live with your voice” card appears in every session or race you host.'
           : 'Included automatically for approved makers — no setup needed.'}</span>
+      </div>
+    </section>
+
+    <section class="panel ${isMaker ? '' : 'pfs-locked'}">
+      ${studioHead('Camera & share videos', isMaker
+        ? 'Go live on camera in your sessions and races — members watch you guide while they measure. The recording is composed into a share-ready video (9:16 for TikTok & Reels, 16:9 for YouTube), and the announcement toolkit hands you ready-made promo images before every event.'
+        : 'Makers guide on camera, every hosted event turns into a share-ready video (9:16 and 16:9), and ready-made announcement images promote each session before it starts.', !isMaker)}
+      <div class="pfs-voice-row">
+        <span class="voice-chip">🎥 On camera</span>
+        <span class="pfs-voice-note">${isMaker
+          ? 'The “With camera” button is in every session or race you host; the promo images appear in the room before the start.'
+          : 'Included automatically for approved makers — and anyone can still turn their own readings into share videos.'}</span>
       </div>
     </section>
 

@@ -15,12 +15,14 @@ import * as auth from './auth.js';
 
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-// ---- date/time — US format + explicit timezone (Csaba's must-have) ---------
+// ---- date/time — ALWAYS US Eastern (Csaba, 2026-07-12: most influencers are
+// American; a GMT+2 stamp means nothing to them. Even a Hungarian maker's
+// event is announced in US time, with the zone named on the image.)
 function fmtDateLine(ms){
   const d = new Date(ms);
-  const day = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-  // "3:30 PM EDT" for US makers, "3:30 PM GMT+2" elsewhere — always explicit.
-  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
+  const tz = { timeZone: 'America/New_York' };
+  const day = d.toLocaleDateString('en-US', { ...tz, weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+  const time = d.toLocaleTimeString('en-US', { ...tz, hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });   // "3:30 PM EDT"
   return { day, time, line: `${day} · ${time}` };
 }
 
@@ -308,7 +310,10 @@ export function mountEventPromo(el, { session, sessionId, kind }){
     if(session.access_mode === 'invite' && session.invite_token) return base + '#/join/' + session.invite_token;
     return base + '#/' + (kind === 'race' ? 'race' : 'room') + '/' + sessionId;
   };
-  const shortUrl = () => eventUrl().replace(/^https?:\/\//, '').replace(/index\.html/, '');
+  // On the IMAGE only the clean domain — an invite token would spill across
+  // the chip and a room number adds nothing (Csaba, 2026-07-12). The real
+  // link travels with Share… / Copy link / Facebook.
+  const shortUrl = () => 'live.egelywheel.com';
 
   const eligible = () => {
     const a = auth.getState();

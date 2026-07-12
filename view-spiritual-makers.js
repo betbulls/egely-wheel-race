@@ -235,6 +235,15 @@ function styles(){
 
   /* ============ motion control ============ */
   .sm-anim:not(.in-view) *,.sm-anim.sm-hidden *{animation-play-state:paused!important}
+  /* On-camera band — Abi's real clip in a framed player */
+  .sm-cam-wrap{position:relative;border-radius:16px;overflow:hidden;background:#0b1b28;box-shadow:0 18px 44px rgba(1,22,36,.18)}
+  .sm-cam-clip{display:block;width:100%;height:100%;min-height:230px;object-fit:cover}
+  .sm-cam-tag{position:absolute;left:12px;bottom:12px;display:inline-flex;align-items:center;gap:7px;padding:5px 12px;
+    border-radius:999px;background:rgba(4,15,25,.62);border:1px solid rgba(255,255,255,.18);color:#fff;font-size:11.5px;font-weight:600}
+  .sm-cam-tag i{width:7px;height:7px;border-radius:50%;background:#3ddc8e;box-shadow:0 0 8px rgba(61,220,142,.9)}
+  .sm-cam-rec{position:absolute;right:12px;top:12px;padding:4px 10px;border-radius:999px;background:rgba(4,15,25,.55);
+    border:1px solid rgba(232,184,75,.5);color:#e8b84b;font-size:10px;font-weight:700;letter-spacing:.08em}
+
   .sm-reveal .sm-band,.sm-reveal .sm-strip{opacity:0;transform:translateY(16px);transition:opacity .55s ease,transform .55s ease}
   .sm-reveal .sm-band.in-view,.sm-reveal .sm-strip.in-view{opacity:1;transform:none}
 
@@ -404,6 +413,22 @@ function pageHtml(){
 
     <section class="sm-band tint alt">
       <div class="sm-band-text">
+        <span class="sm-eyebrow">On camera</span>
+        <h2>Go live on camera — and keep the video</h2>
+        <p>Turn your camera on inside your own sessions and races: your circle watches you guide the whole practice, live. Afterwards the recording is composed into a share-ready video — your face and the group’s energy in one frame, in 9:16 for TikTok and Reels or 16:9 for YouTube.</p>
+        <p class="sm-fine">Camera hosting is a Spiritual Maker feature. Shown here: Abi, live on camera.</p>
+      </div>
+      <div class="sm-band-media">
+        <div class="sm-cam-wrap" aria-hidden="true">
+          <video class="sm-cam-clip" src="assets/makers/abi-guides.mp4" muted loop playsinline preload="metadata"></video>
+          <span class="sm-cam-rec">● REC</span>
+          <span class="sm-cam-tag"><i></i>Abi · live on camera</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="sm-band card">
+      <div class="sm-band-text">
         <span class="sm-eyebrow">Included for life</span>
         <h2>EWR Live access, included for life</h2>
         <p>Approved Spiritual Makers receive lifetime access to EWR Live measurement features, so they can keep measuring, hosting voice-guided sessions and supporting their community.</p>
@@ -467,8 +492,22 @@ export function mount(el){
   const onVis = () => el.querySelectorAll('.sm-anim').forEach(p => p.classList.toggle('sm-hidden', document.hidden));
   document.addEventListener('visibilitychange', onVis);
 
+  // The on-camera clip (Abi) plays only while its band is on screen; reduced
+  // motion leaves it paused on the first frame.
+  const camClip = el.querySelector('.sm-cam-clip');
+  let camTimer = 0;
+  if(camClip && !reduce){
+    camTimer = setInterval(() => {
+      const band = camClip.closest('.sm-band');
+      const on = !document.hidden && (!supportsIO || (band && band.classList.contains('in-view')));
+      if(on && camClip.paused) camClip.play().catch(() => {});
+      else if(!on && !camClip.paused) camClip.pause();
+    }, 700);
+  }
+
   return () => {
     if(io) io.disconnect();
     document.removeEventListener('visibilitychange', onVis);
+    if(camTimer) clearInterval(camTimer);
   };
 }

@@ -117,6 +117,17 @@ export function mount(el, handle){
       for(const s of upcoming) s._participants = (counts.get(s.id) || new Set()).size;
     }
 
+    // The last three readings this person shared on the Showcase — social proof
+    // right on the connection page (empty → the section simply stays away).
+    let sharedReadings = [];
+    try{
+      const { data: sr } = await supabase.from('results')
+        .select('id, label, avg, peak, created_at, duration_seconds, curve')
+        .eq('user_id', pr.id).eq('published', true).is('session_id', null)
+        .order('created_at', { ascending: false }).limit(3);
+      sharedReadings = sr || [];
+    }catch(_){}
+
     // Bio + socials are Spiritual Maker services — never shown on a member page.
     const socials = isMaker ? SOCIALS.filter(s => (pr[s.field] || '').trim()) : [];
     const hasReferral = isMaker && !!(pr.affiliate_link || '').trim();
@@ -128,6 +139,7 @@ export function mount(el, handle){
           : renderMemberHero(pr, name, connectedMembers)}
         ${renderWhat(name)}
         ${renderUpcoming(upcoming, now, name)}
+        ${renderSharedReadings(sharedReadings, name)}
         ${renderCommunity({ connectedMembers, hostedSessions: allSessions.length, level: levelState.level, verifiedRate })}
         ${hasReferral ? renderMakerOffer(pr, name) : renderPlainOffer()}
         ${renderFinal(name)}
@@ -343,6 +355,54 @@ function renderUpcoming(upcoming, now, name){
     <section class="cn-card">
       <h2 class="cn-h">Upcoming sessions</h2>
       ${body}
+    </section>`;
+}
+
+// The last three readings shared on the Showcase — with the curve, so the page
+// SHOWS the practice instead of talking about it. No readings → no section.
+const cnZText = v => v < 6 ? '#c2415b' : v < 13 ? '#b8860b' : '#0f8a52';
+function cnSpark(curve){
+  if(!Array.isArray(curve) || curve.length < 2) return '';
+  const n = curve.length, W = 100, H = 30, step = Math.max(1, Math.ceil(n / 120));
+  let d = '', pen = false, last = null, lastV = 0;
+  for(let i = 0; i < n; i += step){
+    const raw = curve[i];
+    const v = raw == null ? null : Number(raw);
+    if(v == null || !Number.isFinite(v)){ pen = false; continue; }
+    const x = (i / (n - 1)) * W, y = H - 2 - (Math.max(0, Math.min(24, v)) / 24) * (H - 5);
+    d += (pen ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1) + ' ';
+    pen = true; last = [x, y]; lastV = v;
+  }
+  if(!d) return '';
+  const dot = lastV < 6 ? '#e14b64' : lastV < 13 ? '#eab308' : '#10b981';
+  return `<svg class="cn-read-spark" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true">
+    <path d="${d.trim()}" fill="none" stroke="#5230da" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+    ${last ? `<circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="2.3" fill="${dot}"/>` : ''}
+  </svg>`;
+}
+
+function renderSharedReadings(readings, name){
+  if(!readings.length) return '';
+  const fmtDay = iso => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const fmtDur = s => !s ? '' : s >= 60 ? Math.round(s / 60) + ' min' : s + ' s';
+  return `
+    <section class="cn-card">
+      <h2 class="cn-h">Latest shared readings</h2>
+      <div class="cn-reads">
+        ${readings.map(r => `
+          <a class="cn-read" href="#/m/${esc(String(r.id))}">
+            <div class="cn-read-main">
+              <div class="cn-read-name">${esc(r.label || 'Vitality reading')}</div>
+              <div class="cn-read-meta">${esc(fmtDay(r.created_at))}${r.duration_seconds ? ' · ' + fmtDur(r.duration_seconds) : ''}</div>
+            </div>
+            ${cnSpark(r.curve)}
+            <div class="cn-read-stats">
+              <span style="color:${cnZText(r.avg || 0)}">${(r.avg || 0).toFixed(1)}<small>AVG</small></span>
+              <span style="color:${cnZText(r.peak || 0)}">${r.peak || 0}<small>PEAK</small></span>
+            </div>
+          </a>`).join('')}
+      </div>
+      <p class="cn-read-more"><a href="#/showcase">See the whole Showcase →</a></p>
     </section>`;
 }
 
