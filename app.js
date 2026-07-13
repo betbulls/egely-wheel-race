@@ -23,6 +23,7 @@ import { mount as mountHowToConnect } from './view-how-to-connect.js';
 import { mount as mountSpiritualMakers } from './view-spiritual-makers.js';
 import { mount as mountRender } from './view-render.js';
 import { mount as mountShowcase } from './view-showcase.js';
+import { mount as mountPartnerOnboarding } from './view-partner-onboarding.js';
 import * as presence from './presence.js';
 import { supabase } from './db.js';
 
@@ -94,6 +95,7 @@ function router(){
   else if(path === '/how-to-connect') setView(mountHowToConnect);
   else if(path === '/spiritual-makers') setView(mountSpiritualMakers);
   else if(path === '/showcase') setView(mountShowcase);
+  else if(path === '/onboarding') setView(mountPartnerOnboarding);
   else if(path === '/clients') setView(mountClients, param);
   else if(path === '/leaderboard') setView(mountLeaderboard);
   else if(path === '/connect') setView(mountConnect, param);
@@ -301,6 +303,9 @@ function renderAuthArea(){
     const adminItem = a.isAdmin
       ? `<a href="#/admin" data-route="/admin">Admin</a>`
       : '';
+    const partnerItem = isPartner
+      ? `<a href="#/onboarding" data-route="/onboarding">Partner Hub</a>`
+      : '';
     authArea.innerHTML = `
       ${levelPillHtml()}
       <button type="button" class="account-trigger" id="accountTrigger" aria-haspopup="true" aria-expanded="false">
@@ -309,6 +314,7 @@ function renderAuthArea(){
         <span class="account-chevron">▾</span>
       </button>
       <div class="account-menu" id="accountMenu" hidden>
+        ${partnerItem}
         <a href="#/me" data-route="/me">My measurements</a>
         <a href="#/my-sessions" data-route="/my-sessions">My sessions</a>
         <a href="#/my-races" data-route="/my-races">My races</a>
@@ -353,6 +359,28 @@ function needsWelcome(a){
   return (!name || name === emailPrefix) && !a.avatarUrl;
 }
 
+// ---- Partner Hub visibility --------------------------------------------------
+// A logged-in user is a "partner" when a partner_onboarding row matches them (the
+// claim RPC links it by email on first login — idempotent, cheap). The nav pill +
+// account-menu item only show for partners; everyone else never sees the feature.
+let isPartner = false;
+let partnerCheckedFor = null;
+function togglePartnerNav(){
+  document.querySelectorAll('.nav-partner').forEach(n => { n.hidden = !isPartner; });
+}
+async function checkPartner(a){
+  const uid = a.user?.id || null;
+  if(!uid){ isPartner = false; partnerCheckedFor = null; togglePartnerNav(); return; }
+  if(partnerCheckedFor === uid) return;
+  partnerCheckedFor = uid;
+  try {
+    const { data } = await supabase.rpc('claim_partner_onboarding');
+    isPartner = !!data;
+  } catch { isPartner = false; }
+  togglePartnerNav();
+  renderAuthArea();   // adds the account-menu item once known
+}
+
 let prevUid = null;   // tracks login/logout transitions so the view refreshes on logout
 auth.subscribeAuth(a => {
   const uid = a.user?.id || null;
@@ -372,6 +400,7 @@ auth.subscribeAuth(a => {
   }
   prevUid = uid;
   renderAuthArea();
+  checkPartner(a);
 });
 
 // ---- "More" nav menu (mobile only — surfaces Sessions + Global Ranking) -----

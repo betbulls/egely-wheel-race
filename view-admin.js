@@ -7,6 +7,7 @@
 // Self-contained scoped <style> (.adm-*) — no index.html edits.
 import * as auth from './auth.js';
 import { supabase } from './db.js';
+import { mountPartners } from './admin-partners.js';
 
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
 
@@ -58,6 +59,12 @@ function styles(){
     cursor:pointer;background:#401d91;color:#fff;border:1px solid transparent;flex-shrink:0;transition:background .15s}
   .adm-grant:hover{background:#011624}
   .adm-grant:disabled{opacity:.6;cursor:default}
+  .adm-tabs{display:flex;gap:8px;margin:0 0 22px;flex-wrap:wrap}
+  .adm-tab{font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase;
+    padding:10px 18px;border-radius:999px;cursor:pointer;border:1px solid #dfe3e6;background:#fff;color:#67737c;transition:all .15s}
+  .adm-tab:hover{border-color:#5230da;color:#401d91;background:#fff}
+  .adm-tab.on{background:#401d91;color:#fff;border-color:#401d91}
+  .adm-tab.on:hover{background:#401d91;color:#fff}
   @media (max-width:600px){
     .adm-add input{min-width:0;width:100%;flex:none}
     .adm-add .adm-btn{width:100%}
@@ -89,12 +96,35 @@ export function mount(el){
     }
     if(built) return;   // already showing the panel — don't rebuild (keeps the input)
     built = true;
-    buildAdmin();
+    buildShell();
   }
 
-  function buildAdmin(){
+  // ---- tabbed shell: "Makers & access" (the original console) + "Influencer onboarding"
+  let tab = 'makers';
+  let partnersCleanup = null;
+  function buildShell(){
     el.innerHTML = `
-    <div class="adm-wrap">
+      <div class="adm-wrap" style="max-width:${tab === 'partners' ? '1080px' : '640px'}">
+        <div class="adm-tabs">
+          <button type="button" class="adm-tab ${tab === 'makers' ? 'on' : ''}" data-tab="makers">Makers &amp; access</button>
+          <button type="button" class="adm-tab ${tab === 'partners' ? 'on' : ''}" data-tab="partners">Influencer onboarding</button>
+        </div>
+        <div id="admTabHost"></div>
+      </div>`;
+    el.querySelectorAll('.adm-tab').forEach(b => b.addEventListener('click', () => {
+      if(b.dataset.tab === tab) return;
+      tab = b.dataset.tab;
+      if(partnersCleanup){ partnersCleanup(); partnersCleanup = null; }
+      buildShell();
+    }));
+    const host = el.querySelector('#admTabHost');
+    if(tab === 'partners') partnersCleanup = mountPartners(host);
+    else buildAdmin(host);
+  }
+
+  function buildAdmin(el){
+    el.innerHTML = `
+    <div>
       <div class="adm-head">
         <h1>Admin · Spiritual Makers</h1>
         <p>Approve who shows the “✓ Spiritual Maker” badge and label across the app. People keep their account either way — this only controls the public maker badge.</p>
