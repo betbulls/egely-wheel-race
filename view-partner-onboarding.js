@@ -124,12 +124,15 @@ function styles(){
   .pob-lockmail{display:flex;align-items:center;gap:9px;background:#f2f3f4;border:1px solid #dfe3e6;border-radius:10px;
     padding:11px 13px;font:500 14px 'Inter',sans-serif;color:#67737c}
   .pob-lockmail .ok{color:#0f8a52;font-weight:700}
-  .pob-btn{background:#401d91;color:#fff;border:none;border-radius:999px;padding:11px 22px;
-    font:700 12px 'Montserrat',sans-serif;letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
-  .pob-btn:hover{background:#011624}
-  .pob-btn:disabled{opacity:.6;cursor:default}
-  .pob-btn.ghost{background:#fff;color:#011624;border:1px solid #dfe3e6}
-  .pob-btn.ghost:hover{background:#f7f8f8;color:#011624}
+  /* .pob-scoped so these beat the generic ".pob a{color}" link colour on <a> buttons */
+  .pob .pob-btn{background:#401d91;color:#fff;border:none;border-radius:999px;padding:11px 22px;
+    font:700 12px 'Montserrat',sans-serif;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;
+    text-decoration:none;display:inline-flex;align-items:center;gap:6px;
+    transition:background .15s,transform .15s,box-shadow .15s}
+  .pob .pob-btn:hover{background:#2c1470;transform:translateY(-1px);box-shadow:0 8px 20px rgba(64,29,145,.24)}
+  .pob .pob-btn:disabled{opacity:.55;cursor:default;transform:none;box-shadow:none}
+  .pob .pob-btn.ghost{background:#fff;color:#401d91;border:1px solid #e2ddf6}
+  .pob .pob-btn.ghost:hover{background:#faf9ff;color:#2c1470;border-color:#c9bef2;box-shadow:0 6px 16px rgba(1,22,36,.06)}
   .pob-msg{display:inline-block;margin-left:12px;font:500 13px 'Inter',sans-serif;color:#67737c}
   .pob-msg.ok{color:#0f8a52}.pob-msg.err{color:#c2415b}
   .pob-guides{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0}
@@ -190,7 +193,9 @@ function styles(){
   .pob-link .ll{flex:1;min-width:0}
   .pob-link .ll b{display:block;font:600 13px 'Inter',sans-serif;color:#011624}
   .pob-link .ll span{display:block;font:400 11px 'Inter',sans-serif;color:#99a2a7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .pob-btn.sm{padding:7px 14px;font-size:10.5px;flex:none}
+  .pob .pob-btn.sm{padding:7px 15px;font-size:10.5px;letter-spacing:.04em;flex:none;
+    background:rgba(82,48,218,.07);color:#401d91;border:1px solid rgba(82,48,218,.16)}
+  .pob .pob-btn.sm:hover{background:rgba(82,48,218,.13);border-color:rgba(82,48,218,.3);color:#2c1470;box-shadow:none;transform:none}
   .pob-mgr{display:flex;align-items:center;gap:11px}
   .pob-mgr .av{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#37dbff,#5230da);color:#fff;
     display:flex;align-items:center;justify-content:center;font:600 16px 'Montserrat',sans-serif;flex:none}
@@ -680,16 +685,13 @@ export function mount(el){
           </div>
 
           ${(() => {
-            // The money links — everything the partner actually shares, one place.
-            // Checkout links carry the audience coupon pre-applied (Shopify cart
-            // permalink + ?discount=), so their followers land on checkout with
-            // the code already active.
+            // The links the partner actually uses — their tracking link, where they
+            // watch their earnings, and their public page. (The affiliate link is set
+            // by their manager once the UpPromote account is ready.)
             const links = [];
-            if(partner.affiliate_link) links.push({ l: 'Your affiliate link', u: partner.affiliate_link });
-            if(partner.audience_coupon){
-              const d = encodeURIComponent(partner.audience_coupon);
-              links.push({ l: 'Egely Wheel · your coupon applied', u: `https://egelywheel.com/cart/56516037312898:1?discount=${d}` });
-              links.push({ l: 'Vitality Pack · your coupon applied', u: `https://egelywheel.com/cart/56459929780610:1?discount=${d}` });
+            if(partner.affiliate_link){
+              links.push({ l: 'Your affiliate link', u: partner.affiliate_link });
+              links.push({ l: 'Your earnings dashboard', u: 'https://affiliate.egelywheel.com' });
             }
             if(a.practitionerHandle) links.push({ l: 'Your EWR Live connect page', u: `${location.origin}/#/connect/${a.practitionerHandle}` });
             return links.length ? `
@@ -700,7 +702,7 @@ export function mount(el){
                   <div class="ll"><b>${esc(x.l)}</b><span>${esc(x.u.replace(/^https?:\/\//, ''))}</span></div>
                   <button class="pob-btn ghost sm" data-copy="${escAttr(x.u)}">Copy</button>
                 </div>`).join('')}
-              <div class="pob-fine">Your coupon is applied automatically at checkout on the store links.</div>
+              ${partner.affiliate_link ? `<div class="pob-fine">Track your clicks and commissions in your earnings dashboard.</div>` : ''}
             </div></div>` : '';
           })()}
 

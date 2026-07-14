@@ -75,11 +75,12 @@ function styles(){
 
 export function mount(el){
   styles();
-  let built = false;
+  let built = false, partnersCleanup = null;
+  const teardownPartners = () => { if(partnersCleanup){ partnersCleanup(); partnersCleanup = null; } };
 
   function render(a){
     if(!a.user){
-      built = false;
+      built = false; teardownPartners();
       el.innerHTML = `<div class="adm-wrap"><div class="adm-card"><p class="adm-empty">Please <a href="#/login">log in</a>.</p></div></div>`;
       return;
     }
@@ -88,7 +89,7 @@ export function mount(el){
       return;
     }
     if(!a.isAdmin){
-      built = false;
+      built = false; teardownPartners();
       el.innerHTML = `<div class="adm-wrap"><div class="adm-card">
         <h1 style="font-family:'Montserrat',sans-serif;font-weight:600;color:#011624;margin:0 0 6px">Not found</h1>
         <p class="adm-empty">This page isn't available. <a href="#/home">Back to home</a></p></div></div>`;
@@ -101,7 +102,6 @@ export function mount(el){
 
   // ---- tabbed shell: "Makers & access" (the original console) + "Influencer onboarding"
   let tab = 'makers';
-  let partnersCleanup = null;
   function buildShell(){
     el.innerHTML = `
       <div class="adm-wrap" style="max-width:${tab === 'partners' ? '1080px' : '640px'}">
@@ -114,7 +114,7 @@ export function mount(el){
     el.querySelectorAll('.adm-tab').forEach(b => b.addEventListener('click', () => {
       if(b.dataset.tab === tab) return;
       tab = b.dataset.tab;
-      if(partnersCleanup){ partnersCleanup(); partnersCleanup = null; }
+      teardownPartners();
       buildShell();
     }));
     const host = el.querySelector('#admTabHost');
@@ -293,5 +293,5 @@ export function mount(el){
   }
 
   const unsub = auth.subscribeAuth(render);
-  return () => { if(unsub) unsub(); };
+  return () => { teardownPartners(); if(unsub) unsub(); };
 }

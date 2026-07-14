@@ -88,6 +88,22 @@ function styles(){
   .admp-plink{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;
     border-bottom:1px dashed #f2f3f4;font:500 12.5px 'Inter',sans-serif;color:#67737c}
   .admp-plink:last-of-type{border-bottom:none}
+  .admp-modal-bg{position:fixed;inset:0;background:rgba(1,22,36,.45);backdrop-filter:blur(3px);z-index:9999;
+    display:flex;align-items:center;justify-content:center;padding:20px}
+  .admp-modal{background:#fff;border-radius:16px;box-shadow:0 24px 60px rgba(1,22,36,.3);width:100%;max-width:580px;
+    max-height:88vh;display:flex;flex-direction:column;overflow:hidden}
+  .admp-modal-h{display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid #dfe3e6}
+  .admp-modal-h b{font:700 16px 'Montserrat',sans-serif;color:#011624;display:block}
+  .admp-modal-h span{font:400 12.5px 'Inter',sans-serif;color:#67737c}
+  .admp-modal-x{margin-left:auto;background:none;border:none;font-size:17px;color:#99a2a7;cursor:pointer;
+    width:30px;height:30px;border-radius:8px}
+  .admp-modal-x:hover{background:#f2f3f4;color:#011624}
+  .admp-modal-b{padding:18px 20px;overflow-y:auto}
+  .admp-modal-b textarea{width:100%;box-sizing:border-box;background:#f7f8f8;border:1px solid #dfe3e6;border-radius:10px;
+    color:#011624;font:400 13.5px 'Inter',sans-serif;line-height:1.6;padding:12px 13px;resize:vertical}
+  .admp-modal-b textarea:focus,.admp-modal-b input:focus{outline:none;border-color:#5230da;background:#fff}
+  .admp-modal-note{margin-top:10px;font:400 11.5px 'Inter',sans-serif;color:#99a2a7;line-height:1.5}
+  .admp-modal-f{display:flex;align-items:center;gap:10px;padding:14px 20px;border-top:1px solid #dfe3e6;background:#fbfbfc}
   .admp-copybox{background:#f7f8f8;border:1px dashed #b9c2c8;border-radius:12px;padding:13px;margin-top:12px}
   .admp-copybox h6{font:600 10.5px 'Montserrat',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#67737c;margin:0 0 8px}
   .admp-copybox p{font:400 12px 'Inter',sans-serif;color:#67737c;margin:0 0 10px;line-height:1.5}
@@ -104,7 +120,7 @@ const fmtAgo = iso => { const d = daysAgo(iso); if(d == null) return '—'; if(d
 
 export function mountPartners(host){
   styles();
-  let partners = [], stepsByPartner = new Map(), templates = [], profilesById = new Map();
+  let partners = [], stepsByPartner = new Map(), templates = [], profilesById = new Map(), emailsByPartner = new Map();
   let openId = null;
 
   async function loadAll(){
@@ -127,6 +143,14 @@ export function mountPartners(host){
       const { data: profs } = await supabase.from('profiles').select('id,practitioner_handle').in('id', uids);
       (profs || []).forEach(r => profilesById.set(r.id, r));
     }
+    // Sent-email log (for "last nudge") — degrades to empty if the table isn't there yet.
+    emailsByPartner = new Map();
+    const { data: emails } = await supabase.from('partner_emails')
+      .select('partner_id,kind,sent_at').order('sent_at', { ascending: false });
+    (emails || []).forEach(e => {
+      if(!emailsByPartner.has(e.partner_id)) emailsByPartner.set(e.partner_id, []);
+      emailsByPartner.get(e.partner_id).push(e);
+    });
   }
 
   // ---- per-partner rollup ------------------------------------------------------
@@ -146,21 +170,98 @@ export function mountPartners(host){
       waitingOn = { side: needsAdmin ? 'us' : 'them', step: open };
     }
     const lastActivity = steps.reduce((m, s) => s.done_at && (!m || s.done_at > m) ? s.done_at : m, null) || p.updated_at || p.created_at;
-    return { steps, pct, launched, waitingOn, lastActivity, claimed: !!p.user_id };
+    const emails = emailsByPartner.get(p.id) || [];
+    const lastEmailAt = emails.length ? emails[0].sent_at : null;
+    return { steps, pct, launched, waitingOn, lastActivity, lastEmailAt, claimed: !!p.user_id };
   }
 
-  function reminderText(p, r){
+  function reminderEmail(p, r){
     const todo = r.steps.filter(s => s.status !== 'done' && s.status !== 'skipped' && s.owner === 'partner')
       .filter(s => !(s.key === 'agreement' && !p.contract_path) && !(s.key === 'offer' && p.wheel_price_usd == null))
       .slice(0, 3);
     const name = (p.invite_name || '').trim().split(' ')[0] || 'there';
     const lines = todo.map(s => `  • ${s.title}${s.minutes ? ` (~${s.minutes} min)` : ''}`).join('\n');
-    return `Subject: Your Spiritual Maker launch — quick next step\n\nHi ${name},\n\nYour Spiritual Maker partner hub is waiting for you — here's what's next on your side:\n\n${lines || '  • Log in and check your next step'}\n\nIt all lives here: ${HUB_URL}\n(log in with this email address)\n\nWe handle everything else. Any question — just reply.\n\nKrisztián\nBrand Manager · Egely Wheel`;
+    return {
+      subject: 'Your Spiritual Maker launch — quick next step',
+      body: `Hi ${name},\n\nYour Spiritual Maker partner hub is waiting for you — here's what's next on your side:\n\n${lines || '  • Log in and check your next step'}\n\nIt all lives here: ${HUB_URL}\n(log in with this email address)\n\nWe handle everything else. Any question — just reply.\n\nKrisztián\nBrand Manager · Egely Wheel`,
+    };
   }
 
-  function welcomeText(p){
+  function welcomeEmail(p){
     const name = (p.invite_name || '').trim().split(' ')[0] || 'there';
-    return `Subject: Welcome to the Spiritual Maker Partner Program 🌀\n\nHi ${name},\n\nGreat to have you on board! We've set up your personal partner hub — it walks you through everything from your agreement to your first live event, step by step, and shows exactly what we handle for you.\n\nYour hub: ${HUB_URL}\n\nHow to get in:\n  1. Open the link above\n  2. Log in with THIS email address (${p.email}) — you'll get an 8-digit code, no password needed\n  3. Your journey starts on the first screen\n\nMost steps take just a few minutes. I'm your dedicated Brand Manager — any question, just reply to this email.\n\nKrisztián\nBrand Manager · Egely Wheel`;
+    return {
+      subject: 'Welcome to the Spiritual Maker Partner Program 🌀',
+      body: `Hi ${name},\n\nGreat to have you on board! We've set up your personal partner hub — it walks you through everything from your agreement to your first live event, step by step, and shows exactly what we handle for you.\n\nYour hub: ${HUB_URL}\n\nHow to get in:\n  1. Open the link above\n  2. Log in with THIS email address (${p.email}) — you'll get an 8-digit code, no password needed\n  3. Your journey starts on the first screen\n\nMost steps take just a few minutes. I'm your dedicated Brand Manager — any question, just reply to this email.\n\nKrisztián\nBrand Manager · Egely Wheel`,
+    };
+  }
+
+  // ---- email composer (send via the send-partner-email Edge Fn) ----------------
+  function closeComposer(){ document.getElementById('admpModal')?.remove(); }
+
+  function openComposer(partnerId, kind){
+    const p = partners.find(x => x.id === partnerId);
+    if(!p) return;
+    const { subject, body } = kind === 'welcome' ? welcomeEmail(p) : reminderEmail(p, rollup(p));
+    const last = (emailsByPartner.get(partnerId) || [])[0];
+    closeComposer();
+    const wrap = document.createElement('div');
+    wrap.id = 'admpModal';
+    wrap.className = 'admp-modal-bg';
+    wrap.innerHTML = `
+      <div class="admp-modal" role="dialog" aria-modal="true">
+        <div class="admp-modal-h">
+          <div><b>${kind === 'welcome' ? 'Welcome email' : 'Reminder email'}</b><span>to ${esc(p.invite_name || p.email)} · ${esc(p.email)}</span></div>
+          <button class="admp-modal-x" data-mc-close aria-label="Close">✕</button>
+        </div>
+        <div class="admp-modal-b">
+          <div class="admp-f"><label>Subject</label><input type="text" data-mc="subject" value="${escAttr(subject)}"></div>
+          <div class="admp-f"><label>Message — edit freely before sending</label><textarea data-mc="body" rows="14">${esc(body)}</textarea></div>
+          <div class="admp-modal-note">Sends from <b>hello@spiritualmaker.com</b> — your Spiritual Maker assistant.${last ? ` · last email ${fmtAgo(last.sent_at)}` : ''}</div>
+        </div>
+        <div class="admp-modal-f">
+          <span class="admp-msg" data-mc-msg></span>
+          <span style="flex:1"></span>
+          <button class="admp-btn line" data-mc-copy>Copy</button>
+          <button class="admp-btn" data-mc-send>Send email</button>
+        </div>
+      </div>`;
+    document.body.appendChild(wrap);
+
+    const getVals = () => ({
+      subject: wrap.querySelector('[data-mc="subject"]').value.trim(),
+      body: wrap.querySelector('[data-mc="body"]').value.trim(),
+    });
+    wrap.querySelector('[data-mc-close]').addEventListener('click', closeComposer);
+    wrap.addEventListener('click', e => { if(e.target === wrap) closeComposer(); });
+    wrap.querySelector('[data-mc-copy]').addEventListener('click', (e) => {
+      const { subject, body } = getVals();
+      copyText(`Subject: ${subject}\n\n${body}`, e.target);
+    });
+    wrap.querySelector('[data-mc-send]').addEventListener('click', async (e) => {
+      const { subject, body } = getVals();
+      const msg = wrap.querySelector('[data-mc-msg]');
+      if(!subject || !body){ msg.className = 'admp-msg err'; msg.textContent = 'Subject and message are required.'; return; }
+      e.target.disabled = true; msg.className = 'admp-msg'; msg.textContent = 'Sending…';
+      let error, data;
+      try {
+        const res = await supabase.functions.invoke('send-partner-email', { body: { partnerId, kind, subject, body } });
+        error = res.error; data = res.data;
+      } catch(ex){ error = ex; }
+      if(error || (data && data.error)){
+        // supabase-js wraps a non-2xx Fn response in FunctionsHttpError with a generic
+        // .message; the real {error} body lives on error.context (an unread Response).
+        let reason = data?.error || error?.message || 'unknown error';
+        if(error && error.context && typeof error.context.json === 'function'){
+          try { const b = await error.context.json(); if(b && b.error) reason = b.error; } catch {}
+        }
+        e.target.disabled = false; msg.className = 'admp-msg err';
+        msg.textContent = 'Could not send: ' + reason;
+        return;
+      }
+      msg.className = 'admp-msg ok';
+      msg.textContent = (data && data.logged === false) ? 'Sent ✓ (not logged)' : 'Sent ✓';
+      setTimeout(async () => { closeComposer(); await loadAll(); render(); }, 700);
+    });
   }
 
   // ---- render --------------------------------------------------------------------
@@ -206,9 +307,9 @@ export function mountPartners(host){
               <span class="admp-av">${esc((p.invite_name || p.email)[0].toUpperCase())}</span>
               <div><b>${esc(p.invite_name || p.email)}</b><small>${esc(p.tier || 'ambassador')} · ${r.launched ? 'launched' : 'onboarding ' + r.pct + '%'}</small></div>
             </div>
-            <p>Waiting on <b>${r.waitingOn.side === 'us' ? 'US' : 'THEM'}</b> — ${esc(r.waitingOn.step.title)} · ${fmtAgo(r.lastActivity)}</p>
+            <p>Waiting on <b>${r.waitingOn.side === 'us' ? 'US' : 'THEM'}</b> — ${esc(r.waitingOn.step.title)} · ${fmtAgo(r.lastActivity)} · ${r.lastEmailAt ? 'nudged ' + fmtAgo(r.lastEmailAt) : 'not nudged yet'}</p>
             <div class="row">
-              ${r.waitingOn.side === 'them' ? `<button class="admp-btn" data-remind="${p.id}">📧 Copy reminder</button>` : ''}
+              ${r.waitingOn.side === 'them' ? `<button class="admp-btn" data-remind="${p.id}">📧 Send reminder</button>` : ''}
               <button class="admp-btn line" data-open-editor="${p.id}">Open</button>
             </div>
           </div>`).join('')}
@@ -230,9 +331,9 @@ export function mountPartners(host){
             <td>${r.waitingOn
               ? `<span class="admp-chip ${r.waitingOn.side}">${r.waitingOn.side === 'us' ? '🛠 US' : 'THEM'} · ${esc(r.waitingOn.step.title)}</span>`
               : '<span class="admp-ok">—</span>'}</td>
-            <td>${fmtAgo(r.lastActivity)}</td>
+            <td>${fmtAgo(r.lastActivity)}${r.lastEmailAt ? `<br><span style="font-size:10.5px;color:#99a2a7">nudged ${fmtAgo(r.lastEmailAt)}</span>` : ''}</td>
             <td>${r.waitingOn && r.waitingOn.side === 'them' && (daysAgo(r.lastActivity) || 0) >= 3
-              ? `<button class="admp-btn" data-remind="${p.id}">📧</button>` : `<button class="admp-btn line" data-open-editor="${p.id}">Open</button>`}</td>
+              ? `<button class="admp-btn" data-remind="${p.id}" title="Send reminder">📧</button>` : `<button class="admp-btn line" data-open-editor="${p.id}">Open</button>`}</td>
           </tr>
         `).join('')}
       </table></div>
@@ -254,8 +355,8 @@ export function mountPartners(host){
         <h3>${esc(p.invite_name || p.email)}</h3>
         <span class="mail">${esc(p.email)}</span>
         <span style="flex:1"></span>
-        <button class="admp-btn line" data-welcome="${p.id}">📧 Copy welcome email</button>
-        <button class="admp-btn line" data-remind="${p.id}">📧 Copy reminder</button>
+        <button class="admp-btn line" data-welcome="${p.id}">📧 Welcome email</button>
+        <button class="admp-btn line" data-remind="${p.id}">📧 Send reminder</button>
         <button class="admp-btn line" data-close-editor>✕ Close</button>
       </div>
       <div class="admp-edbody">
@@ -298,11 +399,9 @@ export function mountPartners(host){
             // here so Krisztián can paste them straight into emails.
             const prof = p.user_id ? profilesById.get(p.user_id) : null;
             const links = [];
-            if(p.affiliate_link) links.push(['Affiliate link', p.affiliate_link]);
-            if(p.audience_coupon){
-              const d = encodeURIComponent(p.audience_coupon);
-              links.push(['Egely Wheel · coupon applied', `https://egelywheel.com/cart/56516037312898:1?discount=${d}`]);
-              links.push(['Vitality Pack · coupon applied', `https://egelywheel.com/cart/56459929780610:1?discount=${d}`]);
+            if(p.affiliate_link){
+              links.push(['Affiliate link', p.affiliate_link]);
+              links.push(['Earnings dashboard', 'https://affiliate.egelywheel.com']);
             }
             if(prof && prof.practitioner_handle) links.push(['EWR Live connect page', `https://live.egelywheel.com/#/connect/${prof.practitioner_handle}`]);
             return links.length ? `
@@ -401,9 +500,8 @@ export function mountPartners(host){
       await loadAll();
       openId = created.id;
       render();
-      // Offer the welcome email right away.
-      const btn = host.querySelector(`[data-welcome="${created.id}"]`);
-      if(btn) copyText(welcomeText(created), btn);
+      // Offer to send the welcome email right away.
+      openComposer(created.id, 'welcome');
     });
 
     host.querySelectorAll('[data-open-editor]').forEach(b => b.addEventListener('click', (e) => {
@@ -421,13 +519,11 @@ export function mountPartners(host){
 
     host.querySelectorAll('[data-remind]').forEach(b => b.addEventListener('click', (e) => {
       e.stopPropagation();
-      const p = partners.find(x => x.id === Number(b.dataset.remind));
-      if(p) copyText(reminderText(p, rollup(p)), b);
+      openComposer(Number(b.dataset.remind), 'reminder');
     }));
     host.querySelectorAll('[data-welcome]').forEach(b => b.addEventListener('click', (e) => {
       e.stopPropagation();
-      const p = partners.find(x => x.id === Number(b.dataset.welcome));
-      if(p) copyText(welcomeText(p), b);
+      openComposer(Number(b.dataset.welcome), 'welcome');
     }));
     host.querySelectorAll('[data-copylink]').forEach(b => b.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -569,5 +665,5 @@ export function mountPartners(host){
     render();
   })();
 
-  return () => {};
+  return () => { closeComposer(); };
 }
