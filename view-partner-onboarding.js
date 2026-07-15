@@ -206,6 +206,62 @@ function styles(){
     display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff}
   .pob-tease{display:flex;align-items:center;gap:12px;background:rgba(82,48,218,.08);border:1px solid rgba(82,48,218,.18);
     border-radius:14px;padding:15px 18px;font:500 13px 'Inter',sans-serif;color:#401d91}
+  /* ---- Creator Home (after launch) ---- */
+  .pob-earn{background:#fff;border:1px solid #dfe3e6;border-radius:18px;box-shadow:0 10px 28px rgba(1,22,36,.08);
+    padding:22px 26px;margin-bottom:20px;display:flex;gap:26px;align-items:center;flex-wrap:wrap;position:relative;overflow:hidden}
+  .pob-earn:before{content:"";position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,#37dbff,#5230da)}
+  .pob-earn .big b{display:block;font:800 38px 'Montserrat',sans-serif;letter-spacing:-0.02em;
+    background:linear-gradient(135deg,#2ba8d4,#5230da);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .pob-earn .big span{font:700 10.5px 'Montserrat',sans-serif;letter-spacing:.16em;text-transform:uppercase;color:#67737c}
+  .pob-earn .st{padding:2px 0}
+  .pob-earn .st b{display:block;font:700 17px 'Montserrat',sans-serif;color:#011624}
+  .pob-earn .st span{font:600 10px 'Montserrat',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#99a2a7}
+  .pob-earn .sep{width:1px;align-self:stretch;background:#eef0f2}
+  .pob-earn .note{font:400 11.5px 'Inter',sans-serif;color:#99a2a7;width:100%}
+  .pob-earn.softstate{color:#67737c;font:400 14px 'Inter',sans-serif}
+  .pob-month{background:#fff;border:1px solid #dfe3e6;border-radius:16px;margin-bottom:12px;overflow:hidden;
+    box-shadow:0 4px 14px rgba(1,22,36,.04)}
+  .pob-mh{display:flex;align-items:center;gap:11px;padding:15px 20px;flex-wrap:wrap}
+  .pob-mh h3{font:700 15.5px 'Montserrat',sans-serif;color:#011624;margin:0}
+  .pob-mh .st{margin-left:auto;font:600 11.5px 'Inter',sans-serif;color:#67737c}
+  .pob-mc{font:600 9.5px 'Montserrat',sans-serif;letter-spacing:.08em;text-transform:uppercase;border-radius:999px;padding:4px 11px}
+  .pob-mc.due{background:rgba(245,183,0,.16);color:#9a7400;border:1px solid rgba(154,116,0,.25)}
+  .pob-mc.ok{background:rgba(32,178,107,.12);color:#0f8a52;border:1px solid rgba(32,178,107,.25)}
+  .pob-mc.na{background:#f2f3f4;color:#99a2a7;border:1px solid #dfe3e6}
+  .pob-mc.opt{background:rgba(82,48,218,.08);color:#401d91;border:1px solid rgba(82,48,218,.2)}
+  .pob-mbody{padding:2px 20px 18px}
+  .pob-msum{font:400 13px 'Inter',sans-serif;color:#67737c;display:flex;gap:8px 20px;flex-wrap:wrap;align-items:center}
+  .pob-msum a{font-weight:600}
+  .pob-month.empty .pob-msum{color:#99a2a7;font-style:italic}
+  .pob-month.now{background:#011624;border-color:#1f323e;box-shadow:0 14px 36px -16px rgba(1,22,36,.5)}
+  .pob-month.now .pob-mh h3{color:#fff}
+  .pob-month.now .pob-mh .st{color:#8fa2ad}
+  .pob-cycle{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:8px}
+  .pob-cstep{background:#152936;border:1px solid #1f323e;border-radius:13px;padding:13px 14px;min-width:0}
+  .pob-cstep .idx{font:700 9px 'Montserrat',sans-serif;letter-spacing:.13em;color:#8fa2ad;text-transform:uppercase}
+  .pob-cstep.done .idx{color:#4cd894}
+  .pob-cstep b{display:block;font:600 12.5px 'Inter',sans-serif;color:#fff;margin:6px 0 3px;overflow:hidden;text-overflow:ellipsis}
+  .pob-cstep span{display:block;font:400 11px 'Inter',sans-serif;color:#9fb1bb;line-height:1.45}
+  .pob-cstep a{color:#8fd4ff}
+  .pob-cstep.pend{border-color:rgba(55,219,255,.5);box-shadow:0 0 0 1px rgba(55,219,255,.25)}
+  .pob-cstep.pend .idx{color:#37dbff}
+  .pob-cstep.lock{opacity:.55}
+  .pob-cstep input{width:100%;box-sizing:border-box;margin-top:8px;background:rgba(255,255,255,.07);
+    border:1px solid rgba(255,255,255,.18);border-radius:8px;color:#fff;font:400 11.5px 'Inter',sans-serif;padding:7px 9px}
+  .pob-cstep input::placeholder{color:#7e919c}
+  .pob-cstep input:focus{outline:none;border-color:#37dbff}
+  .pob-cbtn{display:inline-block;margin-top:8px;background:linear-gradient(135deg,#37dbff,#5230da);color:#fff;border:none;
+    border-radius:999px;padding:7px 14px;font:700 10px 'Montserrat',sans-serif;letter-spacing:.05em;text-transform:uppercase;cursor:pointer}
+  .pob-cmsg{display:block;margin-top:6px;font:500 10.5px 'Inter',sans-serif;color:#f28f8f;min-height:13px}
+  .pob-boost{display:flex;gap:12px;align-items:flex-start;background:rgba(245,183,0,.09);border:1px solid rgba(245,183,0,.32);
+    border-radius:13px;padding:13px 16px;margin-top:12px}
+  .pob-boost .bi{flex:none;width:34px;height:34px;border-radius:11px;background:rgba(245,183,0,.16);
+    display:flex;align-items:center;justify-content:center;font-size:16px}
+  .pob-boost b{font:600 12.5px 'Inter',sans-serif;color:#f5c959}
+  .pob-boost span{font:400 12px 'Inter',sans-serif;color:#b9c6cf;line-height:1.5}
+  .pob-journeylink{margin-top:16px;text-align:center;font:500 12.5px 'Inter',sans-serif;color:#67737c}
+  .pob-backhome{display:flex;align-items:center;gap:10px;background:rgba(82,48,218,.08);border:1px solid rgba(82,48,218,.18);
+    border-radius:14px;padding:12px 16px;margin-bottom:14px;font:500 13px 'Inter',sans-serif;color:#401d91}
   .pob-empty{max-width:560px;margin:40px auto;background:#fff;border:1px solid #dfe3e6;border-radius:16px;
     box-shadow:0 10px 28px rgba(1,22,36,.08);padding:30px;text-align:center}
   .pob-empty h2{font:700 20px 'Montserrat',sans-serif;color:#011624;margin:12px 0 8px}
@@ -223,6 +279,10 @@ function styles(){
     .pob-guides{grid-template-columns:1fr}
     .pob-srow{grid-template-columns:30px 1fr;padding:13px 14px}
     .pob-srow .chips{grid-column:2;justify-content:flex-start;margin-top:4px}
+    .pob-cycle{grid-template-columns:1fr 1fr}
+    .pob-earn{gap:16px;padding:18px}
+    .pob-earn .big b{font-size:30px}
+    .pob-earn .sep{display:none}
   }`;
   document.head.appendChild(el);
 }
@@ -235,6 +295,19 @@ export function mount(el){
   let partner = null, steps = [], destroyed = false, openKey = null;
   let loading = false;     // load() in flight — render a loading card, never a false empty state
   let firstEvent = null;   // auto-detected first session/race
+  // ---- Creator Home state (after launch the hub becomes the ROUNDS ledger) ----
+  // A content round is tied to the partner's i-th event (chronological) — no
+  // calendar-month rigidity: rounds can span months, influencers stay flexible.
+  let mySessions = [];     // the partner's events since joining (ASC)
+  let rounds = new Map();  // idx (1,2,3…) → partner_rounds row (proof links + boost)
+  let upStats;             // undefined = syncing · null = unavailable · object = stats
+  let upRequested = false;
+  let showJourney = false; // launched partner peeking back at the onboarding checklist
+
+  function launchedNow(){
+    const req = requiredSteps();
+    return req.length > 0 && doneCount(req) === req.length;
+  }
 
   function stepBy(key){ return steps.find(s => s.key === key) || null; }
 
@@ -263,6 +336,50 @@ export function mount(el){
         await setStep('first_event', { status: 'done', payload: { ...fe.payload, session_id: ev.id, title: ev.name } }, false);
       }
     }
+    // Launched partner → load the Creator Home data (monthly ledger + earnings).
+    if(partner && a.user && launchedNow()) await loadHomeData(a);
+  }
+
+  // The ledger + earnings data. Also called lazily when the partner completes the
+  // LAST onboarding step mid-session (launch happens without a page reload).
+  let homeLoaded = false;
+  async function loadHomeData(a){
+    if(homeLoaded || !partner || !a.user) return;
+    homeLoaded = true;
+    const [{ data: sess }, { data: rds }] = await Promise.all([
+      supabase.from('sessions')
+        .select('id,name,event_type,scheduled_start,duration_minutes')
+        .eq('created_by_user_id', a.user.id)
+        .gte('scheduled_start', partner.created_at)
+        .order('scheduled_start', { ascending: true }),
+      supabase.from('partner_rounds').select('*').eq('partner_id', partner.id),
+    ]);
+    mySessions = sess || [];
+    rounds = new Map();
+    (rds || []).forEach(r => rounds.set(Number(r.idx), r));
+    fetchStats();   // fire-and-forget — the earnings band re-renders when it lands
+  }
+
+  // Real affiliate earnings via the uppromote-stats Edge Fn (key stays server-side).
+  async function fetchStats(){
+    if(upRequested) return;
+    upRequested = true;
+    try {
+      const { data, error } = await supabase.functions.invoke('uppromote-stats', { body: {} });
+      upStats = (!error && data && data.ok && data.stats) ? data.stats : null;
+    } catch { upStats = null; }
+    if(!destroyed) render(auth.getState());
+  }
+
+  // Upsert a content-round row by its index (proof links live here).
+  async function saveRound(idx, patch){
+    const cur = rounds.get(idx) || {};
+    const row = { partner_id: partner.id, idx, ...patch, updated_at: new Date().toISOString() };
+    const { data, error } = await supabase.from('partner_rounds')
+      .upsert(row, { onConflict: 'partner_id,idx' }).select().maybeSingle();
+    if(!error && data){ rounds.set(idx, data); render(auth.getState()); }
+    else if(!error){ rounds.set(idx, { ...cur, ...row }); render(auth.getState()); }
+    return { error };
   }
 
   async function setStep(key, patch, rerender = true){
@@ -471,7 +588,7 @@ export function mount(el){
 
   function firstEventBody(s){
     if(s.status === 'done'){
-      const t = (s.payload && s.payload.title) || (firstEvent && firstEvent.title) || 'Your event';
+      const t = (s.payload && s.payload.title) || (firstEvent && firstEvent.name) || 'Your event';
       return `<div class="pob-note">Done — <b>“${esc(t)}”</b> is on the calendar. This ticked itself the moment you created it. 🎉</div>`;
     }
     return `
@@ -560,6 +677,13 @@ export function mount(el){
     const done = doneCount(req);
     const pct = req.length ? Math.round(done / req.length * 100) : 0;
     const launched = req.length > 0 && done === req.length;
+    // After launch the hub becomes the Creator Home (monthly ledger + earnings);
+    // the onboarding checklist stays reachable via a footer link.
+    if(launched && !showJourney){
+      if(!homeLoaded) loadHomeData(a).then(() => { if(!destroyed) render(auth.getState()); });
+      renderHome(a);
+      return;
+    }
     const act1 = steps.filter(s => s.act === 1), act2 = steps.filter(s => s.act === 2);
     const next = nextStep();
     const mins = minutesLeft();
@@ -654,6 +778,7 @@ export function mount(el){
 
       <div class="pob-cols">
         <main>
+          ${launched && showJourney ? `<div class="pob-backhome">🎉 You're launched — this is your finished checklist. <a href="#" data-show-home style="margin-left:auto;font-weight:700">← Back to your Creator Home</a></div>` : ''}
           ${nextCard}
           <div class="pob-acth"><h3>Act 1 · Get ready</h3><div class="rule"></div><span class="cnt">${doneCount(act1)} of ${act1.length} done</span></div>
           ${act1.map(stepRow).join('')}
@@ -663,6 +788,16 @@ export function mount(el){
           <div class="pob-tease">🚀 Unlocks at launch — your monthly content rounds, and Egely email boosts promoting your events to our audience.</div>
         </main>
 
+        ${railHtml(a, commission)}
+      </div>
+    </div>`;
+
+    bind(a);
+  }
+
+  // ---- shared right rail (partnership · links · manager) — journey AND home ----
+  function railHtml(a, commission){
+    return `
         <aside class="pob-rail">
           <div class="pob-card">
             <div class="pob-prod"><img src="assets/ewr-access-product-card.png" alt="Egely Wheel"></div>
@@ -715,11 +850,175 @@ export function mount(el){
           </div></div>
 
           <div class="pob-assist"><span class="ai">✦</span><div>You'll get an <b>email from your Brand Manager</b> whenever it's your turn — so you never have to keep this page open.</div></div>
-        </aside>
+        </aside>`;
+  }
+
+  // ================= CREATOR HOME — the launched partner's ROUNDS ledger ==========
+  // Round i = the partner's i-th event since joining. No calendar rigidity: a round
+  // is done when the event was hosted AND both share-links are in. The first
+  // `contract_rounds` rounds are contractual; everything after is optional.
+  function buildRounds(){
+    const mk = (idx, ev) => {
+      const rd = rounds.get(idx) || {};
+      const hosted = !!ev && (new Date(ev.scheduled_start).getTime() + ((ev.duration_minutes || 10) + 5) * 60000) < Date.now();
+      const complete = !!ev && hosted && !!rd.announce_url && !!rd.video_url;
+      return { idx, ev, rd, hosted, complete };
+    };
+    const list = mySessions.map((ev, i) => mk(i + 1, ev));
+    if(!list.length) list.push(mk(1, null));
+    else if(list.every(r => r.complete)) list.push(mk(list.length + 1, null));
+    return list;
+  }
+
+  function renderHome(a){
+    const tier = TIERS[partner.tier] || TIERS.ambassador;
+    const commission = partner.commission_usd != null ? partner.commission_usd : tier.usd;
+    const first = (a.displayName || '').split(' ')[0] || 'Maker';
+    const contracted = Math.max(0, Number(partner.contract_rounds || 0));
+    const list = buildRounds();
+    const active = list.find(r => !r.complete);
+    const doneContract = list.filter(r => r.complete && r.idx <= contracted).length;
+
+    const sessEnd = s => new Date(s.scheduled_start).getTime() + ((s.duration_minutes || 10) + 5) * 60000;
+    const fmtEv = s => new Date(s.scheduled_start).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+      + ', ' + new Date(s.scheduled_start).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+    const roundChip = (r) => r.idx <= contracted
+      ? `<span class="pob-mc ${r.complete ? 'ok' : (active && active.idx === r.idx ? 'due' : 'na')}">${r.complete ? '✓ ' : ''}Contract round · ${r.idx} of ${contracted}</span>`
+      : `<span class="pob-mc opt">Optional · keep the rhythm</span>`;
+
+    // ---- earnings band (the motivational core — real UpPromote dollars) ----
+    const money = v => '$' + Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: Number(v || 0) % 1 ? 2 : 0, maximumFractionDigits: 2 });
+    const earnBand = () => {
+      if(upStats === undefined) return `<div class="pob-earn softstate">⏳ Syncing your earnings…</div>`;
+      if(!upStats || upStats.connected === false){
+        return `<div class="pob-earn softstate">💜 Your earnings appear here as soon as your affiliate account is connected — every sale through your link or coupon shows up automatically.</div>`;
+      }
+      const s = upStats;
+      let ago = '';
+      try { const m = Math.max(0, Math.round((Date.now() - new Date(s.syncedAt).getTime()) / 60000)); ago = m < 1 ? 'just now' : `${m} min ago`; } catch {}
+      // Exactly three numbers — easy to read at a glance.
+      return `
+      <div class="pob-earn">
+        <div class="big"><b>${money(s.paid)}</b><span>Total paid</span></div>
+        <div class="sep"></div>
+        <div class="st"><b>${money(s.approved)}</b><span>Approved</span></div>
+        <div class="st"><b>${money(s.pending)}</b><span>Unapproved</span></div>
+        <a class="pob-btn ghost" style="margin-left:auto;text-decoration:none" href="https://affiliate.egelywheel.com" target="_blank" rel="noopener">Earnings dashboard →</a>
+        <div class="note">Live from UpPromote · synced ${esc(ago)}${s.lastSaleAt ? ` · last sale ${fmtDate(s.lastSaleAt)}` : ''}</div>
+      </div>`;
+    };
+
+    // ---- the ACTIVE round: the 4-step content cycle ----
+    const activeCard = (r) => {
+      const ev = r.ev, rd = r.rd;
+      const upcoming = ev && sessEnd(ev) >= Date.now() ? ev : null;
+      const c1 = ev ? `
+        <div class="pob-cstep done"><div class="idx">1 · Create ✓</div><b>“${esc(ev.name || 'Your event')}”</b><span>${ev.event_type === 'race' ? 'Race' : 'Session'} · ${esc(fmtEv(ev))}</span></div>` : `
+        <div class="pob-cstep pend"><div class="idx">1 · Create</div><b>Schedule your event</b><span>A Session or a Race — your audience is waiting.</span>
+          <a class="pob-cbtn" style="text-decoration:none" href="#/sessions/new">New session</a></div>`;
+      const c2 = rd.announce_url ? `
+        <div class="pob-cstep done"><div class="idx">2 · Announce ✓</div><b>Invite shared</b><span><a href="${escAttr(rd.announce_url)}" target="_blank" rel="noopener">view your post ↗</a></span></div>`
+        : ev ? `
+        <div class="pob-cstep pend"><div class="idx">2 · Announce</div><b>Share your invite</b><span>Your promo image lives in the event's room — post it, paste the link.</span>
+          <input type="url" data-rd-in="announce" placeholder="link to your post"><button class="pob-cbtn" data-rd-save="announce" data-rd-idx="${r.idx}">Save</button><span class="pob-cmsg" data-rd-msg="announce"></span></div>` : `
+        <div class="pob-cstep lock"><div class="idx">2 · Announce</div><b>Share your invite</b><span>Unlocks once your event exists.</span></div>`;
+      const c3 = r.hosted ? `
+        <div class="pob-cstep done"><div class="idx">3 · Host ✓</div><b>Hosted live</b><span>${esc(fmtEv(ev))}</span></div>`
+        : ev ? `
+        <div class="pob-cstep"><div class="idx">3 · Host</div><b>Go live${upcoming ? ' · ' + esc(fmtEv(upcoming)) : ''}</b><span>Guide it with your voice or on camera.</span></div>` : `
+        <div class="pob-cstep lock"><div class="idx">3 · Host</div><b>Go live</b><span>Schedule your event first.</span></div>`;
+      const c4 = rd.video_url ? `
+        <div class="pob-cstep done"><div class="idx">4 · Share video ✓</div><b>Replay shared</b><span><a href="${escAttr(rd.video_url)}" target="_blank" rel="noopener">view your post ↗</a></span></div>`
+        : r.hosted ? `
+        <div class="pob-cstep pend"><div class="idx">4 · Share video</div><b>Post your replay video</b><span>“Share as a video” on your results page — post it, paste the link.</span>
+          <input type="url" data-rd-in="video" placeholder="link to your post"><button class="pob-cbtn" data-rd-save="video" data-rd-idx="${r.idx}">Save</button><span class="pob-cmsg" data-rd-msg="video"></span></div>` : `
+        <div class="pob-cstep lock"><div class="idx">4 · Share video</div><b>Your replay video</b><span>Generated right after your event — TikTok, Reels, YouTube.</span></div>`;
+      const boost = rd.boost_sent
+        ? `sent to the Egely audience ✓`
+        : rd.boost_planned_on
+          ? `scheduled for <b style="color:#f5c959">${esc(new Date(rd.boost_planned_on + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }))}</b>`
+          : `your manager schedules it a few days before your event`;
+      return `
+      <div class="pob-month now">
+        <div class="pob-mh"><h3>Round ${r.idx}</h3>${roundChip(r)}<span class="st">in progress</span></div>
+        <div class="pob-mbody">
+          <div class="pob-cycle">${c1}${c2}${c3}${c4}</div>
+          <div class="pob-boost"><div class="bi">📣</div><div><b>Egely email boost</b> <span style="font:600 10px 'Inter',sans-serif;color:#dbe2e6;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);border-radius:999px;padding:2px 9px;margin-left:6px">🛠 OUR SIDE</span><br>
+          <span>We announce your event to the Egely audience by email — ${boost}.</span></div></div>
+        </div>
+      </div>`;
+    };
+
+    // ---- other rounds: compact, honest rows ----
+    const roundRow = (r) => {
+      const bits = [];
+      if(r.ev) bits.push(`<span>🗓️ “${esc(r.ev.name || 'Event')}”${r.hosted ? ' · hosted ✓' : ' · upcoming'}</span>`);
+      if(r.rd.announce_url) bits.push(`<span>✨ <a href="${escAttr(r.rd.announce_url)}" target="_blank" rel="noopener">invite post ↗</a></span>`);
+      if(r.rd.video_url) bits.push(`<span>🎬 <a href="${escAttr(r.rd.video_url)}" target="_blank" rel="noopener">video post ↗</a></span>`);
+      if(r.rd.boost_sent) bits.push(`<span>📣 Egely boost sent</span>`);
+      return `
+      <div class="pob-month ${bits.length ? '' : 'empty'}">
+        <div class="pob-mh"><h3>Round ${r.idx}${r.complete ? ' ✓' : ''}</h3>${roundChip(r)}</div>
+        <div class="pob-mbody"><div class="pob-msum">${bits.length ? bits.join('') : 'Not started yet'}</div></div>
+      </div>`;
+    };
+
+    const others = list.filter(r => !active || r.idx !== active.idx).sort((x, y) => y.idx - x.idx);
+
+    el.innerHTML = `
+    <div class="pob">
+      <div class="pob-hero">
+        <div class="pob-hero-l">
+          <div class="pob-smrow"><img class="pob-smlogo" src="assets/spiritual-maker-logo.png" alt="Spiritual Maker" style="height:48px"><span class="pob-pp">Partner Program</span></div>
+          <h1>You're live, ${esc(first)} 🎉</h1>
+          <div class="pob-sub">Your content round: <b>create → announce → host → share the video</b> — at your own pace, and watch the sales land below. We boost every event to the Egely audience by email.</div>
+        </div>
+        <div class="pob-card" style="min-width:246px;flex:none"><div class="pad">
+          <h4>Your contract</h4>
+          ${contracted > 0 ? `
+          <div style="font:700 18px 'Montserrat',sans-serif;color:#011624">${contracted} content round${contracted > 1 ? 's' : ''} <span style="font:500 12.5px 'Inter',sans-serif;color:#67737c">contracted</span></div>
+          <div class="pob-fine" style="margin-top:6px">Event → invite → host → video · <b style="color:#011624">${doneContract} of ${contracted} done</b></div>` : `
+          <div style="font:700 18px 'Montserrat',sans-serif;color:#011624">Content rounds <span style="font:500 12.5px 'Inter',sans-serif;color:#67737c">flexible</span></div>
+          <div class="pob-fine" style="margin-top:6px">No fixed commitment — every round puts you in front of our audience.</div>`}
+        </div></div>
+      </div>
+
+      <div class="pob-cols">
+        <main>
+          ${earnBand()}
+          <div class="pob-acth"><h3>Your rounds</h3><div class="rule"></div></div>
+          ${active ? activeCard(active) : ''}
+          ${others.map(roundRow).join('')}
+          <div class="pob-journeylink"><a href="#" data-show-journey>View your onboarding checklist →</a></div>
+        </main>
+        ${railHtml(a, commission)}
       </div>
     </div>`;
 
-    bind(a);
+    bindHome(a);
+  }
+
+  function bindHome(a){
+    el.querySelectorAll('[data-copy]').forEach(n => n.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(n.dataset.copy); const t = n.textContent; n.textContent = 'Copied ✓'; setTimeout(() => { n.textContent = t; }, 1200); } catch {}
+    }));
+    el.querySelector('[data-show-journey]')?.addEventListener('click', (e) => {
+      e.preventDefault(); showJourney = true; render(auth.getState());
+      window.scrollTo({ top: 0 });
+    });
+    el.querySelectorAll('[data-rd-save]').forEach(b => b.addEventListener('click', async () => {
+      const field = b.dataset.rdSave;                      // 'announce' | 'video'
+      const idx = Number(b.dataset.rdIdx) || 1;
+      const input = el.querySelector(`[data-rd-in="${field}"]`);
+      const msg = el.querySelector(`[data-rd-msg="${field}"]`);
+      const url = (input?.value || '').trim();
+      if(!/^https?:\/\/.+\..+/.test(url)){ if(msg) msg.textContent = 'Paste the link to your post (https://…).'; return; }
+      b.disabled = true;
+      const ev = mySessions[idx - 1] || null;
+      const { error } = await saveRound(idx, { [field === 'announce' ? 'announce_url' : 'video_url']: url, session_id: ev?.id ?? null });
+      if(error){ b.disabled = false; if(msg) msg.textContent = 'Could not save: ' + error.message; }
+    }));
   }
 
   // ---- interactions ------------------------------------------------------------
@@ -733,6 +1032,10 @@ export function mount(el){
     el.querySelectorAll('[data-copy]').forEach(n => n.addEventListener('click', async () => {
       try { await navigator.clipboard.writeText(n.dataset.copy); const t = n.textContent; n.textContent = 'Copied ✓'; setTimeout(() => { n.textContent = t; }, 1200); } catch {}
     }));
+    // launched partner browsing the finished checklist → back to the Creator Home
+    el.querySelector('[data-show-home]')?.addEventListener('click', (e) => {
+      e.preventDefault(); showJourney = false; render(auth.getState()); window.scrollTo({ top: 0 });
+    });
     // row toggles
     el.querySelectorAll('[data-toggle]').forEach(row => row.addEventListener('click', (e) => {
       if(e.target.closest('a, button, input, textarea, label')) return;
@@ -857,7 +1160,12 @@ export function mount(el){
   let loadedFor = null;
   const unsub = auth.subscribeAuth(async (a) => {
     if(destroyed) return;
-    if(!a.user){ partner = null; steps = []; loadedFor = null; render(a); return; }
+    if(!a.user){
+      partner = null; steps = []; loadedFor = null;
+      homeLoaded = false; upRequested = false; upStats = undefined;
+      mySessions = []; rounds = new Map(); showJourney = false;
+      render(a); return;
+    }
     if(!a.accessReady){ return; }
     if(loadedFor === a.user.id){ render(a); return; }
     loadedFor = a.user.id;
