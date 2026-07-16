@@ -58,8 +58,11 @@ function injectCss() {
   s.textContent = `
 .slv-warn{color:#c2415b !important}
 .vd-ring.vd-cam{width:64px;height:64px;padding:3px}
-.vd-ring.vd-cam .slv-self{width:100%;height:100%;border-radius:50%;overflow:hidden;background:#0b1b28;display:block}
+.vd-ring.vd-cam .slv-self{width:100%;height:100%;border-radius:50%;overflow:hidden;background:#0b1b28;display:block;position:relative}
 .vd-ring.vd-cam video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block}
+.vd-ring.vd-cam .slv-guide{display:none;position:absolute;pointer-events:none;z-index:2;
+  border:1.5px solid rgba(255,255,255,.9);border-radius:9px;box-shadow:0 0 0 200px rgba(1,22,36,.42)}
+.vd.slv-setup .slv-guide{display:block}
 .vd.slv-setup .vd-ring.vd-cam{width:128px;height:128px;padding:4px}
 @media (max-width:600px){
   .vd-ring.vd-cam{width:48px;height:48px}
@@ -105,6 +108,31 @@ export function createSoloVoice(mountEl) {
   const elapsedSec = () => recStartMs ? Math.max(0, Math.floor((Date.now() - recStartMs) / 1000)) : 0;
   const postLeftSec = () => Math.max(0, Math.ceil((postDeadline - Date.now()) / 1000));
 
+  // Safe-area guide: the bright frame in the big setup self-view marks the strip
+  // of the camera frame the SHARE VIDEO's camera box will actually show (the
+  // render page crops with object-fit:cover, centered). Box aspect ratios come
+  // from view-render.js .rv-camspace geometry — SOLO: 9:16 layout 944×632,
+  // 16:9 layout 679×379. If those boxes ever change, update these ratios.
+  const GUIDE_BOX_ARS = [944 / 632, 679 / 379.3];
+  function placeGuide() {
+    const g = row.querySelector('[data-camguide]');
+    if (!g || !selfVid || !selfVid.videoWidth || !selfVid.videoHeight) return;
+    const w = selfVid.videoWidth, h = selfVid.videoHeight, m = Math.min(w, h);
+    const srcAR = w / h;
+    let fw = 1, fh = 1;   // fraction of the source frame each render box keeps
+    for (const b of GUIDE_BOX_ARS) {
+      if (b >= srcAR) fh = Math.min(fh, srcAR / b);   // wide box → middle strip
+      else fw = Math.min(fw, b / srcAR);              // tall box → middle column
+    }
+    // the self-view itself is a center-cropped square (cover) — map into it
+    const halfW = Math.min(0.5, (w * fw) / (2 * m));
+    const halfH = Math.min(0.5, (h * fh) / (2 * m));
+    g.style.left = ((0.5 - halfW) * 100).toFixed(1) + '%';
+    g.style.top = ((0.5 - halfH) * 100).toFixed(1) + '%';
+    g.style.width = (halfW * 200).toFixed(1) + '%';
+    g.style.height = (halfH * 200).toFixed(1) + '%';
+  }
+
   // ONE persistent self-view element, re-parented into whatever ring the
   // current phase renders — moving it keeps playback running, so phase
   // changes never flash a black frame while the video re-decodes.
@@ -117,9 +145,17 @@ export function createSoloVoice(mountEl) {
       selfVid.muted = true; selfVid.playsInline = true; selfVid.autoplay = true;
       selfVid.setAttribute('data-self', '');
       selfVid.setAttribute('aria-label', 'Your camera preview');
+      selfVid.addEventListener('loadedmetadata', placeGuide);
+      selfVid.addEventListener('resize', placeGuide);   // phone rotation mid-take
     }
     if (selfVid.srcObject !== stream) selfVid.srcObject = stream;
     if (selfVid.parentNode !== slot) slot.appendChild(selfVid);
+    if (!slot.querySelector('[data-camguide]')) {
+      const g = document.createElement('span');
+      g.className = 'slv-guide'; g.setAttribute('data-camguide', '');
+      slot.appendChild(g);
+    }
+    placeGuide();
     const p = selfVid.play(); if (p && p.catch) p.catch(() => {});
   }
 
@@ -182,7 +218,7 @@ export function createSoloVoice(mountEl) {
           <span class="vd-txt">
             <b>${vid ? 'Camera ready' : 'Voice ready'}</b>
             <small>${vid
-              ? 'Line yourself up in the preview — recording starts when you begin measuring, and you’re on camera until you finish.'
+              ? 'Keep your face inside the bright frame — that’s what your share video shows. Recording starts when you begin measuring.'
               : 'Recording starts when you begin measuring — it plays on your share video.'}</small>
           </span>
           <button type="button" class="vd-btn ghost" data-off>Off</button>

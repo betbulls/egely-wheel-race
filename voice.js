@@ -435,8 +435,11 @@ export function mountVoiceDock(el, opts){
     const s = document.createElement('style');
     s.id = 'vdCamStyles';
     s.textContent = '.vd-ring.vd-cam{width:64px;height:64px;padding:3px}'
-      + '.vd-ring.vd-cam .slv-self{width:100%;height:100%;border-radius:50%;overflow:hidden;background:#0b1b28;display:block}'
+      + '.vd-ring.vd-cam .slv-self{width:100%;height:100%;border-radius:50%;overflow:hidden;background:#0b1b28;display:block;position:relative}'
       + '.vd-ring.vd-cam video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block}'
+      + '.vd-ring.vd-cam .slv-guide{display:none;position:absolute;pointer-events:none;z-index:2;'
+      + 'border:1.5px solid rgba(255,255,255,.9);border-radius:9px;box-shadow:0 0 0 200px rgba(1,22,36,.42)}'
+      + '.vd-ring.vd-cam.slv-setup-ring .slv-guide{display:block}'
       + '.vd-ring.vd-cam[data-camring]{cursor:pointer}'
       + '.vd-ring.vd-cam.slv-setup-ring{width:128px;height:128px;padding:4px}'
       + '@media (max-width:600px){ .vd-ring.vd-cam{width:48px;height:48px} .vd-ring.vd-cam.slv-setup-ring{width:96px;height:96px} }'
@@ -448,6 +451,30 @@ export function mountVoiceDock(el, opts){
       + 'background:rgba(1,22,36,.55);color:#fff;font:600 12px Inter,sans-serif}';
     document.head.appendChild(s);
   }
+  // Safe-area guide: the bright frame in the big self-view marks the strip of
+  // the camera frame the SHARE VIDEO's camera box will actually show (the render
+  // page crops with object-fit:cover, centered). Box aspect ratios come from
+  // view-render.js .rv-camspace geometry — SESSION/RACE: 9:16 layout 944×422,
+  // 16:9 layout 539×300.6. If those boxes ever change, update these ratios.
+  const GUIDE_BOX_ARS = [944 / 422, 539 / 300.6];
+  function placeGuide(){
+    const g = el.querySelector('[data-camguide]');
+    if(!g || !selfVid || !selfVid.videoWidth || !selfVid.videoHeight) return;
+    const w = selfVid.videoWidth, h = selfVid.videoHeight, m = Math.min(w, h);
+    const srcAR = w / h;
+    let fw = 1, fh = 1;   // fraction of the source frame each render box keeps
+    for(const b of GUIDE_BOX_ARS){
+      if(b >= srcAR) fh = Math.min(fh, srcAR / b);   // wide box → middle strip
+      else fw = Math.min(fw, b / srcAR);             // tall box → middle column
+    }
+    // the self-view itself is a center-cropped square (cover) — map into it
+    const halfW = Math.min(0.5, (w * fw) / (2 * m));
+    const halfH = Math.min(0.5, (h * fh) / (2 * m));
+    g.style.left = ((0.5 - halfW) * 100).toFixed(1) + '%';
+    g.style.top = ((0.5 - halfH) * 100).toFixed(1) + '%';
+    g.style.width = (halfW * 200).toFixed(1) + '%';
+    g.style.height = (halfH * 200).toFixed(1) + '%';
+  }
   function bindSelf(){
     const slot = el.querySelector('[data-selfslot]');
     const cs = voice.camStream;
@@ -456,9 +483,17 @@ export function mountVoiceDock(el, opts){
       selfVid = document.createElement('video');
       selfVid.muted = true; selfVid.playsInline = true; selfVid.autoplay = true;
       selfVid.setAttribute('aria-label', 'Your camera preview');
+      selfVid.addEventListener('loadedmetadata', placeGuide);
+      selfVid.addEventListener('resize', placeGuide);   // phone rotation mid-take
     }
     if(selfVid.srcObject !== cs) selfVid.srcObject = cs;
     if(selfVid.parentNode !== slot) slot.appendChild(selfVid);
+    if(!slot.querySelector('[data-camguide]')){
+      const g = document.createElement('span');
+      g.className = 'slv-guide'; g.setAttribute('data-camguide', '');
+      slot.appendChild(g);
+    }
+    placeGuide();
     const p = selfVid.play(); if(p && p.catch) p.catch(() => {});
   }
   function camRecStart(){
