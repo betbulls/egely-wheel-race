@@ -295,16 +295,15 @@ export function mount(el){
   let partner = null, steps = [], destroyed = false, openKey = null;
   let loading = false;     // load() in flight — render a loading card, never a false empty state
   let firstEvent = null;   // auto-detected first session/race
-  // ---- Creator Home state (after launch the hub becomes the ROUNDS ledger) ----
-  // A content round is tied to the partner's i-th event (chronological) — no
-  // calendar-month rigidity: rounds can span months, influencers stay flexible.
-  let mySessions = [];     // the partner's events since joining (ASC)
-  let rounds = new Map();  // idx (1,2,3…) → partner_rounds row (proof links + boost)
+  // ---- Creator Home state (after launch the hub = money + base data, no chores) --
   let upStats;             // undefined = syncing · null = unavailable · object = stats
   let upRequested = false;
   let showJourney = false; // launched partner peeking back at the onboarding checklist
 
+  // Launched = every required step done. A partner row WITHOUT steps is an
+  // auto-provisioned Spiritual Maker (no onboarding needed) → straight to home.
   function launchedNow(){
+    if(!steps.length) return true;
     const req = requiredSteps();
     return req.length > 0 && doneCount(req) === req.length;
   }
@@ -340,23 +339,12 @@ export function mount(el){
     if(partner && a.user && launchedNow()) await loadHomeData(a);
   }
 
-  // The ledger + earnings data. Also called lazily when the partner completes the
+  // Home data = the earnings. Also called lazily when the partner completes the
   // LAST onboarding step mid-session (launch happens without a page reload).
   let homeLoaded = false;
   async function loadHomeData(a){
     if(homeLoaded || !partner || !a.user) return;
     homeLoaded = true;
-    const [{ data: sess }, { data: rds }] = await Promise.all([
-      supabase.from('sessions')
-        .select('id,name,event_type,scheduled_start,duration_minutes')
-        .eq('created_by_user_id', a.user.id)
-        .gte('scheduled_start', partner.created_at)
-        .order('scheduled_start', { ascending: true }),
-      supabase.from('partner_rounds').select('*').eq('partner_id', partner.id),
-    ]);
-    mySessions = sess || [];
-    rounds = new Map();
-    (rds || []).forEach(r => rounds.set(Number(r.idx), r));
     fetchStats();   // fire-and-forget — the earnings band re-renders when it lands
   }
 
@@ -371,16 +359,6 @@ export function mount(el){
     if(!destroyed) render(auth.getState());
   }
 
-  // Upsert a content-round row by its index (proof links live here).
-  async function saveRound(idx, patch){
-    const cur = rounds.get(idx) || {};
-    const row = { partner_id: partner.id, idx, ...patch, updated_at: new Date().toISOString() };
-    const { data, error } = await supabase.from('partner_rounds')
-      .upsert(row, { onConflict: 'partner_id,idx' }).select().maybeSingle();
-    if(!error && data){ rounds.set(idx, data); render(auth.getState()); }
-    else if(!error){ rounds.set(idx, { ...cur, ...row }); render(auth.getState()); }
-    return { error };
-  }
 
   async function setStep(key, patch, rerender = true){
     const s = stepBy(key);
@@ -676,7 +654,7 @@ export function mount(el){
     const req = requiredSteps();
     const done = doneCount(req);
     const pct = req.length ? Math.round(done / req.length * 100) : 0;
-    const launched = req.length > 0 && done === req.length;
+    const launched = launchedNow();
     // After launch the hub becomes the Creator Home (monthly ledger + earnings);
     // the onboarding checklist stays reachable via a footer link.
     if(launched && !showJourney){
@@ -853,39 +831,14 @@ export function mount(el){
         </aside>`;
   }
 
-  // ================= CREATOR HOME — the launched partner's ROUNDS ledger ==========
-  // Round i = the partner's i-th event since joining. No calendar rigidity: a round
-  // is done when the event was hosted AND both share-links are in. The first
-  // `contract_rounds` rounds are contractual; everything after is optional.
-  function buildRounds(){
-    const mk = (idx, ev) => {
-      const rd = rounds.get(idx) || {};
-      const hosted = !!ev && (new Date(ev.scheduled_start).getTime() + ((ev.duration_minutes || 10) + 5) * 60000) < Date.now();
-      const complete = !!ev && hosted && !!rd.announce_url && !!rd.video_url;
-      return { idx, ev, rd, hosted, complete };
-    };
-    const list = mySessions.map((ev, i) => mk(i + 1, ev));
-    if(!list.length) list.push(mk(1, null));
-    else if(list.every(r => r.complete)) list.push(mk(list.length + 1, null));
-    return list;
-  }
-
+  // ================= CREATOR HOME — money + base data, no chores ==================
+  // After launch (or for auto-provisioned Spiritual Makers) the hub is simply:
+  // the earnings band + the partnership/link cards. The relationship itself lives
+  // in email and with Krisztián — this page is where the money and the facts are.
   function renderHome(a){
     const tier = TIERS[partner.tier] || TIERS.ambassador;
     const commission = partner.commission_usd != null ? partner.commission_usd : tier.usd;
     const first = (a.displayName || '').split(' ')[0] || 'Maker';
-    const contracted = Math.max(0, Number(partner.contract_rounds || 0));
-    const list = buildRounds();
-    const active = list.find(r => !r.complete);
-    const doneContract = list.filter(r => r.complete && r.idx <= contracted).length;
-
-    const sessEnd = s => new Date(s.scheduled_start).getTime() + ((s.duration_minutes || 10) + 5) * 60000;
-    const fmtEv = s => new Date(s.scheduled_start).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-      + ', ' + new Date(s.scheduled_start).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-
-    const roundChip = (r) => r.idx <= contracted
-      ? `<span class="pob-mc ${r.complete ? 'ok' : (active && active.idx === r.idx ? 'due' : 'na')}">${r.complete ? '✓ ' : ''}Contract round · ${r.idx} of ${contracted}</span>`
-      : `<span class="pob-mc opt">Optional · keep the rhythm</span>`;
 
     // ---- earnings band (the motivational core — real UpPromote dollars) ----
     const money = v => '$' + Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: Number(v || 0) % 1 ? 2 : 0, maximumFractionDigits: 2 });
@@ -909,88 +862,21 @@ export function mount(el){
       </div>`;
     };
 
-    // ---- the ACTIVE round: the 4-step content cycle ----
-    const activeCard = (r) => {
-      const ev = r.ev, rd = r.rd;
-      const upcoming = ev && sessEnd(ev) >= Date.now() ? ev : null;
-      const c1 = ev ? `
-        <div class="pob-cstep done"><div class="idx">1 · Create ✓</div><b>“${esc(ev.name || 'Your event')}”</b><span>${ev.event_type === 'race' ? 'Race' : 'Session'} · ${esc(fmtEv(ev))}</span></div>` : `
-        <div class="pob-cstep pend"><div class="idx">1 · Create</div><b>Schedule your event</b><span>A Session or a Race — your audience is waiting.</span>
-          <a class="pob-cbtn" style="text-decoration:none" href="#/sessions/new">New session</a></div>`;
-      const c2 = rd.announce_url ? `
-        <div class="pob-cstep done"><div class="idx">2 · Announce ✓</div><b>Invite shared</b><span><a href="${escAttr(rd.announce_url)}" target="_blank" rel="noopener">view your post ↗</a></span></div>`
-        : ev ? `
-        <div class="pob-cstep pend"><div class="idx">2 · Announce</div><b>Share your invite</b><span>Your promo image lives in the event's room — post it, paste the link.</span>
-          <input type="url" data-rd-in="announce" placeholder="link to your post"><button class="pob-cbtn" data-rd-save="announce" data-rd-idx="${r.idx}">Save</button><span class="pob-cmsg" data-rd-msg="announce"></span></div>` : `
-        <div class="pob-cstep lock"><div class="idx">2 · Announce</div><b>Share your invite</b><span>Unlocks once your event exists.</span></div>`;
-      const c3 = r.hosted ? `
-        <div class="pob-cstep done"><div class="idx">3 · Host ✓</div><b>Hosted live</b><span>${esc(fmtEv(ev))}</span></div>`
-        : ev ? `
-        <div class="pob-cstep"><div class="idx">3 · Host</div><b>Go live${upcoming ? ' · ' + esc(fmtEv(upcoming)) : ''}</b><span>Guide it with your voice or on camera.</span></div>` : `
-        <div class="pob-cstep lock"><div class="idx">3 · Host</div><b>Go live</b><span>Schedule your event first.</span></div>`;
-      const c4 = rd.video_url ? `
-        <div class="pob-cstep done"><div class="idx">4 · Share video ✓</div><b>Replay shared</b><span><a href="${escAttr(rd.video_url)}" target="_blank" rel="noopener">view your post ↗</a></span></div>`
-        : r.hosted ? `
-        <div class="pob-cstep pend"><div class="idx">4 · Share video</div><b>Post your replay video</b><span>“Share as a video” on your results page — post it, paste the link.</span>
-          <input type="url" data-rd-in="video" placeholder="link to your post"><button class="pob-cbtn" data-rd-save="video" data-rd-idx="${r.idx}">Save</button><span class="pob-cmsg" data-rd-msg="video"></span></div>` : `
-        <div class="pob-cstep lock"><div class="idx">4 · Share video</div><b>Your replay video</b><span>Generated right after your event — TikTok, Reels, YouTube.</span></div>`;
-      const boost = rd.boost_sent
-        ? `sent to the Egely audience ✓`
-        : rd.boost_planned_on
-          ? `scheduled for <b style="color:#f5c959">${esc(new Date(rd.boost_planned_on + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }))}</b>`
-          : `your manager schedules it a few days before your event`;
-      return `
-      <div class="pob-month now">
-        <div class="pob-mh"><h3>Round ${r.idx}</h3>${roundChip(r)}<span class="st">in progress</span></div>
-        <div class="pob-mbody">
-          <div class="pob-cycle">${c1}${c2}${c3}${c4}</div>
-          <div class="pob-boost"><div class="bi">📣</div><div><b>Egely email boost</b> <span style="font:600 10px 'Inter',sans-serif;color:#dbe2e6;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);border-radius:999px;padding:2px 9px;margin-left:6px">🛠 OUR SIDE</span><br>
-          <span>We announce your event to the Egely audience by email — ${boost}.</span></div></div>
-        </div>
-      </div>`;
-    };
-
-    // ---- other rounds: compact, honest rows ----
-    const roundRow = (r) => {
-      const bits = [];
-      if(r.ev) bits.push(`<span>🗓️ “${esc(r.ev.name || 'Event')}”${r.hosted ? ' · hosted ✓' : ' · upcoming'}</span>`);
-      if(r.rd.announce_url) bits.push(`<span>✨ <a href="${escAttr(r.rd.announce_url)}" target="_blank" rel="noopener">invite post ↗</a></span>`);
-      if(r.rd.video_url) bits.push(`<span>🎬 <a href="${escAttr(r.rd.video_url)}" target="_blank" rel="noopener">video post ↗</a></span>`);
-      if(r.rd.boost_sent) bits.push(`<span>📣 Egely boost sent</span>`);
-      return `
-      <div class="pob-month ${bits.length ? '' : 'empty'}">
-        <div class="pob-mh"><h3>Round ${r.idx}${r.complete ? ' ✓' : ''}</h3>${roundChip(r)}</div>
-        <div class="pob-mbody"><div class="pob-msum">${bits.length ? bits.join('') : 'Not started yet'}</div></div>
-      </div>`;
-    };
-
-    const others = list.filter(r => !active || r.idx !== active.idx).sort((x, y) => y.idx - x.idx);
-
     el.innerHTML = `
     <div class="pob">
       <div class="pob-hero">
         <div class="pob-hero-l">
           <div class="pob-smrow"><img class="pob-smlogo" src="assets/spiritual-maker-logo.png" alt="Spiritual Maker" style="height:48px"><span class="pob-pp">Partner Program</span></div>
-          <h1>You're live, ${esc(first)} 🎉</h1>
-          <div class="pob-sub">Your content round: <b>create → announce → host → share the video</b> — at your own pace, and watch the sales land below. We boost every event to the Egely audience by email.</div>
+          <h1>Welcome back, ${esc(first)} 🌀</h1>
+          <div class="pob-sub">This is your partner home base — your earnings, your deal and your links in one place. Host whenever you're ready; every sale through your link or coupon lands here automatically.</div>
         </div>
-        <div class="pob-card" style="min-width:246px;flex:none"><div class="pad">
-          <h4>Your contract</h4>
-          ${contracted > 0 ? `
-          <div style="font:700 18px 'Montserrat',sans-serif;color:#011624">${contracted} content round${contracted > 1 ? 's' : ''} <span style="font:500 12.5px 'Inter',sans-serif;color:#67737c">contracted</span></div>
-          <div class="pob-fine" style="margin-top:6px">Event → invite → host → video · <b style="color:#011624">${doneContract} of ${contracted} done</b></div>` : `
-          <div style="font:700 18px 'Montserrat',sans-serif;color:#011624">Content rounds <span style="font:500 12.5px 'Inter',sans-serif;color:#67737c">flexible</span></div>
-          <div class="pob-fine" style="margin-top:6px">No fixed commitment — every round puts you in front of our audience.</div>`}
-        </div></div>
       </div>
 
       <div class="pob-cols">
         <main>
           ${earnBand()}
-          <div class="pob-acth"><h3>Your rounds</h3><div class="rule"></div></div>
-          ${active ? activeCard(active) : ''}
-          ${others.map(roundRow).join('')}
-          <div class="pob-journeylink"><a href="#" data-show-journey>View your onboarding checklist →</a></div>
+          <div class="pob-tease" style="margin-top:14px">🎬 After every event you host, the ready-to-post replay video lands in your inbox — with a caption you can copy straight to TikTok, Reels or Shorts.</div>
+          ${steps.length ? `<div class="pob-journeylink"><a href="#" data-show-journey>View your onboarding checklist →</a></div>` : ''}
         </main>
         ${railHtml(a, commission)}
       </div>
@@ -1007,18 +893,6 @@ export function mount(el){
       e.preventDefault(); showJourney = true; render(auth.getState());
       window.scrollTo({ top: 0 });
     });
-    el.querySelectorAll('[data-rd-save]').forEach(b => b.addEventListener('click', async () => {
-      const field = b.dataset.rdSave;                      // 'announce' | 'video'
-      const idx = Number(b.dataset.rdIdx) || 1;
-      const input = el.querySelector(`[data-rd-in="${field}"]`);
-      const msg = el.querySelector(`[data-rd-msg="${field}"]`);
-      const url = (input?.value || '').trim();
-      if(!/^https?:\/\/.+\..+/.test(url)){ if(msg) msg.textContent = 'Paste the link to your post (https://…).'; return; }
-      b.disabled = true;
-      const ev = mySessions[idx - 1] || null;
-      const { error } = await saveRound(idx, { [field === 'announce' ? 'announce_url' : 'video_url']: url, session_id: ev?.id ?? null });
-      if(error){ b.disabled = false; if(msg) msg.textContent = 'Could not save: ' + error.message; }
-    }));
   }
 
   // ---- interactions ------------------------------------------------------------
@@ -1163,7 +1037,7 @@ export function mount(el){
     if(!a.user){
       partner = null; steps = []; loadedFor = null;
       homeLoaded = false; upRequested = false; upStats = undefined;
-      mySessions = []; rounds = new Map(); showJourney = false;
+      showJourney = false;
       render(a); return;
     }
     if(!a.accessReady){ return; }

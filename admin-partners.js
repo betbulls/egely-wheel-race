@@ -128,8 +128,6 @@ const fmtAgo = iso => { const d = daysAgo(iso); if(d == null) return '—'; if(d
 export function mountPartners(host){
   styles();
   let partners = [], stepsByPartner = new Map(), templates = [], profilesById = new Map(), emailsByPartner = new Map();
-  let roundsByKey = new Map();       // `${partner_id}:${idx}` → partner_rounds row
-  let sessionsByUid = new Map();     // user_id → ALL their events since joining (ASC)
   let openId = null;
 
   async function loadAll(){
@@ -160,46 +158,17 @@ export function mountPartners(host){
       if(!emailsByPartner.has(e.partner_id)) emailsByPartner.set(e.partner_id, []);
       emailsByPartner.get(e.partner_id).push(e);
     });
-    // Content rounds + the partners' events (round i = their i-th event since joining).
-    roundsByKey = new Map();
-    const { data: rds } = await supabase.from('partner_rounds').select('*');
-    (rds || []).forEach(r => roundsByKey.set(`${r.partner_id}:${r.idx}`, r));
-    sessionsByUid = new Map();
-    if(uids.length){
-      const { data: ms } = await supabase.from('sessions')
-        .select('id,name,event_type,scheduled_start,duration_minutes,created_by_user_id')
-        .in('created_by_user_id', uids)
-        .order('scheduled_start', { ascending: true });
-      (ms || []).forEach(s => {
-        if(!sessionsByUid.has(s.created_by_user_id)) sessionsByUid.set(s.created_by_user_id, []);
-        sessionsByUid.get(s.created_by_user_id).push(s);
-      });
-    }
-  }
-
-  // Round model — identical semantics to the partner hub's buildRounds().
-  function partnerRounds(p){
-    const events = (p.user_id ? (sessionsByUid.get(p.user_id) || []) : [])
-      .filter(s => !p.created_at || s.scheduled_start >= p.created_at);
-    const mk = (idx, ev) => {
-      const rd = roundsByKey.get(`${p.id}:${idx}`) || {};
-      const hosted = !!ev && (new Date(ev.scheduled_start).getTime() + ((ev.duration_minutes || 10) + 5) * 60000) < Date.now();
-      const complete = !!ev && hosted && !!rd.announce_url && !!rd.video_url;
-      return { idx, ev, rd, hosted, complete };
-    };
-    const list = events.map((ev, i) => mk(i + 1, ev));
-    if(!list.length) list.push(mk(1, null));
-    else if(list.every(r => r.complete)) list.push(mk(list.length + 1, null));
-    return list;
   }
 
   // ---- per-partner rollup ------------------------------------------------------
   function rollup(p){
     const steps = stepsByPartner.get(p.id) || [];
+    // No steps at all = auto-provisioned Spiritual Maker (no onboarding to run).
+    const isMaker = steps.length === 0;
     const req = steps.filter(s => s.required && s.status !== 'skipped');
     const done = req.filter(s => s.status === 'done').length;
-    const pct = req.length ? Math.round(done / req.length * 100) : 0;
-    const launched = req.length > 0 && done === req.length;
+    const pct = isMaker ? 100 : (req.length ? Math.round(done / req.length * 100) : 0);
+    const launched = isMaker || (req.length > 0 && done === req.length);
     // What are we waiting on? First not-done step decides.
     const open = steps.find(s => s.status !== 'done' && s.status !== 'skipped');
     let waitingOn = null;
@@ -213,50 +182,16 @@ export function mountPartners(host){
     const lastActivity = steps.reduce((m, s) => s.done_at && (!m || s.done_at > m) ? s.done_at : m, null) || p.updated_at || p.created_at;
     const emails = emailsByPartner.get(p.id) || [];
     const lastEmailAt = emails.length ? emails[0].sent_at : null;
-    // Launched partners → the CONTENT ROUNDS drive the attention logic.
-    let round = null, roundsList = null;
-    if(launched){
-      roundsList = partnerRounds(p);
-      const active = roundsList.find(r => !r.complete) || roundsList[roundsList.length - 1];
-      const contracted = Math.max(0, Number(p.contract_rounds || 0));
-      round = {
-        idx: active.idx,
-        contracted: active.idx <= contracted,
-        created: !!active.ev, announced: !!active.rd.announce_url,
-        hosted: active.hosted, video: !!active.rd.video_url,
-        boostPlanned: active.rd.boost_planned_on || null, boostSent: !!active.rd.boost_sent,
-        session: active.ev, rd: active.rd,
-        doneCount: roundsList.filter(r => r.complete).length,
-      };
-      if(!waitingOn){
-        // Egely boost due within 3 days of the active event → our move.
-        const ev = active.ev && new Date(active.ev.scheduled_start).getTime() > Date.now() ? active.ev : null;
-        const evSoon = ev && (new Date(ev.scheduled_start).getTime() - Date.now()) < 3 * 864e5;
-        if(evSoon && !round.boostSent){
-          waitingOn = { side: 'us', step: { title: `Email boost · “${ev.name || 'event'}”` } };
-        } else if(round.contracted){
-          // Only CONTRACTED rounds nudge the partner — optional rounds stay gentle.
-          const missing = !round.created ? 'create the event'
-            : !round.announced ? 'share the invite'
-            : (round.hosted && !round.video) ? 'share the replay video' : null;
-          if(missing) waitingOn = { side: 'them', step: { title: `Round ${round.idx} — ${missing}` } };
-        }
-      }
-    }
-    return { steps, pct, launched, waitingOn, lastActivity, lastEmailAt, claimed: !!p.user_id, round, roundsList };
+    return { steps, pct, launched, isMaker, waitingOn, lastActivity, lastEmailAt, claimed: !!p.user_id };
   }
 
   function reminderEmail(p, r){
     const name = (p.invite_name || '').trim().split(' ')[0] || 'there';
-    // Launched partner → rhythm reminder about the active content round.
-    if(r.launched && r.round){
-      const items = [];
-      if(!r.round.created) items.push('  • Schedule your next Session or Race (~15 min)');
-      if(r.round.created && !r.round.announced) items.push('  • Share your invite — the promo image is one click in your event\'s room (~5 min)');
-      if(r.round.hosted && !r.round.video) items.push('  • Post your replay video — “Share as a video” on your results page (~10 min)');
+    // Launched partner → gentle "host again" nudge with the money angle.
+    if(r.launched){
       return {
-        subject: `Your content round is waiting 🌀`,
-        body: `Hi ${name},\n\nQuick nudge from your Egely home base — round ${r.round.idx} still has a step or two open:\n\n${items.join('\n') || '  • Open your hub and check your current round'}\n\nYour hub: ${HUB_URL}\n\nEvery round puts you in front of our audience too — we email your event to the Egely list. And every sale through your link lands in your earnings, right on the same page.\n\nAny question — just reply.\n\nKrisztián\nBrand Manager · Egely Wheel`,
+        subject: 'Your audience is asking about you 🌀',
+        body: `Hi ${name},\n\nQuick hello from your Egely home base — it's a great moment to host your next live Session or Race. We'll email your event to the Egely audience, and the ready-to-post replay video lands straight in your inbox afterwards.\n\nYour hub (earnings + links): ${HUB_URL}\n\nAny question — just reply.\n\nKrisztián\nBrand Manager · Egely Wheel`,
       };
     }
     const todo = r.steps.filter(s => s.status !== 'done' && s.status !== 'skipped' && s.owner === 'partner')
@@ -400,7 +335,7 @@ export function mountPartners(host){
       <div class="sec">All partners</div>
       ${partners.length ? `
       <div class="admp-tablewrap"><table class="admp-roster">
-        <tr><th>Partner</th><th>Stage</th><th>Current round</th><th>Waiting on</th><th>Last activity</th><th></th></tr>
+        <tr><th>Partner</th><th>Stage</th><th>Waiting on</th><th>Last activity</th><th></th></tr>
         ${rolls.map(({ p, r }) => `
           <tr data-open="${p.id}" ${openId === p.id ? 'style="background:#fbfaff"' : ''}>
             <td><div class="admp-p">
@@ -408,11 +343,8 @@ export function mountPartners(host){
               <div><b>${esc(p.invite_name || p.email)}</b><small>${esc(p.email)}${r.claimed ? '' : ' · not logged in yet'}</small></div>
             </div></td>
             <td>${r.launched
-              ? '<span class="admp-ok">Launched ✓</span>'
+              ? `<span class="admp-ok">${r.isMaker ? 'Maker ✓' : 'Launched ✓'}</span>${p.uppromote_stats && p.uppromote_stats.connected ? `<br><span style="font:600 10.5px 'Inter',sans-serif;color:#0f8a52">$${Number(p.uppromote_stats.totalEarned || 0)} earned</span>` : ''}`
               : `<span class="admp-bar"><i style="width:${r.pct}%"></i></span>${r.pct}%`}</td>
-            <td>${r.round
-              ? `<span class="admp-dots">${['created', 'announced', 'hosted', 'video'].map(f => `<span class="${r.round[f] ? 'on' : 'off'}">●</span>`).join('')}</span> <span style="font:600 10.5px 'Inter',sans-serif;color:#67737c">R${r.round.idx}${r.round.contracted ? '' : ' · opt'}</span>${p.uppromote_stats && p.uppromote_stats.connected ? `<br><span style="font:600 10.5px 'Inter',sans-serif;color:#0f8a52">$${Number(p.uppromote_stats.totalEarned || 0)} earned</span>` : ''}`
-              : '<span style="color:#cdd4d9">starts at launch</span>'}</td>
             <td>${r.waitingOn
               ? `<span class="admp-chip ${r.waitingOn.side}">${r.waitingOn.side === 'us' ? '🛠 US' : 'THEM'} · ${esc(r.waitingOn.step.title)}</span>`
               : '<span class="admp-ok">—</span>'}</td>
@@ -464,8 +396,6 @@ export function mountPartners(host){
           </div>
 
           <h5 style="margin-top:18px">Agreement</h5>
-          <div class="admp-f"><label>Contracted content rounds (0 = none — rounds stay optional)</label>
-            <input type="number" min="0" step="1" data-p="contract_rounds" value="${p.contract_rounds ?? 0}" placeholder="1"></div>
           <div class="admp-f"><label>Contract PDF ${p.contract_path ? '· <span style="color:#0f8a52">uploaded ✓</span>' : '· <span style="color:#b8860b">not uploaded</span>'}</label>
             <input type="file" accept="application/pdf" data-p-file="contract"></div>
           <div class="admp-f"><label>Key commitments (one per line — shown to the partner)</label>
@@ -498,26 +428,6 @@ export function mountPartners(host){
             <h5 style="margin-top:20px">Partner links</h5>
             ${links.map(([l, u]) => `<div class="admp-plink"><span>${esc(l)}</span><button class="admp-btn line" data-copylink="${escAttr(u)}">Copy</button></div>`).join('')}` : '';
           })()}
-          ${r.roundsList ? `
-            <h5 style="margin-top:20px">Content rounds — you can fill these for the partner</h5>
-            ${r.roundsList.map(rd => `
-            <div class="admp-roundbox" data-round="${rd.idx}">
-              <div style="display:flex;align-items:center;gap:8px;font:600 12.5px 'Inter',sans-serif;color:#011624;margin-bottom:7px">
-                Round ${rd.idx}${rd.complete ? ' ✓' : ''}
-                <span style="font:600 10px 'Montserrat',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:${rd.idx <= (p.contract_rounds || 0) ? '#9a7400' : '#99a2a7'}">${rd.idx <= (p.contract_rounds || 0) ? 'contracted' : 'optional'}</span>
-                <span style="font:400 11.5px 'Inter',sans-serif;color:#67737c;margin-left:auto">${rd.ev ? `🗓️ “${esc(rd.ev.name || 'Event')}”${rd.hosted ? ' · hosted ✓' : ''}` : 'no event yet'}</span>
-              </div>
-              <div class="admp-grid2">
-                <div class="admp-f"><label>Invite post link</label><input type="url" data-rr="announce" value="${escAttr(rd.rd.announce_url || '')}" placeholder="https://…"></div>
-                <div class="admp-f"><label>Video post link</label><input type="url" data-rr="video" value="${escAttr(rd.rd.video_url || '')}" placeholder="https://…"></div>
-                <div class="admp-f"><label>Egely boost — planned date</label><input type="date" data-rr="planned" value="${escAttr(rd.rd.boost_planned_on || '')}"></div>
-                <div class="admp-f" style="display:flex;align-items:flex-end;padding-bottom:4px">
-                  <label style="display:flex;gap:7px;align-items:center;font:500 12.5px 'Inter',sans-serif;color:#011624;margin:0">
-                    <input type="checkbox" data-rr="sent" ${rd.rd.boost_sent ? 'checked' : ''}> Boost sent</label></div>
-              </div>
-              <button class="admp-btn line" data-rr-save="${p.id}:${rd.idx}">Save round ${rd.idx}</button>
-              <span class="admp-msg" data-rrmsg></span>
-            </div>`).join('')}` : ''}
         </div>
 
         <div class="admp-col" data-stepscol="${p.id}">${stepsColHtml(p)}</div>
@@ -679,34 +589,6 @@ export function mountPartners(host){
       }
     }));
 
-    // Save a content round on the partner's behalf (links + the Egely boost plan).
-    // Targeted local update only — no full re-render, the deal fields survive.
-    host.querySelectorAll('[data-rr-save]').forEach(b => b.addEventListener('click', async () => {
-      const [pidS, idxS] = String(b.dataset.rrSave).split(':');
-      const pid = Number(pidS), idx = Number(idxS);
-      const box = b.closest('.admp-roundbox');
-      const msg = box.querySelector('[data-rrmsg]');
-      const g = k => box.querySelector(`[data-rr="${k}"]`);
-      const announce = g('announce').value.trim() || null;
-      const video = g('video').value.trim() || null;
-      const bad = [announce, video].find(v => v && !/^https?:\/\/.+\..+/.test(v));
-      if(bad){ msg.className = 'admp-msg err'; msg.textContent = 'Links must start with https://'; return; }
-      const row = {
-        partner_id: pid, idx,
-        announce_url: announce, video_url: video,
-        boost_planned_on: g('planned').value || null,
-        boost_sent: g('sent').checked,
-        updated_at: new Date().toISOString(),
-      };
-      b.disabled = true; msg.className = 'admp-msg'; msg.textContent = 'Saving…';
-      const { error } = await supabase.from('partner_rounds').upsert(row, { onConflict: 'partner_id,idx' });
-      b.disabled = false;
-      if(error){ msg.className = 'admp-msg err'; msg.textContent = 'Error: ' + error.message; return; }
-      msg.className = 'admp-msg ok'; msg.textContent = 'Saved ✓';
-      const key = `${pid}:${idx}`;
-      roundsByKey.set(key, { ...(roundsByKey.get(key) || {}), ...row });
-    }));
-
     // save partner fields
     host.querySelectorAll('[data-save]').forEach(b => b.addEventListener('click', async () => {
       const id = Number(b.dataset.save);
@@ -725,7 +607,6 @@ export function mountPartners(host){
         tracking_number: val('tracking_number').value.trim() || null,
         delivered: ed.querySelector('[data-p="delivered"]').checked,
         contract_points: val('contract_points_text').value.split('\n').map(s => s.trim()).filter(Boolean),
-        contract_rounds: Math.max(0, Math.floor(num('contract_rounds') ?? 0)),
         updated_at: new Date().toISOString(),
       };
       b.disabled = true; msg.className = 'admp-msg'; msg.textContent = 'Saving…';
