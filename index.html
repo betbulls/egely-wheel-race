@@ -778,8 +778,11 @@
   .lj-marker.reached .lj-label{color:rgba(255,255,255,0.7)}
   .lj-marker.current .lj-label{color:#ffd479;font-weight:600}
   /* Anchor the first and last labels to the bar edges so they don't overlap
-     the left/right info columns. */
-  .lj-marker:first-child .lj-label{transform:translateX(0)}
+     the left/right info columns. NOTE: the first marker is the sibling AFTER
+     .lj-bar (never :first-child of the track — that's the bar itself), which
+     is why the old :first-child rule silently never matched and "Explorer"
+     spilled out of the card on mobile. */
+  .lj-bar + .lj-marker .lj-label{transform:translateX(0)}
   .lj-marker:last-child .lj-label{transform:translateX(-100%)}
   /* Small link from the Home journey block → the full Journey page */
   .lj-link{display:block;text-align:center;margin:10px 0 2px;font-size:13px;color:var(--muted);
@@ -1290,7 +1293,7 @@
     .lj-right{text-align:left;align-items:flex-start}
     .lj-title{font-size:22px}
     .lj-track{padding:14px 6px 22px}
-    .lj-label{font-size:9px}
+    .lj-label{font-size:10px}   /* only the current label shows on mobile — let it breathe */
     .lj-marker .lj-label{display:none}
     .lj-marker.current .lj-label{display:block}
     .lb-podium{grid-template-columns:1fr;gap:10px}
