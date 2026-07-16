@@ -5,6 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>EWR Live</title>
 <meta name="description" content="Measure your vitality with the Egely Wheel, join live sessions and races, and watch Spiritual Makers guide on camera. Watching is free.">
+<!-- Google Analytics (GA4) — production host only, so localhost/preview traffic
+     never pollutes the data. This is a hash-routed SPA, so auto page_view is off;
+     app.js sends a page_view on every route change (and once on boot). -->
+<script>
+(function(){
+  if(location.hostname !== 'live.egelywheel.com') return;   // skip localhost / preview / staging
+  var GA_ID = 'G-7698XKZN2M';
+  window.dataLayer = window.dataLayer || [];
+  window.gtag = function(){ dataLayer.push(arguments); };
+  gtag('js', new Date());
+  gtag('config', GA_ID, { send_page_view: false });
+  var s = document.createElement('script');
+  s.async = true; s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+  document.head.appendChild(s);
+})();
+</script>
 <!-- favicons (canvas-drawn brand bolt) -->
 <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png">
@@ -1362,7 +1378,7 @@
   }
 </style>
 <!-- EWR Live light redesign layer — loads last so it wins the cascade. Remove this line to revert. -->
-<link rel="stylesheet" href="ewr-redesign.css?v=20260716">
+<link rel="stylesheet" href="ewr-redesign.css?v=20260716b">
 </head>
 <body>
 

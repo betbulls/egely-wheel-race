@@ -47,8 +47,25 @@ function setView(mountFn, ...args){
   if(typeof res === 'function') cleanup = res;
 }
 
+// ---- Analytics (GA4) --------------------------------------------------------
+// GA only loads on the production host (see index.html); everywhere else this is
+// a no-op. Hash routes aren't real navigations, so we send a page_view per route
+// change, mapping "#/showcase" → a clean "/showcase" location GA can report on.
+let lastTrackedPath = null;
+function trackPageView(){
+  if(typeof window.gtag !== 'function') return;              // not loaded → no-op
+  const virtualPath = '/' + (location.hash.replace(/^#\/?/, '') || 'home');
+  if(virtualPath === lastTrackedPath) return;                // ignore in-place re-renders (e.g. login → home)
+  lastTrackedPath = virtualPath;
+  window.gtag('event', 'page_view', {
+    page_title: document.title,
+    page_location: location.origin + virtualPath,
+  });
+}
+
 function router(){
   const { path, param } = parseHash();
+  trackPageView();
   document.querySelectorAll('.nav a').forEach(a => {
     a.classList.toggle('active', a.dataset.route === path);
   });
