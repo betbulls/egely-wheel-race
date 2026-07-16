@@ -301,6 +301,31 @@ function injectCss(){
 }
 
 // ---- mount ------------------------------------------------------------------
+// ---- headless build (for the announcement-pack EMAIL) -------------------------
+// Draws both promo images on detached canvases — no DOM mount needed. Used by
+// view-session-new right after the maker creates an event, so the images can be
+// uploaded and emailed to their inbox ("inbox-first": they post from the phone).
+export async function buildPromoBlobs(session, sessionId, kind){
+  const a = auth.getState();
+  const startMs = Date.parse(session.scheduled_start);
+  const info = {
+    kind,
+    title: session.name || (kind === 'race' ? 'Live race' : 'Live session'),
+    host: a.displayName || session.created_by || 'Your host',
+    when: fmtDateLine(startMs),
+    shortUrl: 'live.egelywheel.com',
+  };
+  try{ await Promise.all([document.fonts.load('700 64px Montserrat'), document.fonts.load('600 30px Inter'), document.fonts.ready]); }catch(_){}
+  const [photo, avatar] = await Promise.all([loadImg((a.wheelPhotoUrl || '').trim() || null), loadImg(a.avatarUrl || null)]);
+  const sq = document.createElement('canvas');
+  const st = document.createElement('canvas');
+  drawSquare(sq, info, photo, avatar);
+  drawStory(st, info, photo, avatar);
+  const toBlob = c => new Promise(res => c.toBlob(b => res(b), 'image/png'));
+  const [feed, story] = await Promise.all([toBlob(sq), toBlob(st)]);
+  return { feed, story };
+}
+
 export function mountEventPromo(el, { session, sessionId, kind }){
   if(!el || !session || !session.scheduled_start) return { destroy(){} };
   let disposed = false, built = false, unsub = null, timer = 0;

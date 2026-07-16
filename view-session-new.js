@@ -1,6 +1,28 @@
 import { supabase } from './db.js';
 import * as auth from './auth.js';
 import { durationPicker, startPicker, summaryBar, MAX_EVENT_MINUTES } from './time-controls.js';
+import { buildPromoBlobs } from './event-promo.js';
+
+// Fire-and-forget after a successful create: the maker gets the ANNOUNCEMENT PACK
+// (both promo images + a share caption with the event name/date/link) straight in
+// their inbox — inbox-first, they post from their phone. SPA hash-navigation does
+// not kill this async task. Silent on any failure (the event itself is created).
+async function sendAnnouncementPack(session, kind, a){
+  try{
+    if(!a || !a.user || !a.approvedMaker) return;
+    const { feed, story } = await buildPromoBlobs(session, session.id, kind);
+    if(!feed || !story) return;
+    const up = async (blob, suffix) => {
+      const path = `${a.user.id}/promo-${session.id}-${suffix}.png`;
+      const { error } = await supabase.storage.from('avatars')
+        .upload(path, blob, { upsert: true, contentType: 'image/png' });
+      if(error) throw error;
+      return supabase.storage.from('avatars').getPublicUrl(path).data.publicUrl;
+    };
+    const [feedUrl, storyUrl] = await Promise.all([up(feed, 'feed'), up(story, 'story')]);
+    await supabase.functions.invoke('send-event-email', { body: { sessionId: session.id, feedUrl, storyUrl } });
+  }catch(e){ console.warn('[announcement pack]', e && e.message ? e.message : e); }
+}
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
@@ -210,6 +232,8 @@ export function mount(el, mode = 'session'){
       return;
     }
     setFormMsg(cfg.created, 'ok');
+    // Maker → announcement pack lands in their inbox (async, non-blocking).
+    sendAnnouncementPack({ ...row, id: data.id }, isRace ? 'race' : 'session', a);
     // Send the user to the management page so they immediately see what they created.
     setTimeout(() => { location.hash = cfg.dest; }, 400);
   });
