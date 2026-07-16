@@ -111,16 +111,18 @@ export function createSoloVoice(mountEl) {
   // Safe-area guide: the bright frame in the big setup self-view marks the strip
   // of the camera frame the SHARE VIDEO's camera box will actually show (the
   // render page crops with object-fit:cover, centered). Box aspect ratios come
-  // from view-render.js .rv-camspace geometry — SOLO: 9:16 layout 944×632,
-  // 16:9 layout 679×379. If those boxes ever change, update these ratios.
-  const GUIDE_BOX_ARS = [944 / 632, 679 / 379.3];
+  // from view-render.js .rv-camspace geometry — SOLO landscape: 9:16 layout
+  // 944×632, 16:9 layout 679×379; portrait take (F8 panels): 612×932 / 374×554.
+  // If those boxes ever change, update these ratios.
+  const GUIDE_ARS_LAND = [944 / 632, 679 / 379.3];
+  const GUIDE_ARS_PORT = [612 / 932, 374 / 554];
   function placeGuide() {
     const g = row.querySelector('[data-camguide]');
     if (!g || !selfVid || !selfVid.videoWidth || !selfVid.videoHeight) return;
     const w = selfVid.videoWidth, h = selfVid.videoHeight, m = Math.min(w, h);
     const srcAR = w / h;
     let fw = 1, fh = 1;   // fraction of the source frame each render box keeps
-    for (const b of GUIDE_BOX_ARS) {
+    for (const b of (h > w ? GUIDE_ARS_PORT : GUIDE_ARS_LAND)) {
       if (b >= srcAR) fh = Math.min(fh, srcAR / b);   // wide box → middle strip
       else fw = Math.min(fw, b / srcAR);              // tall box → middle column
     }

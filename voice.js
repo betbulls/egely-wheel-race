@@ -454,16 +454,18 @@ export function mountVoiceDock(el, opts){
   // Safe-area guide: the bright frame in the big self-view marks the strip of
   // the camera frame the SHARE VIDEO's camera box will actually show (the render
   // page crops with object-fit:cover, centered). Box aspect ratios come from
-  // view-render.js .rv-camspace geometry — SESSION/RACE: 9:16 layout 944×422,
-  // 16:9 layout 539×300.6. If those boxes ever change, update these ratios.
-  const GUIDE_BOX_ARS = [944 / 422, 539 / 300.6];
+  // view-render.js .rv-camspace geometry — SESSION/RACE landscape: 9:16 layout
+  // 944×422, 16:9 layout 539×300.6; portrait take (F8 panels): 612×1002 / 374×554.
+  // If those boxes ever change, update these ratios.
+  const GUIDE_ARS_LAND = [944 / 422, 539 / 300.6];
+  const GUIDE_ARS_PORT = [612 / 1002, 374 / 554];
   function placeGuide(){
     const g = el.querySelector('[data-camguide]');
     if(!g || !selfVid || !selfVid.videoWidth || !selfVid.videoHeight) return;
     const w = selfVid.videoWidth, h = selfVid.videoHeight, m = Math.min(w, h);
     const srcAR = w / h;
     let fw = 1, fh = 1;   // fraction of the source frame each render box keeps
-    for(const b of GUIDE_BOX_ARS){
+    for(const b of (h > w ? GUIDE_ARS_PORT : GUIDE_ARS_LAND)){
       if(b >= srcAR) fh = Math.min(fh, srcAR / b);   // wide box → middle strip
       else fw = Math.min(fw, b / srcAR);             // tall box → middle column
     }

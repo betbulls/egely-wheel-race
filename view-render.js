@@ -994,17 +994,34 @@ export function mount(el, kind, id) {
     // event has a camera recording. Without it every layout is byte-identical to
     // the voice-only render — all camera styling hangs off .rv-with-cam.
     d.cam = window.__rvCamUrl ? { url: String(window.__rvCamUrl) } : null;
+    // Portrait-aware layout (F8): phone recordings arrive 9:16 — the wide band's
+    // center-crop would keep only ~25% of such a frame (heads get cut). Probe the
+    // orientation BEFORE building so a portrait take gets a tall portrait panel
+    // instead. Fails open to the landscape layout on error/timeout.
+    if (d.cam) {
+      d.cam.portrait = await new Promise(res => {
+        const p = document.createElement('video');
+        p.muted = true; p.preload = 'metadata';
+        const t = setTimeout(() => res(false), 8000);
+        p.addEventListener('loadedmetadata', () => { clearTimeout(t); res(p.videoHeight > p.videoWidth); }, { once: true });
+        p.addEventListener('error', () => { clearTimeout(t); res(false); }, { once: true });
+        p.src = d.cam.url;
+      });
+    }
     stage.dataset.kind = K;
     if (FMT === '169') stage.classList.add('rv-169');
     // 16:9 keeps the camera in the identity column — the 9:16 .rv-with-cam
     // shrink-rules must not fire there.
     if (d.cam) stage.classList.add(FMT === '169' ? 'rv-cam169' : 'rv-with-cam');
+    if (d.cam && d.cam.portrait) stage.classList.add('rv-cam-portrait');
     // The camera band costs vertical room in 9:16: fewer list rows, same podium
     // math (rows are score-sorted, so 1st–3rd can never scroll out of frame).
+    // A portrait panel is taller still → race 3 lanes, session 1 row.
     // In 16:9 the camera never eats board height: race 5 lanes, session 3 rows.
     d._top = FMT === '169'
       ? (K === 'race' ? 5 : 3)
-      : K === 'race' ? (d.cam ? 5 : TOP_LANES) : (d.cam ? 4 : TOP_ROWS);
+      : K === 'race' ? (d.cam ? (d.cam.portrait ? 3 : 5) : TOP_LANES)
+        : (d.cam ? (d.cam.portrait ? 1 : 4) : TOP_ROWS);
     const pillTxt = K === 'race' ? 'RACE REPLAY' : K === 'solo' ? 'SOLO REPLAY' : 'SESSION REPLAY';
     const paintFrame = K === 'race' ? paintRaceFrame : K === 'solo' ? paintSoloFrame : paintSessionFrame;
     const defSpeed = K === 'session' ? sessionSpeed : raceSpeed;
@@ -1223,6 +1240,15 @@ body.rv-mode > header, body.rv-mode #navMoreMenu, body.rv-mode .fab, body.rv-mod
    it is scoped to .rv-with-cam so camera-less renders stay byte-identical. */
 .rv-camspace{height:430px;margin:24px 0 26px;flex:none}
 .rv-with-cam[data-kind="solo"] .rv-camspace{height:640px}
+/* Portrait phone take (F8): tall centered panel — (nearly) the whole 9:16 frame
+   is visible instead of the wide band's ~25% center strip. Scoped: landscape
+   and camera-less renders are untouched. */
+.rv-cam-portrait.rv-with-cam .rv-camspace{width:620px;height:1010px;margin:20px auto 22px}
+.rv-cam-portrait.rv-with-cam[data-kind="solo"] .rv-camspace{height:940px}
+.rv-cam-portrait.rv-with-cam .rv-solo-hero{margin-top:24px}
+.rv-cam-portrait.rv-with-cam .rv-solo-val .v{font-size:120px}
+.rv-cam-portrait.rv-with-cam .rv-sstat .v{font-size:48px}
+.rv-cam-portrait.rv-with-cam .rv-solo-card{margin-top:20px}
 .rv-camlayer{position:absolute;left:64px;right:64px;z-index:6;display:none;border-radius:34px;padding:4px;
   background:linear-gradient(135deg,#37dbff,#5230da);box-shadow:0 34px 90px -22px rgba(82,48,218,.6)}
 .rv-camlayer.on{display:block}
@@ -1321,6 +1347,13 @@ body.rv-mode > header, body.rv-mode #navMoreMenu, body.rv-mode .fab, body.rv-mod
 .rv-idcard{flex:1;background:var(--card);border:1.5px solid var(--cardb);border-radius:24px;padding:24px 26px;display:flex;flex-direction:column;gap:12px;min-height:0}
 .rv-idcard.center{align-items:center;text-align:center;justify-content:center;gap:14px}
 .rv-169 .rv-camspace{height:auto;aspect-ratio:16/9;width:100%;margin:0 0 8px;flex:none}
+/* Portrait phone take (F8): the identity column gets a portrait camera panel;
+   the stat minicards yield the room (the right column tells the data story). */
+.rv-cam-portrait.rv-169 .rv-camspace{aspect-ratio:auto;width:380px;height:560px;margin:0 auto 6px}
+.rv-cam-portrait.rv-169 .rv-idcard{gap:10px}
+.rv-cam-portrait.rv-169 .rv-idstats{display:none}
+.rv-cam-portrait.rv-169 .rv-idtitle{font-size:28px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rv-cam-portrait.rv-169 .rv-idmeta{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rv-idhero{margin:2px 0 4px}
 .rv-169 .rv-idcard .rv-ava.hero{width:150px;height:150px}
 .rv-169 .rv-idcard .rv-ava.hero>span{font-size:54px}
