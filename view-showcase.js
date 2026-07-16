@@ -26,6 +26,7 @@ function injectCss(){
 .sc-tab{padding:8px 18px;border-radius:999px;border:1px solid var(--ewr-border,#dfe3e6);background:var(--ewr-surface,#fff);
   color:var(--ewr-text-muted,#67737c);font:600 13px Inter,sans-serif;cursor:pointer}
 .sc-tab.on{background:var(--ewr-accent-strong,#401d91);border-color:transparent;color:#fff}
+.sc-tab:not(.on):hover{border-color:rgba(82,48,218,.4);color:var(--ewr-accent-strong,#401d91);background:rgba(82,48,218,.06)}
 .sc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}
 .sc-card{background:var(--ewr-surface,#fff);border:1px solid var(--ewr-border,#dfe3e6);border-radius:18px;padding:16px 18px;
   box-shadow:0 10px 28px rgba(1,22,36,.05);cursor:pointer;transition:transform .18s ease, box-shadow .18s ease;display:flex;flex-direction:column;gap:10px}
@@ -36,6 +37,7 @@ function injectCss(){
   align-items:center;justify-content:center;font:700 16px Montserrat,sans-serif;color:#33424d}
 .sc-who{min-width:0;flex:1}
 .sc-who b{display:flex;align-items:center;gap:7px;font:600 14px Inter,sans-serif;color:var(--ewr-text,#011624);white-space:nowrap;overflow:hidden}
+.sc-name{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .sc-who small{display:block;font:500 12px Inter,sans-serif;color:var(--ewr-text-muted,#67737c);margin-top:1px}
 .sc-flag{width:18px;height:13px;border-radius:2.5px;object-fit:cover;flex:none}
 .sc-check{color:#0f8a52;font-size:12px;flex:none}
@@ -56,6 +58,7 @@ function injectCss(){
 @media (max-width:620px){
   .sc-card.hero{flex-direction:column}
   .sc-hero-photo{width:100%;height:190px}
+  .sc-who b{flex-wrap:wrap;row-gap:3px}   /* narrow phones: the gold pill drops below the name instead of clipping */
 }
 .sc-stats{display:flex;gap:22px;align-items:baseline}
 .sc-stat b{font:700 20px Montserrat,sans-serif}
@@ -148,7 +151,7 @@ export function mount(el){
         <div class="sc-top">
           ${avaHtml(it.prof && it.prof.avatar_url, name)}
           <div class="sc-who">
-            <b>${esc(name)}${it.prof && it.prof.country ? `<img class="sc-flag" src="${esc(flagUrl(it.prof.country))}" alt="">` : ''}${r.verified ? '<span class="sc-check">✓</span>' : ''}${isMaker ? '<span class="sc-maker">Spiritual Maker</span>' : ''}</b>
+            <b><span class="sc-name">${esc(name)}</span>${it.prof && it.prof.country ? `<img class="sc-flag" src="${esc(flagUrl(it.prof.country))}" alt="">` : ''}${r.verified ? '<span class="sc-check">✓</span>' : ''}${isMaker ? '<span class="sc-maker">Spiritual Maker</span>' : ''}</b>
             <small>${esc(fmtWhen(r.created_at))}${r.duration_seconds ? ' · ' + fmtDur(r.duration_seconds) : ''}</small>
           </div>
           ${media ? `<span class="sc-media">${media}</span>` : ''}

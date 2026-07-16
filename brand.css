@@ -57,7 +57,11 @@ input[type="time"]::-webkit-calendar-picker-indicator{filter:invert(1) opacity(.
 button{font-family:'Inter',sans-serif;background:var(--accent);color:var(--white);
   border:none;padding:13px 22px;border-radius:8px;font-size:15px;font-weight:500;
   cursor:pointer;transition:all .2s}
-button:hover:not(:disabled){background:#6a47f0}
+/* :where() drops this to element-level specificity (0,0,1) so ANY component rule —
+   even a plain .x{background:...} — overrides it. The old selector's (0,2,1) beat
+   every single-class .x:hover and caused the recurring "purple hover + dark text"
+   bug across the app (account chip, tabs, info buttons, pill controls…). */
+button:where(:hover:not(:disabled)){background:#6a47f0;color:var(--white)}
 button:disabled{opacity:.45;cursor:not-allowed}
 
 /* Connection / cloud status */

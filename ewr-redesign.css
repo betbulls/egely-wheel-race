@@ -406,7 +406,7 @@ input[type=file]{color:var(--ewr-text-muted)}
 
 /* Info "i" button + description — functional (tap toggles description) but
    visually quiet: faint by default, prominent on hover/focus/expanded. */
-.db-info{background:transparent;border:1px solid transparent;color:var(--ewr-text-soft);opacity:.45;
+.db-info{background:transparent;border:1px solid var(--ewr-border);color:var(--ewr-text-muted);opacity:.75;
   transition:opacity .15s,background .15s,color .15s,border-color .15s}
 .db-info:hover,.db-info:focus-visible,
 .dash-badge.expanded .db-info,
@@ -449,6 +449,10 @@ input[type=file]{color:var(--ewr-text-muted)}
 
 .live-name{color:var(--ewr-text);font-weight:600}
 .live-you{color:var(--ewr-accent-strong);border:1px solid rgba(82,48,218,0.35);background:var(--ewr-accent-tint)}
+/* The name is the only shrinkable item in the name line — flag + badges stay whole,
+   so "You" / "✓ Spiritual Maker" never get pushed off the card. */
+.live-name-txt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.live-name>img,.live-maker,.live-you{flex:none}
 /* Approved Spiritual Maker seal — gold, recognition. Sits in the name line, so it
    stays next to the name in both the idle and the measuring (chart) card states. */
 .live-maker{display:inline-flex;align-items:center;gap:3px;margin-left:7px;vertical-align:middle;
@@ -920,6 +924,7 @@ input[type=file]{color:var(--ewr-text-muted)}
 /* Mobile: measuring rows get a deterministic grid — name row on top,
    metric + chart toggle on a second row (no cramming/overlap at 375px). */
 @media (max-width:600px){
+  .live-name{flex-wrap:wrap;row-gap:4px}   /* badges wrap under the name instead of overflowing the card */
   .live-row{display:grid;grid-template-columns:auto 1fr auto;
     grid-template-areas:"av main main" "av val exp";align-items:center;column-gap:12px;row-gap:4px}
   .live-avatar{grid-area:av;align-self:start}
@@ -1740,6 +1745,9 @@ a.xp-topic:hover{border-color:var(--ewr-accent)}
 
 /* Completed-day note / measurement link. */
 .xp-done-note{background:rgba(32,178,107,0.1);border:1px solid rgba(32,178,107,0.3);color:#0f8a52}
+/* Midnight gate — the next lesson day opens tomorrow. */
+.xp-lock-note{margin-top:10px;padding:11px 14px;border-radius:12px;font-size:13.5px;line-height:1.5;
+  background:var(--ewr-accent-tint);border:1px solid rgba(82,48,218,0.25);color:var(--ewr-accent-strong)}
 .xp-done-card{background:rgba(32,178,107,0.1);border:1px solid rgba(32,178,107,0.3)}
 .xp-done-card:hover{border-color:rgba(32,178,107,0.55)}
 .xp-done-main{color:#0f8a52}

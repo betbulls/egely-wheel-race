@@ -159,7 +159,7 @@ export function mount(el){
           <div class="live-row">
             <div class="live-avatar">${avatarHtml(p.avatar, p.name)}</div>
             <div class="live-main">
-              <div class="live-name">${(p.maker && p.handle) ? `<a class="maker-name-link" href="#/connect/${esc(p.handle)}">${esc(p.name || 'Explorer')}</a>` : esc(p.name || 'Explorer')}${flagHtml(p.country)}${p.maker ? '<span class="live-maker">✓ Spiritual Maker</span>' : ''}${isMe ? ' <span class="live-you">You</span>' : ''}</div>
+              <div class="live-name"><span class="live-name-txt">${(p.maker && p.handle) ? `<a class="maker-name-link" href="#/connect/${esc(p.handle)}">${esc(p.name || 'Explorer')}</a>` : esc(p.name || 'Explorer')}</span>${flagHtml(p.country)}${p.maker ? '<span class="live-maker">✓ Spiritual Maker</span>' : ''}${isMe ? ' <span class="live-you">You</span>' : ''}</div>
               <div class="live-status"><span class="live-pill ${st.cls}">${esc(st.label)}</span></div>
             </div>
             ${value}

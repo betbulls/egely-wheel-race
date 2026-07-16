@@ -197,12 +197,27 @@ export function mountExperimentDetail(el, experimentId){
     const prog = progByExp.get(exp.id);
     if(a.user) ensureStarted(a.user.id, exp.id);   // fire-and-forget: shows in Continue
     const st = experimentState(exp, prog);
+    const done = (prog && prog.completedDays) || new Set();
 
-    // Which day to show: the one the user picked (if still unlocked) else the current one.
+    // Midnight gate: one lesson day per local calendar day. If any day of THIS
+    // experiment was completed today (its results row was created today), the next
+    // day stays locked until local midnight. Fails open when a legacy completed
+    // day has no results row.
+    const localDay = d => new Date(d).toLocaleDateString('en-CA');   // YYYY-MM-DD in the user's timezone
+    const today = localDay(new Date());
+    const dateLocked = !!st.currentDay && [...done].some(id => {
+      const r = resultsByDay.get(id);
+      return r && r.createdAt && localDay(r.createdAt) === today;
+    });
+
+    // Which day to show: the one the user picked (if still unlocked) else the current
+    // one — but never the date-locked next day (its intro/task would leak early).
     let day = viewDayId ? exp.days.find(d => d.id === viewDayId) : null;
     if(!day || !isDayUnlocked(exp, day, prog)) day = st.currentDay || exp.days[exp.days.length - 1];
+    if(dateLocked && st.currentDay && day.id === st.currentDay.id){
+      day = [...exp.days].reverse().find(d => done.has(d.id)) || day;
+    }
     viewDayId = day.id;
-    const done = (prog && prog.completedDays) || new Set();
     const isDone = done.has(day.id);
     const topic = getTopic(exp.topic);
 
@@ -210,9 +225,10 @@ export function mountExperimentDetail(el, experimentId){
     const strip = exp.days.map(d => {
       const n = dayNumber(exp, d);
       const dDone = done.has(d.id);
-      const unlocked = isDayUnlocked(exp, d, prog);
+      const gated = dateLocked && !dDone;                              // tomorrow's day while the midnight gate is on
+      const unlocked = !gated && isDayUnlocked(exp, d, prog);
       const cls = dDone ? 'done' : (d.id === day.id ? 'current' : unlocked ? 'open' : 'locked');
-      const mark = dDone ? '✓' : unlocked ? n : '🔒';
+      const mark = dDone ? '✓' : unlocked ? n : (gated && st.currentDay && d.id === st.currentDay.id ? '🌙' : '🔒');
       return `<button class="xp-day-dot ${cls}" data-day="${esc(d.id)}" ${unlocked ? '' : 'disabled'} aria-label="Day ${n}">${mark}</button>`;
     }).join('');
 
@@ -250,11 +266,13 @@ export function mountExperimentDetail(el, experimentId){
     if(isDone){
       const res = resultsByDay.get(day.id);
       const finishedNote = st.completed ? `<div class="xp-done-note">You finished this experiment — beautifully done. ✨</div>` : '';
+      const lockNote = (dateLocked && st.currentDay && res && res.createdAt && localDay(res.createdAt) === today)
+        ? `<div class="xp-lock-note">🌙 Day ${dayNumber(exp, st.currentDay)} unlocks tomorrow — one practice day at a time. Come back after midnight.</div>` : '';
       host.innerHTML = res
         ? `<a class="xp-done-card" href="#/m/${esc(String(res.id))}">
              <span class="xp-done-main">✓ Day ${dayNumber(exp, day)} · <b style="color:${zText(res.avg)}">${res.avg.toFixed(1)}</b> avg ${res.verified ? '<span class="v-badge verified">✓ Verified</span>' : '<span class="warn">Not verified</span>'}</span>
              <span class="xp-done-cta">View measurement →</span>
-           </a>${finishedNote}`
+           </a>${lockNote}${finishedNote}`
         : `<div class="xp-done-note">✓ Day ${dayNumber(exp, day)} completed.</div>${finishedNote}`;
     } else {
       teardownMeasure = setupMeasure(host, exp, day, () => { viewDayId = null; render(); });
