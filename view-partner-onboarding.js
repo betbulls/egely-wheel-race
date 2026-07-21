@@ -18,6 +18,7 @@ const escAttr = esc;
 const ASSET_BASE = 'https://lhyychkrcrndjptptkii.supabase.co/storage/v1/object/public/partner-assets/';
 const GUIDES = [
   { file: 'spiritual-maker-showcase.pdf', title: 'Spiritual Maker Showcase', blurb: 'What EWR Live is — and what you can do with it.' },
+  { file: 'ewr-live-creators.pdf',        title: 'EWR Live for Creators',    blurb: 'Go live on camera, host your method, turn sessions into shareable video.' },
   { file: 'egely-history.pdf',            title: 'Egely History',            blurb: '30 years of the Egely Wheel story.' },
   { file: 'guide-book.pdf',               title: 'Guide Book — Egely Wheel', blurb: 'A short practical guide to your device.' },
 ];
