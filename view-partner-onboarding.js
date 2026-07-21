@@ -475,12 +475,15 @@ export function mount(el){
     }
     const free = Number(partner.wheel_price_usd) === 0;
     const url = partner.offer_url || 'https://egelywheel.com';
+    const coupons = [];
+    if(partner.wheel_coupon) coupons.push(`<span class="pob-code" data-copy="${escAttr(partner.wheel_coupon)}">${esc(partner.wheel_coupon)}</span>`);
+    if(partner.shipping_coupon) coupons.push(`<span class="pob-code" data-copy="${escAttr(partner.shipping_coupon)}">${esc(partner.shipping_coupon)}</span> for free shipping`);
     return `
       <div class="pob-offer">
         <img src="assets/ewr-access-product-card.png" alt="Egely Wheel">
         <div>
           <div class="big">${free ? 'Free' : '$' + Number(partner.wheel_price_usd)}</div>
-          <div class="pob-note">Your Egely Wheel${partner.wheel_coupon ? ` — use coupon <span class="pob-code" data-copy="${escAttr(partner.wheel_coupon)}">${esc(partner.wheel_coupon)}</span> at checkout` : ''}.</div>
+          <div class="pob-note">Your Egely Wheel${coupons.length ? ` — use ${coupons.join(' and ')} at checkout` : ''}.</div>
         </div>
       </div>
       <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
