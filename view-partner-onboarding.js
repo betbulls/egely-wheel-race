@@ -68,10 +68,16 @@ function styles(){
   .pob-ring{position:relative;width:128px;height:128px}
   .pob-ring svg{transform:rotate(-90deg);display:block}
   .pob-ring .pct{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
-  .pob-ring .pct b{font:700 28px 'Montserrat',sans-serif;color:#011624}
+  .pob-ring .pct b{font:800 31px 'Montserrat',sans-serif;color:#401d91}
   .pob-ring .pct span{font:600 9.5px 'Montserrat',sans-serif;letter-spacing:.14em;color:#67737c;text-transform:uppercase}
+  /* Reassuring "almost done" block under the ring — big steps-left number so it
+     reads as "not much to do here". */
+  .pob-left{font:700 14px 'Inter',sans-serif;color:#011624;text-align:center}
+  .pob-left b{font:800 23px 'Montserrat',sans-serif;color:#401d91;margin-right:4px;vertical-align:-2px}
+  .pob-reassure{font:600 11px 'Inter',sans-serif;letter-spacing:.01em;color:#0f8a52;text-align:center}
   .pob-time{display:inline-flex;align-items:center;gap:7px;background:#f2f3f4;border:1px solid #dfe3e6;
-    border-radius:999px;padding:6px 13px;font:600 12px 'Inter',sans-serif;color:#011624}
+    border-radius:999px;padding:6px 13px;font:600 12.5px 'Inter',sans-serif;color:#011624}
+  .pob-time.ok{background:rgba(15,138,82,.1);border-color:rgba(15,138,82,.32);color:#0f8a52}
   .pob-cols{display:grid;grid-template-columns:1fr 350px;gap:24px;margin-top:20px;align-items:start}
   /* navy next-step anchor */
   .pob-next{background:#011624;border:1px solid #1f323e;border-radius:18px;padding:24px 26px;color:#dbe2e6;
@@ -197,9 +203,9 @@ function styles(){
   .pob .pob-btn.sm{padding:7px 15px;font-size:10.5px;letter-spacing:.04em;flex:none;
     background:rgba(82,48,218,.07);color:#401d91;border:1px solid rgba(82,48,218,.16)}
   .pob .pob-btn.sm:hover{background:rgba(82,48,218,.13);border-color:rgba(82,48,218,.3);color:#2c1470;box-shadow:none;transform:none}
-  .pob-mgr{display:flex;align-items:center;gap:11px}
-  .pob-mgr .av{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#37dbff,#5230da);color:#fff;
-    display:flex;align-items:center;justify-content:center;font:600 16px 'Montserrat',sans-serif;flex:none}
+  .pob-mgr{display:flex;align-items:center;gap:13px}
+  .pob-mgr .av{width:54px;height:54px;border-radius:50%;object-fit:cover;flex:none;display:block;
+    border:2px solid #fff;box-shadow:0 0 0 2px rgba(82,48,218,.35),0 5px 14px -4px rgba(1,22,36,.35)}
   .pob-mgr b{display:block;font:600 14px 'Inter',sans-serif;color:#011624}
   .pob-mgr span{font:600 10px 'Montserrat',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#9a7400}
   .pob-assist{display:flex;gap:9px;align-items:flex-start;font:400 12px 'Inter',sans-serif;color:#67737c;line-height:1.5;padding:0 4px}
@@ -624,7 +630,7 @@ export function mount(el){
     unboxing:  { t: 'Film your unboxing 🎬', p: 'The first reaction is content gold. Post it anywhere and paste the link to your post here.' },
     first_event: { t: 'Schedule your first event 🗓️', p: 'A guided Session or a live Race — this is where your audience meets you live. It ticks itself when you create one.' },
     announce:  { t: 'Announce it 📣', p: 'One click in your practice room generates a branded promo image with your face — post it and paste the link.' },
-    share_video: { t: 'Share your replay video 🎬', p: 'Your event becomes a ready-to-post video with one click — post it and paste the link. This is the full content round done.' },
+    share_video: { t: 'Share your replay video 🎬', p: 'Your event becomes a ready-to-post video with one click — post it and paste the link.' },
   };
 
   // ---- render ------------------------------------------------------------------
@@ -666,6 +672,7 @@ export function mount(el){
     const act1 = steps.filter(s => s.act === 1), act2 = steps.filter(s => s.act === 2);
     const next = nextStep();
     const mins = minutesLeft();
+    const left = Math.max(0, req.length - done);   // steps still on the partner's side
     const CIRC = 2 * Math.PI * 56;
 
     const actPill = (n, label, list, active, lastDone) => {
@@ -706,7 +713,7 @@ export function mount(el){
       <div class="pob-next">
         <div class="pob-next-top"><span class="pob-nextlabel">You made it</span></div>
         <h2>You're launched, ${esc((a.displayName || '').split(' ')[0] || 'Maker')} 🎉</h2>
-        <p>Every setup step is done. From here it's your monthly content rounds — create, announce, host, share the video — and we boost your events to the Egely audience by email.</p>
+        <p>Every setup step is done — the stage is yours now. Host your sessions, share your videos your way, and your commissions land right here. We wish you great sessions and a thriving business 🎉</p>
         <a class="go" href="#/sessions/new">Create your next Session</a>
       </div>`
       : next ? `
@@ -738,7 +745,7 @@ export function mount(el){
             <div class="pob-actline"></div>
             ${actPill(2, 'Go live', act2, !act1Active && !launched, false)}
             <div class="pob-actline"></div>
-            <div class="pob-act later"><span class="n">3</span> Keep growing</div>
+            <div class="pob-act later"><span class="n">3</span> Over to you</div>
           </div>
         </div>
         <div class="pob-ringbox">
@@ -751,7 +758,11 @@ export function mount(el){
             </svg>
             <div class="pct"><b>${pct}%</b><span>to launch</span></div>
           </div>
-          ${mins > 0 ? `<div class="pob-time">⏱ ${fmtMin(mins)} of your time left</div>` : ''}
+          ${left > 0
+            ? `<div class="pob-left"><b>${left}</b>${left === 1 ? 'step' : 'steps'} left</div>`
+              + (mins > 0 ? `<div class="pob-time">⏱ only ${fmtMin(mins)} of your time</div>` : '')
+              + `<div class="pob-reassure">${left <= 2 ? 'Almost there — a quick finish 🎉' : 'A short setup, then you’re live'}</div>`
+            : `<div class="pob-time ok">✓ You’re ready to launch</div>`}
         </div>
       </div>
 
@@ -763,8 +774,8 @@ export function mount(el){
           ${act1.map(stepRow).join('')}
           <div class="pob-acth"><h3>Act 2 · Go live</h3><div class="rule"></div><span class="cnt">${act1Active ? 'up next' : doneCount(act2) + ' of ' + act2.length + ' done'}</span></div>
           ${act2.map(stepRow).join('')}
-          <div class="pob-acth"><h3>Act 3 · Keep growing</h3><div class="rule"></div></div>
-          <div class="pob-tease">🚀 Unlocks at launch — your monthly content rounds, and Egely email boosts promoting your events to our audience.</div>
+          <div class="pob-acth"><h3>Act 3 · Over to you</h3><div class="rule"></div></div>
+          <div class="pob-tease">🎉 Once you launch, the stage is yours. Host your sessions, share your videos, and your commissions land right here — we wish you great work and a thriving business.</div>
         </main>
 
         ${railHtml(a, commission)}
@@ -822,7 +833,7 @@ export function mount(el){
 
           <div class="pob-card"><div class="pad">
             <div class="pob-mgr">
-              <span class="av">K</span>
+              <img class="av" src="assets/krisztian-manager.jpg" alt="Krisztián" loading="lazy">
               <div><b>Krisztián</b><span>Brand Manager</span></div>
               <a class="pob-btn ghost" style="margin-left:auto;text-decoration:none" href="mailto:egelymedia@egelywheel.net">Email →</a>
             </div>
@@ -857,7 +868,7 @@ export function mount(el){
         <div class="big"><b>${money(s.paid)}</b><span>Total paid</span></div>
         <div class="sep"></div>
         <div class="st"><b>${money(s.approved)}</b><span>Approved</span></div>
-        <div class="st"><b>${money(s.pending)}</b><span>Unapproved</span></div>
+        <div class="st"><b>${money(s.pending)}</b><span>Pending</span></div>
         <a class="pob-btn ghost" style="margin-left:auto;text-decoration:none" href="https://affiliate.egelywheel.com" target="_blank" rel="noopener">Earnings dashboard →</a>
         <div class="note">Live from UpPromote · synced ${esc(ago)}${s.lastSaleAt ? ` · last sale ${fmtDate(s.lastSaleAt)}` : ''}</div>
       </div>`;
