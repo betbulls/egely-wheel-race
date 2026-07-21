@@ -798,6 +798,7 @@ export function mount(el){
                 <div class="pob-deal"><span>Commission per sale</span><b>$${esc(commission)}</b></div>
                 ${partner.wheel_price_usd != null ? `<div class="pob-deal"><span>Your Egely Wheel</span><b class="${Number(partner.wheel_price_usd) === 0 ? 'free' : ''}">${Number(partner.wheel_price_usd) === 0 ? 'Free' : '$' + Number(partner.wheel_price_usd)}</b></div>` : ''}
                 ${partner.wheel_coupon ? `<div class="pob-deal"><span>Your coupon</span><span class="pob-code" data-copy="${escAttr(partner.wheel_coupon)}">${esc(partner.wheel_coupon)}</span></div>` : ''}
+                ${partner.shipping_coupon ? `<div class="pob-deal"><span>Free shipping</span><span class="pob-code" data-copy="${escAttr(partner.shipping_coupon)}">${esc(partner.shipping_coupon)}</span></div>` : ''}
                 ${partner.audience_coupon ? `<div class="pob-deal"><span>Audience code</span><span class="pob-code" data-copy="${escAttr(partner.audience_coupon)}">${esc(partner.audience_coupon)}</span></div>` : ''}
                 <div class="pob-ladder">
                   ${Object.entries(TIERS).map(([k, t]) => `

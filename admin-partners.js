@@ -88,6 +88,12 @@ function styles(){
   .admp-plink{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;
     border-bottom:1px dashed #f2f3f4;font:500 12.5px 'Inter',sans-serif;color:#67737c}
   .admp-plink:last-of-type{border-bottom:none}
+  .admp-photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:10px;margin-top:4px}
+  .admp-photo{display:flex;flex-direction:column;gap:5px}
+  .admp-photo img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;border:1px solid #dfe3e6;display:block;background:#f2f3f4}
+  .admp-dl{font:700 10px 'Montserrat',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:#401d91;text-align:center;
+    text-decoration:none;padding:5px;border:1px solid #e2ddf6;border-radius:8px;background:#faf9ff}
+  .admp-dl:hover{background:#f1ecff;border-color:#c9bef2}
   .admp-dots{font-size:13px;letter-spacing:3px}
   .admp-dots .on{color:#0f8a52}
   .admp-dots .off{color:#cdd4d9}
@@ -391,6 +397,7 @@ export function mountPartners(host){
             <div class="admp-f"><label>Commission $ / sale</label><input type="number" data-p="commission_usd" value="${p.commission_usd ?? ''}" placeholder="${TIERS[p.tier] || 100}"></div>
             <div class="admp-f"><label>Wheel price $ (0 = free)</label><input type="number" step="0.01" data-p="wheel_price_usd" value="${p.wheel_price_usd ?? ''}" placeholder="0"></div>
             <div class="admp-f"><label>Wheel coupon</label><input type="text" data-p="wheel_coupon" value="${escAttr(p.wheel_coupon || '')}" placeholder="ANNA-WHEEL"></div>
+            <div class="admp-f"><label>Free-shipping coupon</label><input type="text" data-p="shipping_coupon" value="${escAttr(p.shipping_coupon || '')}" placeholder="ANNA-SHIP"></div>
             <div class="admp-f"><label>Audience coupon</label><input type="text" data-p="audience_coupon" value="${escAttr(p.audience_coupon || '')}" placeholder="ANNA10"></div>
             <div class="admp-f"><label>Affiliate link</label><input type="url" data-p="affiliate_link" value="${escAttr(p.affiliate_link || '')}" placeholder="https://…"></div>
           </div>
@@ -427,6 +434,25 @@ export function mountPartners(host){
             return links.length ? `
             <h5 style="margin-top:20px">Partner links</h5>
             ${links.map(([l, u]) => `<div class="admp-plink"><span>${esc(l)}</span><button class="admp-btn line" data-copylink="${escAttr(u)}">Copy</button></div>`).join('')}` : '';
+          })()}
+          ${(() => {
+            // Wheel photos the partner uploaded (public avatars bucket). Thumbnails
+            // + a per-photo download — Supabase's ?download= query forces an
+            // attachment header even cross-origin; the image link opens full size.
+            const ps = r.steps.find(s => s.key === 'photos');
+            const photos = (ps && ps.payload && ps.payload.photos) || [];
+            if(!photos.length) return '';
+            return `
+          <h5 style="margin-top:20px">Wheel photos · ${photos.length}</h5>
+          <div class="admp-photos">
+            ${photos.map((u, i) => {
+              const dl = u + (u.includes('?') ? '&' : '?') + 'download=wheel-photo-' + (i + 1) + '.jpg';
+              return `<div class="admp-photo">
+                <a href="${escAttr(u)}" target="_blank" rel="noopener"><img src="${escAttr(u)}" alt="Wheel photo ${i + 1}" loading="lazy"></a>
+                <a class="admp-dl" href="${escAttr(dl)}" download>⬇ Download</a>
+              </div>`;
+            }).join('')}
+          </div>`;
           })()}
         </div>
 
@@ -601,6 +627,7 @@ export function mountPartners(host){
         commission_usd: num('commission_usd'),
         wheel_price_usd: num('wheel_price_usd'),
         wheel_coupon: val('wheel_coupon').value.trim() || null,
+        shipping_coupon: val('shipping_coupon').value.trim() || null,
         audience_coupon: val('audience_coupon').value.trim() || null,
         affiliate_link: val('affiliate_link').value.trim() || null,
         shipping_carrier: val('shipping_carrier').value || null,
