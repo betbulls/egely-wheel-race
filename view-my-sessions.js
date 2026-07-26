@@ -454,7 +454,15 @@ export function mount(el, eventType = 'session'){
   function freshSession(id){ return sessions.find(s => s.id === id) || null; }
 
   // ---- edit modal ----
-  function openEdit(id){
+  async function openEdit(id){
+    // Refresh this row first — the cached list may be minutes old, and a stale
+    // baseline would mis-prefill the picker (a save could then silently revert
+    // a just-made time change AND suppress the "updated" email to RSVPers).
+    try {
+      const { data: dbRow } = await supabase.from('sessions').select('*')
+        .eq('id', id).eq('created_by_user_id', uid).maybeSingle();
+      if(dbRow){ const i = sessions.findIndex(x => x.id === id); if(i >= 0) sessions[i] = dbRow; }
+    } catch(_){ /* offline → edit from the cached copy, same as before */ }
     const s = freshSession(id);
     if(!s) return;
     if(stateOf(s, Date.now()) !== 'upcoming'){
@@ -590,6 +598,19 @@ export function mount(el, eventType = 'session'){
     if(error){ saveBtn.disabled = false; setMsg('Could not save: ' + error.message, 'err'); return; }
     if(!data || !data.length){ saveBtn.disabled = false; setMsg(`Could not save — you may not have permission to edit this ${noun}.`, 'err'); return; }
 
+    // Time changed → tell the RSVP'd members (fire-and-forget; the send-rsvp-email
+    // Edge Fn verifies ownership, resolves the recipients server-side and re-arms
+    // the reminder markers for the new schedule). Name-only edits stay silent.
+    // invoke() RESOLVES with { error } on non-2xx — inspect it, don't .catch it.
+    if(Date.parse(payload.scheduled_start) !== Date.parse(s.scheduled_start)){
+      try {
+        supabase.functions.invoke('send-rsvp-email', {
+          body: { mode: 'updated', sessionId: id, oldStartIso: s.scheduled_start },
+        }).then(({ error: fnErr }) => { if(fnErr) console.warn('[rsvp update email]', fnErr); })
+          .catch(e => console.warn('[rsvp update email]', e));
+      } catch(e){ console.warn('[rsvp update email]', e); }
+    }
+
     closeModal();
     await loadSessions();
   }
@@ -633,18 +654,37 @@ export function mount(el, eventType = 'session'){
 
     const btn = r.querySelector('#mysConfirmDel');
     btn.disabled = true; setMsg('Deleting…', '');
-    const { data, error } = await supabase.from('sessions')
-      .delete()
-      .eq('id', id)
-      .eq('created_by_user_id', uid)
-      .select('id');
+    // Cancel through the send-rsvp-email Edge Fn when it's reachable: it emails
+    // the RSVP'd members ("event cancelled"), then deletes server-side (owner +
+    // upcoming + no-results are re-verified there). Any Fn problem falls back to
+    // the plain client-side delete (no emails) — cancelling must never break.
+    let deleted = false;
+    try {
+      const { data: fnRes, error: fnErr } = await supabase.functions.invoke('send-rsvp-email', {
+        body: { mode: 'cancelled', sessionId: id },
+      });
+      deleted = !fnErr && !!(fnRes && fnRes.deleted);
+    } catch(_){ /* Fn unreachable/undeployed → direct delete below */ }
 
-    if(error){ btn.disabled = false; setMsg('Could not delete: ' + error.message, 'err'); return; }
-    if(!data || !data.length){
-      // RLS blocked it silently (started / has results / not owner) → 0 rows, no error.
-      btn.disabled = false;
-      setMsg(`Could not delete — the ${noun} may have started or already has results.`, 'err');
-      return;
+    if(!deleted){
+      const { data, error } = await supabase.from('sessions')
+        .delete()
+        .eq('id', id)
+        .eq('created_by_user_id', uid)
+        .select('id');
+
+      if(error){ btn.disabled = false; setMsg('Could not delete: ' + error.message, 'err'); return; }
+      if(!data || !data.length){
+        // 0 rows: either RLS blocked it (started / has results / not owner) OR
+        // the Fn actually deleted it but its response got lost — check which.
+        const { data: still } = await supabase.from('sessions').select('id').eq('id', id).maybeSingle();
+        if(still){
+          btn.disabled = false;
+          setMsg(`Could not delete — the ${noun} may have started or already has results.`, 'err');
+          return;
+        }
+        // Row is gone → the cancellation DID happen; fall through to success.
+      }
     }
     closeModal();
     await loadSessions();

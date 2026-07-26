@@ -1,6 +1,7 @@
 import { supabase } from './db.js';
 import * as auth from './auth.js';
 import { createAddToCalendar } from './calendar.js';
+import { fetchRsvpMap, createRsvpButton } from './rsvp.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
@@ -80,6 +81,8 @@ export function mount(el, eventType = 'session'){
   }
   const roomCounts = new Map();          // sessionId -> people currently in the room (presence)
   const roomChannels = new Map();        // sessionId -> presence channel (observer, never tracks)
+  let rsvpBySession = new Map();         // sessionId -> { count, mine } ("I'll be there"); NULL = table unreachable → hide the RSVP layer
+  const rsvpButtons = new Map();         // sessionId -> button handle (rebuilt on each render)
 
   async function loadSessions(){
     const [{ data, error }, resRes] = await Promise.all([
@@ -109,16 +112,19 @@ export function mount(el, eventType = 'session'){
     recBySession = new Map();
     const nowMs = Date.now();
     const recIds = sessions.filter(s => sessionState(s, nowMs) === 'finished').map(s => s.id);
-    const [profQ, recQ] = await Promise.all([
+    const rsvpIds = sessions.filter(s => sessionState(s, nowMs) !== 'finished').map(s => s.id);
+    const [profQ, recQ, rsvpM] = await Promise.all([
       organizerIds.length
         ? supabase.from('profiles').select('id, display_name, avatar_url, approved_maker, practitioner_handle').in('id', organizerIds)
         : Promise.resolve({ data: [] }),
       recIds.length
         ? supabase.from('session_recordings').select('session_id, duration_seconds, media').eq('status', 'ready').in('session_id', recIds)
         : Promise.resolve({ data: [] }),
+      fetchRsvpMap(rsvpIds),
     ]);
     for(const p of (profQ.data || [])) organizersById.set(p.id, p);
     for(const r of (recQ.data || [])) recBySession.set(r.session_id, r);
+    rsvpBySession = rsvpM;
     renderSessions();
   }
 
@@ -248,11 +254,18 @@ export function mount(el, eventType = 'session'){
         </div>
         <div class="session-meta sess-when">${esc(formatStart(s.scheduled_start))} · ${s.duration_minutes} min</div>`;
 
+    // "N going" — RSVP social proof on upcoming (and live) cards. When the
+    // table isn't deployed (map is null) the whole RSVP layer stays hidden.
+    const rsvp = (rsvpBySession && rsvpBySession.get(s.id)) || { count: 0, mine: false };
+    const rsvpChip = (base === 'finished' || !rsvpBySession) ? ''
+      : `<span class="rsvp-chip" data-role="rsvp-chip"${rsvp.count > 0 ? '' : ' hidden'}>★ ${rsvp.count} going</span>`;
+
     card.innerHTML = `
       <div class="sess-left">${leftHtml}</div>
       <div class="sess-mid">
         ${pillHtml(shown)}
         <span class="sess-activity">${esc(activity)}</span>
+        ${rsvpChip}
       </div>
       <div class="sess-right">
         <div class="countdown${base === 'live' ? ' live' : ''}" data-role="countdown"></div>
@@ -260,11 +273,67 @@ export function mount(el, eventType = 'session'){
         <div class="sess-actions">${actionMain}</div>
       </div>`;
 
-    // "Remind me" (calendar) for anything not yet finished or live.
+    // "I'll be there" + "Remind me" (calendar) for anything not yet finished or live.
     if(base !== 'live' && base !== 'finished'){
+      const me = auth.getState().user?.id || null;
+      const isOwn = !!(me && s.created_by_user_id && me === s.created_by_user_id);
+      // Button only on PUBLIC events (the insert policy is public-only — a pill
+      // on a restricted event could never succeed) and only while the table is
+      // reachable (null map = SQL not deployed → no dead buttons).
+      if(!isOwn && rsvpBySession && (s.access_mode || 'public') === 'public'){
+        const rb = createRsvpButton(s, {
+          compact: true, going: rsvp.mine, loginHash: roomBase + s.id,
+          onToggled: going => {
+            const e = rsvpBySession.get(s.id) || { count: 0, mine: false };
+            e.mine = going; e.count = Math.max(0, e.count + (going ? 1 : -1));
+            rsvpBySession.set(s.id, e);
+            applyRsvpChip(s.id);
+          },
+        });
+        rsvpButtons.set(s.id, rb);
+        card.querySelector('.sess-actions').append(rb.el);
+      }
       card.querySelector('.sess-actions').append(createAddToCalendar({ ...s, _hostName: organizerName }));
     }
     return card;
+  }
+
+  function applyRsvpAll(){
+    if(!rsvpBySession) return;
+    const now = Date.now();
+    for(const s of sessions){
+      if(sessionState(s, now) === 'finished') continue;
+      applyRsvpChip(s.id);
+      const rb = rsvpButtons.get(s.id);
+      if(rb) rb.setGoing((rsvpBySession.get(s.id) || {}).mine || false);
+    }
+  }
+
+  // Patch one card's "N going" chip in place (no re-render → no countdown flicker).
+  function applyRsvpChip(id){
+    if(!rsvpBySession) return;
+    const card = el.querySelector(`.session-card[data-id="${CSS.escape(String(id))}"]`);
+    if(!card) return;
+    const chip = card.querySelector('[data-role="rsvp-chip"]');
+    if(!chip) return;
+    const e = rsvpBySession.get(id) || { count: 0, mine: false };
+    chip.textContent = `★ ${e.count} going`;
+    chip.hidden = e.count === 0;
+  }
+
+  // Batched refresh when any RSVP row changes anywhere (own channel; debounced
+  // — bots RSVP in bursts).
+  let rsvpTimer = null;
+  function queueRsvpRefresh(){
+    clearTimeout(rsvpTimer);
+    rsvpTimer = setTimeout(async () => {
+      const now = Date.now();
+      const ids = sessions.filter(s => sessionState(s, now) !== 'finished').map(s => s.id);
+      const m = await fetchRsvpMap(ids);
+      if(m === null) return;   // table unreachable — keep whatever we had
+      rsvpBySession = m;
+      applyRsvpAll();
+    }, 400);
   }
 
   // Sort rank for the Upcoming section: live → active practice room → soon → later.
@@ -299,6 +368,7 @@ export function mount(el, eventType = 'session'){
     const upcomingEl = $('upcomingList');
     const pastEl = $('pastList');
     if(!upcomingEl || !pastEl) return;   // view was unmounted before async resolution
+    rsvpButtons.clear();                 // stale handles die with the re-rendered cards
 
     const now = Date.now();
     const upcoming = [];
@@ -397,6 +467,22 @@ export function mount(el, eventType = 'session'){
   const channel = supabase.channel('sessions-changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, () => loadSessions())
     .subscribe();
+  // The RSVP listener rides its OWN channel: if event_rsvps isn't deployed /
+  // published yet, only this channel errors — the sessions live-refresh above
+  // must never be collateral damage.
+  const rsvpChannel = supabase.channel('rsvps-changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'event_rsvps' }, () => queueRsvpRefresh())
+    .subscribe();
+
+  // Auth settles async after a hard refresh — reload so "mine"/own-event state is right.
+  let lastUid;
+  const unsubAuth = auth.subscribeAuth(a => {
+    const uid = a.user?.id || null;
+    if(lastUid === undefined){ lastUid = uid; return; }   // initial fire — loadSessions() below covers it
+    if(uid === lastUid) return;
+    lastUid = uid;
+    loadSessions();
+  });
 
   const tickTimer = setInterval(tickCountdowns, 1000);
 
@@ -404,7 +490,10 @@ export function mount(el, eventType = 'session'){
 
   return () => {
     clearInterval(tickTimer);
+    clearTimeout(rsvpTimer);
+    unsubAuth();
     supabase.removeChannel(channel);
+    supabase.removeChannel(rsvpChannel);
     for(const ch of roomChannels.values()) supabase.removeChannel(ch);
     roomChannels.clear();
   };

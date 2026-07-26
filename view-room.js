@@ -9,6 +9,7 @@ import { createAddToCalendar } from './calendar.js';
 import * as wakeLock from './wake-lock.js';
 import { mountVoiceDock, mountVoicePlayer, fetchRecordingPlayback, REC_POSTROLL_MS } from './voice.js';
 import { mountEventPromo } from './event-promo.js';
+import { mountRsvpDock } from './rsvp.js';
 import { mountSessionReplay } from './replay.js';
 import { mountVideoShare } from './video-share.js';
 
@@ -141,6 +142,7 @@ export function mount(el, sessionId, inviteToken = null){
   let broadcastTimer = null, renderTimer = null, flushTimer = null;
   let unsubFrames = null, unsubStatus = null;
   let started = false, unsubAuthGate = null;
+  let disposed = false;   // set by cleanup — the async load IIFE must not touch a re-used container
 
   let bleConnected = false;
 
@@ -183,6 +185,7 @@ export function mount(el, sessionId, inviteToken = null){
       </div>
       <div class="room-sub" id="roomSub"></div>
       <div class="room-actions" id="roomActions"></div>
+      <div id="rsvpDock" hidden></div>
       <p class="room-practice-note" id="roomPracticeNote" hidden>This room is open for practice now — official results are recorded once the session begins.</p>
       <div class="voice-dock" id="voiceDock" hidden></div>
       <div id="promoDock" hidden></div>
@@ -249,6 +252,7 @@ export function mount(el, sessionId, inviteToken = null){
   let hostAvatarUrl = null;                     // maker photo → the voice dock's breathing ring
   let voiceDock = null, voiceLive = false;      // Live Voice: dock UI + my "I am speaking" presence flag
   let promoDock = null;                         // maker announcement toolkit (G3)
+  let rsvpDock = null;                          // "I'll be there" toggle + live "N going" strip
   let voicePlayer = null;                       // "Listen again" card on the results screen
   let sessReplay = null;                        // session replay (R3) on the results screen
   let recLive = false;                          // host only: server-confirmed "recording is running"
@@ -258,6 +262,7 @@ export function mount(el, sessionId, inviteToken = null){
   (async () => {
     const baseQ = supabase.from('sessions').select('*');
     const { data, error } = await (sessionId ? baseQ.eq('id', sessionId) : baseQ.eq('invite_token', inviteToken)).maybeSingle();
+    if(disposed) return;   // navigated away while loading — the container belongs to the next view now
     if(error || !data){
       $('roomTitle').textContent = (inviteToken && !sessionId) ? 'Invite link not valid' : 'Session not found';
       $('roomSub').innerHTML = '<a href="#/sessions" class="link">Back to sessions</a>';
@@ -288,6 +293,7 @@ export function mount(el, sessionId, inviteToken = null){
     if(session.created_by_user_id){
       const { data: hp } = await supabase.from('profiles')
         .select('practitioner_handle, approved_maker, avatar_url').eq('id', session.created_by_user_id).maybeSingle();
+      if(disposed) return;
       if(hp){ hostHandle = hp.practitioner_handle || null; hostIsMaker = !!hp.approved_maker; hostAvatarUrl = hp.avatar_url || null; }
     }
 
@@ -303,8 +309,16 @@ export function mount(el, sessionId, inviteToken = null){
     }
     if(!accessOk && accessMode === 'followers'){
       accessOk = !!(meId && await auth.isConnectedTo(session.created_by_user_id));
+      if(disposed) return;
     }
     if(!accessOk){ renderLocked(accessMode); return; }
+
+    // RSVP AFTER the access gate (a locked room must never offer a working
+    // "I'll be there") and only on public events — the insert policy is
+    // public-only, so a pill on restricted rooms could never succeed anyway.
+    if(phaseNow === 'pre' && accessMode === 'public'){
+      rsvpDock = mountRsvpDock($('rsvpDock'), session, { actionsEl });
+    }
 
     // Restricted room → small "entry restricted" badge + (host) a copy-invite-link control.
     if(accessMode !== 'public'){
@@ -390,7 +404,9 @@ export function mount(el, sessionId, inviteToken = null){
   }
   function showNameGate(){
     if(started) return;
-    $('nameGate').hidden = false;
+    const gate = $('nameGate');
+    if(!gate) return;   // navigated away before the 1.2s auth wait (e.g. RSVP → login)
+    gate.hidden = false;
     $('rName').focus();
     $('rJoin').addEventListener('click', () => {
       const v = $('rName').value.trim();
@@ -1562,9 +1578,11 @@ export function mount(el, sessionId, inviteToken = null){
   window.addEventListener('resize', render);
 
   return () => {
+    disposed = true;   // stops the load IIFE from mounting into a re-used container
     if(unsubVoiceAuth) unsubVoiceAuth();
     if(voiceDock) voiceDock.destroy();
     if(promoDock) promoDock.destroy();
+    if(rsvpDock) rsvpDock.destroy();
     if(voicePlayer) voicePlayer.destroy();
     if(sessReplay) sessReplay.destroy();
     if(videoShare) videoShare.destroy();

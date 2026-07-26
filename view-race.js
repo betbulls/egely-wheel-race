@@ -32,6 +32,7 @@ import { computeStats, downsample } from './analytics.js';
 import * as wakeLock from './wake-lock.js';
 import { mountVoiceDock, mountVoicePlayer, fetchRecordingPlayback, REC_POSTROLL_MS } from './voice.js';
 import { mountEventPromo } from './event-promo.js';
+import { mountRsvpDock } from './rsvp.js';
 import { mountRaceReplay } from './replay.js';
 import { mountVideoShare } from './video-share.js';
 
@@ -346,16 +347,19 @@ export function mount(el, raceId, inviteToken = null){
   const $ = id => el.querySelector('#' + id);
   let voiceDock = null, voiceLive = false;   // Live Voice: dock UI + my "I am speaking" presence flag
   let promoDock = null;                      // maker announcement toolkit (G3)
+  let rsvpDock = null;                       // "I'll be there" toggle + live "N going" strip
   let voicePlayer = null;                    // "Listen again" card on the results screen
   let racePlayback = null;                   // race replay (R2) on the results screen
   let videoShare = null;                     // "Share as video" block on the results screen
   let recLive = false;                       // host only: server-confirmed "recording is running"
   let unsubVoiceAuth = null;
+  let disposed = false;                      // set by cleanup — the async load IIFE must not touch a re-used container
 
   // ---- Load + access gate ----------------------------------------------------
   (async () => {
     const baseQ = supabase.from('sessions').select('*');
     const { data, error } = await (raceId ? baseQ.eq('id', raceId) : baseQ.eq('invite_token', inviteToken)).maybeSingle();
+    if(disposed) return;   // navigated away while loading — the container belongs to the next view now
     if(error || !data){
       $('rlHead').innerHTML = `<div class="rl-title">${(inviteToken && !raceId) ? 'Invite link not valid' : 'Race not found'}</div>
         <p class="rl-meta"><a href="#/my-races" class="link">Back to races</a></p>`;
@@ -373,11 +377,12 @@ export function mount(el, raceId, inviteToken = null){
     const isHostUser = !!(meId && session.created_by_user_id && meId === session.created_by_user_id);
     let accessOk = accessMode === 'public' || isHostUser;
     if(!accessOk && accessMode === 'invite') accessOk = !!(inviteToken && session.invite_token && inviteToken === session.invite_token);
-    if(!accessOk && accessMode === 'followers') accessOk = !!(meId && await auth.isConnectedTo(session.created_by_user_id));
+    if(!accessOk && accessMode === 'followers'){ accessOk = !!(meId && await auth.isConnectedTo(session.created_by_user_id)); if(disposed) return; }
     if(!accessOk){ renderLocked(accessMode); return; }
 
     if(session.created_by_user_id){
       const { data: hp } = await supabase.from('profiles').select('avatar_url, display_name').eq('id', session.created_by_user_id).maybeSingle();
+      if(disposed) return;
       if(hp){ hostAvatar = hp.avatar_url || null; hostName = hp.display_name || null; }
     }
 
@@ -434,7 +439,8 @@ export function mount(el, raceId, inviteToken = null){
       <div class="rl-host">${avatarHtml(hostAvatar, hn)}<span>Hosted by <b style="color:#011624">${esc(hn)}</b></span></div>
       <div class="rl-meta">${esc(when)} · ${session.duration_minutes} min</div>
       <div class="rl-badges">${accessBadge}${verifiedBadge}</div>
-      <div class="rl-actions" id="rlActions"></div>`;
+      <div class="rl-actions" id="rlActions"></div>
+      <div id="rlRsvp" hidden></div>`;
     const actions = $('rlActions');
     if(phase() === 'pre') actions.appendChild(createAddToCalendar({ ...session, _hostName: hn }));
     actions.appendChild(shareButton());
@@ -443,6 +449,13 @@ export function mount(el, raceId, inviteToken = null){
       if(meId && meId === session.created_by_user_id){
         actions.appendChild(copyButton('Copy invite link', location.origin + location.pathname + '#/join/' + session.invite_token));
       }
+    }
+    // RSVP: prominent "I'll be there" pill (first action) + live "N going"
+    // strip — public events only (the insert policy is public-only; renderHead
+    // already runs after the access gate).
+    if(phase() === 'pre' && (session.access_mode || 'public') === 'public'){
+      if(rsvpDock) rsvpDock.destroy();
+      rsvpDock = mountRsvpDock($('rlRsvp'), session, { actionsEl: actions });
     }
   }
 
@@ -512,7 +525,9 @@ export function mount(el, raceId, inviteToken = null){
   }
   function showNameGate(){
     if(begun) return;
-    $('rlBody').innerHTML = `<div class="rl-gate">
+    const body = $('rlBody');
+    if(!body) return;   // navigated away before the 1.2s auth wait (e.g. RSVP → login)
+    body.innerHTML = `<div class="rl-gate">
       <label for="rlName" style="font-weight:700;color:#011624">Your name</label>
       <input type="text" id="rlName" maxlength="60" placeholder="Your name">
       <button type="button" class="rl-join" id="rlJoin">Join</button></div>`;
@@ -1223,9 +1238,11 @@ export function mount(el, raceId, inviteToken = null){
 
   // ---- Cleanup ---------------------------------------------------------------
   return () => {
+    disposed = true;   // stops the load IIFE from mounting into a re-used container
     if(unsubVoiceAuth) unsubVoiceAuth();
     if(voiceDock) voiceDock.destroy();
     if(promoDock) promoDock.destroy();
+    if(rsvpDock) rsvpDock.destroy();
     if(voicePlayer) voicePlayer.destroy();
     if(racePlayback) racePlayback.destroy();
     if(videoShare) videoShare.destroy();

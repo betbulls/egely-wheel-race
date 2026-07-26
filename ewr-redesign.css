@@ -2446,3 +2446,67 @@ input.vp-seek:focus{padding:0;border:none;box-shadow:none;
   .rp-stat{flex:1;min-width:0;padding:8px 10px}
   .rp-clock{font-size:16px}
 }
+
+/* =============================================================================
+   RSVP — "I'll be there" (rsvp.js). Prominent accent pill that flips to a
+   green "You're going" confirmation (hover reveals the cancel affordance);
+   plus the "N going" strip with overlapping attendee avatars on the detail
+   pages and a compact count chip on the list cards.
+   ========================================================================== */
+.rsvp-btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  font-family:'Montserrat','Inter',sans-serif;font-size:12.5px;font-weight:700;letter-spacing:.04em;
+  border-radius:var(--ewr-radius-pill);padding:9px 18px;cursor:pointer;
+  border:1.5px solid var(--ewr-accent-strong);background:var(--ewr-accent-strong);color:#fff;
+  box-shadow:0 6px 16px -8px rgba(82,48,218,.55);
+  transition:background .15s,border-color .15s,color .15s,box-shadow .15s}
+.rsvp-btn:focus-visible{outline:2px solid var(--ewr-accent);outline-offset:2px}
+.rsvp-btn svg{display:block;flex-shrink:0}
+.rsvp-btn[aria-busy="true"]{opacity:.7;cursor:default}
+/* Going state — confirmed green tint. */
+.rsvp-btn.on{background:rgba(32,178,107,.13);border-color:rgba(32,178,107,.5);color:#0f8a52;box-shadow:none}
+.rsvp-face{display:inline-flex;align-items:center;gap:7px}
+.rsvp-btn.on .rsvp-face-cancel{display:none}
+/* Compact list-card variant: outline pill (the filled version would fight the
+   card's primary "Enter room" button); the on-state stays the green confirm. */
+.rsvp-btn.sm{font-size:11.5px;padding:7px 13px;box-shadow:none;
+  background:#fff;border-color:rgba(82,48,218,.45);color:var(--ewr-accent)}
+.rsvp-btn.sm.on{background:rgba(32,178,107,.13);border-color:rgba(32,178,107,.5);color:#0f8a52}
+/* Hover states ONLY on hover-capable devices — on touch, :hover sticks after a
+   tap and the fresh green "You're going" would instantly render as the rose
+   cancel face. Tap = toggle; hover = preview of what a click would do. */
+@media (hover:hover){
+  .rsvp-btn:hover{background:var(--ewr-dark);border-color:var(--ewr-dark);color:#fff}
+  .rsvp-btn.on:hover{background:rgba(240,68,56,.09);border-color:rgba(240,68,56,.42);color:#c2415b}
+  .rsvp-btn.on:hover .rsvp-face-on{display:none}
+  .rsvp-btn.on:hover .rsvp-face-cancel{display:inline-flex}
+  .rsvp-btn.sm:hover{background:var(--ewr-accent-tint);border-color:var(--ewr-accent);color:var(--ewr-accent-strong)}
+  .rsvp-btn.sm.on:hover{background:rgba(240,68,56,.09);border-color:rgba(240,68,56,.42);color:#c2415b}
+}
+
+/* "N going" strip (detail pages): star + count + overlapping faces. */
+.rsvp-dock{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}
+.rsvp-going{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;
+  color:var(--ewr-text)}
+.rsvp-going svg{color:#f5b700}
+.rsvp-going .rsvp-n{font-family:'Montserrat',sans-serif;font-weight:700}
+.rsvp-avs{display:inline-flex;align-items:center}
+.rsvp-av{width:26px;height:26px;border-radius:50%;border:2px solid #fff;margin-left:-8px;
+  box-shadow:0 1px 3px rgba(1,22,36,.18);object-fit:cover}
+.rsvp-av:first-child{margin-left:0}
+.rsvp-av-init{display:inline-flex;align-items:center;justify-content:center;
+  background:var(--ewr-surface-muted);color:#5a6571;font-size:11px;font-weight:700}
+.rsvp-more{font-size:11.5px;color:var(--ewr-text-muted)}
+.rsvp-empty{font-size:12.5px;color:var(--ewr-text-muted)}
+
+/* Compact count chip on the Sessions/Races list cards. */
+.rsvp-chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;
+  letter-spacing:.03em;color:var(--ewr-accent);background:var(--ewr-accent-tint);
+  border-radius:var(--ewr-radius-pill);padding:2px 9px;white-space:nowrap}
+
+/* Room / race-lobby actions: the RSVP pill leads the row; full-width on mobile.
+   List cards: the RSVP pill takes its own row, Enter room + calendar share the next. */
+@media (max-width:600px){
+  .room-actions .rsvp-btn,.rl-actions .rsvp-btn{flex:1 1 100%}
+  .sess-actions{flex-wrap:wrap}
+  .sess-actions .rsvp-btn{flex:1 1 100%}
+}
