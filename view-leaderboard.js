@@ -1,6 +1,6 @@
 import { supabase } from './db.js';
 import * as auth from './auth.js';
-import { ACHIEVEMENTS, LEVELS, TIER_XP } from './achievements.js';
+import { ACHIEVEMENTS, LEVELS, TIER_XP, iconHtml } from './achievements.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
@@ -55,7 +55,7 @@ function renderRare(badges){
       if(ta !== tb) return ta - tb;
       return new Date(a.unlocked_at) - new Date(b.unlocked_at);
     });
-  return rare.map(b => `<span class="lb-rare-icon tier-${b.tier}" title="${esc(b.title)}">${b.icon}</span>`).join('');
+  return rare.map(b => `<span class="lb-rare-icon tier-${b.tier}" title="${esc(b.title)}">${iconHtml(b)}</span>`).join('');
 }
 
 // ---- Status title — a short persona derived from the user's data --------

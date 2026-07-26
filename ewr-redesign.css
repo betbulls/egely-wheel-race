@@ -2510,3 +2510,22 @@ input.vp-seek:focus{padding:0;border:none;box-shadow:none;
   .sess-actions{flex-wrap:wrap}
   .sess-actions .rsvp-btn{flex:1 1 100%}
 }
+
+/* =============================================================================
+   ACHIEVEMENT BADGE ART — the custom SVG family (assets/achievement-icons/,
+   "aura disc" chassis). Sizes bumped 34→44 (mobile 28→36): the ringless disc
+   lets the artwork carry the meaning, so it earns the extra room. The .ai-emoji
+   span is the fallback when an svg is missing — it inherits the old font-size
+   look. Locked grayscale keeps working (the filter sits on the wrapper).
+   ========================================================================== */
+.db-icon{font-size:44px}
+.db-icon .ai-img{width:44px;height:44px;display:inline-block;vertical-align:top}
+.drc-icon{font-size:44px}
+.drc-icon .ai-img{width:44px;height:44px;display:inline-block;vertical-align:top}
+.dm-icon .ai-img{width:24px;height:24px;display:inline-block;vertical-align:-5px}
+.lb-rare-icon .ai-img{width:18px;height:18px;display:inline-block;vertical-align:-4px}
+.lb-podium-card .lb-rare-icon .ai-img{width:16px;height:16px}
+@media (max-width:600px){
+  .db-icon{font-size:36px}
+  .db-icon .ai-img{width:36px;height:36px}
+}

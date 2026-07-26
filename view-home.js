@@ -1,7 +1,7 @@
 import { supabase } from './db.js';
 import * as auth from './auth.js';
 import { vitalityColor as vColor } from './analytics.js';
-import { CATEGORIES, LEVELS, TIER_XP, computeAchievements, pickNextMilestones, computeLevelState } from './achievements.js';
+import { CATEGORIES, LEVELS, TIER_XP, computeAchievements, pickNextMilestones, computeLevelState, iconHtml } from './achievements.js';
 import { fetchUserAchievements, recordNewUnlocks, markSeen } from './achievements-store.js';
 import { fetchProgress } from './experiments-store.js';
 import { completedExperimentCount, pickContinue, experimentState, getTopic } from './experiments.js';
@@ -1237,7 +1237,7 @@ function recentCard(a, isNew, stored){
     <div class="dash-recent-card tier-${a.tier}${isNew ? ' is-new' : ''}" title="${esc(a.description)}">
       ${isNew ? '<span class="dash-new-pill">NEW</span>' : ''}
       <button type="button" class="db-info" aria-label="Info">i</button>
-      <div class="drc-icon">${a.icon}</div>
+      <div class="drc-icon">${iconHtml(a)}</div>
       <div class="drc-title">${esc(a.title)}</div>
       ${descBlock(a, stored)}
     </div>`;
@@ -1259,7 +1259,7 @@ function milestoneCard(a){
   return `
     <div class="dash-milestone tier-${a.tier}">
       <div class="dm-row">
-        <span class="dm-icon">${a.icon}</span>
+        <span class="dm-icon">${iconHtml(a)}</span>
         <div class="dm-title">${esc(a.title)}</div>
       </div>
       <div class="dm-bar"><div class="dm-bar-fill" style="width:${pct}%"></div></div>
@@ -1309,7 +1309,7 @@ function badgeCard(a, isNew, stored){
     <div class="${cls.join(' ')}" title="${esc(a.description)}">
       ${isNew ? '<span class="dash-new-pill">NEW</span>' : ''}
       <button type="button" class="db-info" aria-label="Info">i</button>
-      <div class="db-icon">${a.icon}</div>
+      <div class="db-icon">${iconHtml(a)}</div>
       <div class="db-title">${esc(a.title)}</div>
       ${status}
       ${descBlock(a, stored)}
