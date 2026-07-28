@@ -289,12 +289,17 @@ export function mountPartners(host){
 
   // ---- render --------------------------------------------------------------------
   function render(){
-    const rolls = partners.map(p => ({ p, r: rollup(p) }));
+    // Archived partners (stalled / test accounts) live in their own quiet list at
+    // the bottom — they never show up in the roster or the attention cards.
+    const active = partners.filter(p => !p.archived);
+    const archived = partners.filter(p => p.archived);
+    const rolls = active.map(p => ({ p, r: rollup(p) }));
     const attention = rolls.filter(({ r }) => {
       if(!r.waitingOn) return false;
       const d = daysAgo(r.lastActivity) || 0;
       return r.waitingOn.side === 'us' || d >= 3;
     }).slice(0, 6);
+    const editorBlock = (() => { const op = partners.find(x => x.id === openId); return op ? editorHtml(op, rollup(op)) : ''; })();
 
     host.innerHTML = `
     <div class="admp">
@@ -302,8 +307,9 @@ export function mountPartners(host){
         <div>
           <h1 style="font:700 24px 'Montserrat',sans-serif;color:#011624;margin:0">Influencer onboarding</h1>
           <p style="font:400 13.5px 'Inter',sans-serif;color:#67737c;margin:5px 0 0">
-            ${partners.length} partner${partners.length === 1 ? '' : 's'}
+            ${active.length} partner${active.length === 1 ? '' : 's'}
             ${attention.length ? ` · <b style="color:#b8860b">${attention.length} need${attention.length === 1 ? 's' : ''} attention</b>` : ' · all quiet ✓'}
+            ${archived.length ? ` · ${archived.length} archived` : ''}
           </p>
         </div>
         <div style="flex:1"></div>
@@ -339,7 +345,7 @@ export function mountPartners(host){
       </div>` : ''}
 
       <div class="sec">All partners</div>
-      ${partners.length ? `
+      ${active.length ? `
       <div class="admp-tablewrap"><table class="admp-roster">
         <tr><th>Partner</th><th>Stage</th><th>Waiting on</th><th>Last activity</th><th></th></tr>
         ${rolls.map(({ p, r }) => `
@@ -355,15 +361,32 @@ export function mountPartners(host){
               ? `<span class="admp-chip ${r.waitingOn.side}">${r.waitingOn.side === 'us' ? '🛠 US' : 'THEM'} · ${esc(r.waitingOn.step.title)}</span>`
               : '<span class="admp-ok">—</span>'}</td>
             <td>${fmtAgo(r.lastActivity)}${r.lastEmailAt ? `<br><span style="font-size:10.5px;color:#99a2a7">nudged ${fmtAgo(r.lastEmailAt)}</span>` : ''}</td>
-            <td>${r.waitingOn && r.waitingOn.side === 'them' && (daysAgo(r.lastActivity) || 0) >= 3
-              ? `<button class="admp-btn" data-remind="${p.id}" title="Send reminder">📧</button>` : `<button class="admp-btn line" data-open-editor="${p.id}">Open</button>`}</td>
+            <td style="white-space:nowrap">${r.waitingOn && r.waitingOn.side === 'them' && (daysAgo(r.lastActivity) || 0) >= 3
+              ? `<button class="admp-btn" data-remind="${p.id}" title="Send reminder">📧</button>` : `<button class="admp-btn line" data-open-editor="${p.id}">Open</button>`}<button class="admp-btn line" data-archive="${p.id}" title="Archive — move to the quiet list below" style="margin-left:6px">🗄</button></td>
           </tr>
         `).join('')}
-      </table></div>
-      ${(() => { const op = partners.find(x => x.id === openId); return op ? editorHtml(op, rollup(op)) : ''; })()}` : `
+      </table></div>` : archived.length ? `
+      <div style="background:#fff;border:1px solid #dfe3e6;border-radius:14px;padding:22px;color:#99a2a7;font:400 14px 'Inter',sans-serif">
+        No active partners — everyone is in the archived list below.
+      </div>` : `
       <div style="background:#fff;border:1px solid #dfe3e6;border-radius:14px;padding:22px;color:#99a2a7;font:400 14px 'Inter',sans-serif">
         No partners yet — add the first one above. They get a personal onboarding hub the moment they log in with that email.
       </div>`}
+      ${editorBlock}
+      ${archived.length ? `
+      <div class="sec" style="color:#99a2a7">Archived · out of your day-to-day</div>
+      <div class="admp-tablewrap"><table class="admp-roster">
+        <tr><th>Partner</th><th>Stage</th><th></th></tr>
+        ${archived.map(p => { const r = rollup(p); return `
+          <tr data-open="${p.id}" style="opacity:.72${openId === p.id ? ';background:#fbfaff' : ''}">
+            <td><div class="admp-p">
+              <span class="admp-av" style="filter:grayscale(1)">${esc((p.invite_name || p.email)[0].toUpperCase())}</span>
+              <div><b style="color:#67737c">${esc(p.invite_name || p.email)}</b><small>${esc(p.email)}</small></div>
+            </div></td>
+            <td>${r.launched ? `<span class="admp-ok" style="color:#99a2a7">${r.isMaker ? 'Maker' : 'Launched'}</span>` : r.pct + '%'}</td>
+            <td style="white-space:nowrap"><button class="admp-btn line" data-unarchive="${p.id}">↩ Restore</button><button class="admp-btn line" data-open-editor="${p.id}" style="margin-left:6px">Open</button></td>
+          </tr>`; }).join('')}
+      </table></div>` : ''}
     </div>`;
 
     bind();
@@ -384,6 +407,9 @@ export function mountPartners(host){
         <span style="flex:1"></span>
         <button class="admp-btn line" data-welcome="${p.id}">📧 Welcome email</button>
         <button class="admp-btn line" data-remind="${p.id}">📧 Send reminder</button>
+        ${p.archived
+          ? `<button class="admp-btn line" data-unarchive="${p.id}">↩ Restore</button>`
+          : `<button class="admp-btn line" data-archive="${p.id}" title="Move to the quiet list — restore anytime">🗄 Archive</button>`}
         <button class="admp-btn line" data-close-editor>✕ Close</button>
       </div>
       <div class="admp-edbody">
@@ -613,6 +639,27 @@ export function mountPartners(host){
           ? `💰 $${Number(st.totalEarned || 0)} earned · ${Number(st.sales || 0)} sales`
           : 'not an UpPromote affiliate yet';
       }
+    }));
+
+    // archive / restore (admin-side organization only — the partner's hub keeps working)
+    host.querySelectorAll('[data-archive]').forEach(b => b.addEventListener('click', async () => {
+      const id = Number(b.dataset.archive);
+      const p = partners.find(x => x.id === id);
+      if(!confirm(`Archive ${p?.invite_name || p?.email || 'this partner'}?\n\nThey move to the quiet Archived list at the bottom — no reminders, no attention cards. Their hub keeps working, and you can restore them anytime.`)) return;
+      b.disabled = true;
+      const { error } = await supabase.from('partner_onboarding')
+        .update({ archived: true, updated_at: new Date().toISOString() }).eq('id', id);
+      if(error){ b.disabled = false; alert('Could not archive: ' + error.message); return; }
+      if(openId === id) openId = null;
+      await loadAll(); render();
+    }));
+    host.querySelectorAll('[data-unarchive]').forEach(b => b.addEventListener('click', async () => {
+      const id = Number(b.dataset.unarchive);
+      b.disabled = true;
+      const { error } = await supabase.from('partner_onboarding')
+        .update({ archived: false, updated_at: new Date().toISOString() }).eq('id', id);
+      if(error){ b.disabled = false; alert('Could not restore: ' + error.message); return; }
+      await loadAll(); render();
     }));
 
     // save partner fields
