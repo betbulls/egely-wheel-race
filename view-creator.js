@@ -53,7 +53,15 @@ function styles(){
   .cw-st.on span{color:#fff}
   .cw-st.done b{background:#20b26b;color:#fff}
   .cw-st.done span{color:#7fd6ab}
-  @media (max-width:600px){ .cw-st span{display:none} .cw-st{justify-content:center} .cw-st.on span{display:inline} }
+  /* Mobile rail: inactive steps shrink to bare dots, the ACTIVE step stretches
+     and keeps its full label readable (Csaba, 2026-07-26). */
+  @media (max-width:600px){
+    .cw-steps{gap:5px}
+    .cw-st{flex:0 1 42px;justify-content:center;padding:8px 5px}
+    .cw-st span{display:none}
+    .cw-st.on{flex:1 1 auto;justify-content:flex-start;padding:8px 12px}
+    .cw-st.on span{display:inline;overflow:visible}
+  }
   .cw-coach{display:flex;gap:10px;align-items:flex-start;margin:14px 0 0;background:var(--ewr-accent-tint,rgba(82,48,218,.08));
     border:1px solid rgba(82,48,218,.18);border-radius:13px;padding:11px 14px;font-size:13px;line-height:1.5;color:#26323b}
   .cw-coach b{color:#011624}
