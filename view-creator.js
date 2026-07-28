@@ -93,6 +93,23 @@ function styles(){
   .cw-back{background:transparent;border:none;color:#67737c;font:600 12.5px 'Inter',sans-serif;cursor:pointer;padding:8px 4px}
   .cw-back:hover:not(:disabled){color:#011624;background:transparent}
   .cw-solo-host .view-head{display:none}
+  /* Wizard-only reorder of the embedded solo SETUP panel: camera first, the
+     Start button LAST — you aim the camera, then you roll (Csaba, 2026-07-26).
+     The plain #/solo route keeps its own order. */
+  .cw-solo-host .solo-setup{display:flex;flex-direction:column}
+  .cw-solo-host .solo-setup .solo-top{order:1}
+  .cw-solo-host .solo-setup .solo-durfield{order:2}
+  .cw-solo-host .solo-setup #sVoiceDock{order:3}
+  .cw-solo-host .solo-setup .solo-controls{order:4;margin-top:14px}
+  .cw-solo-host .solo-setup .solo-msg{order:5}
+  .cw-solo-host .solo-controls #sStart{width:100%;padding:13px 20px}
+  .cw-spin{flex:none;width:15px;height:15px;border-radius:50%;margin-top:2px;
+    border:2.5px solid rgba(82,48,218,.25);border-top-color:#5230da;animation:cwspin .8s linear infinite}
+  @keyframes cwspin{to{transform:rotate(360deg)}}
+  .cw-coach .cw-bar{display:block;height:5px;border-radius:999px;background:#e8e4f8;overflow:hidden;margin-top:8px}
+  .cw-coach .cw-bar i{display:block;height:100%;width:40%;border-radius:999px;
+    background:linear-gradient(90deg,#37dbff,#5230da);animation:cwslide 1.3s ease-in-out infinite}
+  @keyframes cwslide{0%{margin-left:-40%}100%{margin-left:100%}}
   .cw-stats{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px}
   .cw-stat{background:var(--ewr-surface-muted,#f2f3f4);border:1px solid var(--ewr-border,#dfe3e6);border-radius:12px;
     padding:9px 16px;min-width:78px;text-align:center}
@@ -202,12 +219,13 @@ export function mount(el){
     }).join('');
   }
 
-  function coach(html){
+  function coach(html, opts2 = {}){
     const c = $('#cwCoach');
     if(!c) return;
     if(!html){ c.hidden = true; return; }
     c.hidden = false;
-    c.innerHTML = `<span class="cw-coach-ic">🧭</span><span>${html}</span>`;
+    const ic = opts2.spinner ? '<span class="cw-spin"></span>' : '<span class="cw-coach-ic">🧭</span>';
+    c.innerHTML = `${ic}<span>${html}${opts2.bar ? '<span class="cw-bar"><i></i></span>' : ''}</span>`;
   }
 
   function teardownStep(){
@@ -309,6 +327,15 @@ export function mount(el){
         recPhase = 'closing';
         coach(`<b>Measurement complete ✓</b> The camera is still rolling for your <b>closing words</b> (up to 60s) — tap <b>End</b> when you're done, then <b>Save to my measurements</b>.`);
       },
+      onSaving(hasRecording){
+        // The camera take upload can take a while on big files — say so LOUDLY
+        // so the wait never reads as "stuck" (Csaba feedback, 2026-07-26).
+        if(destroyed) return;
+        recPhase = 'storing';
+        coach(hasRecording
+          ? `<b>Storing your recording…</b> A camera take can be big — this may take up to a minute. Hang tight, we'll move on automatically.`
+          : `<b>Saving your measurement…</b>`, { spinner: true, bar: true });
+      },
       onSaved(id, s, meta){
         if(destroyed) return;
         const g = takeGen;
@@ -321,7 +348,7 @@ export function mount(el){
         coach(recordingError
           ? `<b>Saved</b> — but your recording could not be stored. You can <b>Re-record</b> on the next screen, or continue with a silent video.`
           : `<b>Saved ✓</b> Taking you to your result…`);
-        setTimeout(() => { if(!destroyed && step === 2 && g === takeGen) go(3); }, recordingError ? 2600 : 1200);
+        setTimeout(() => { if(!destroyed && step === 2 && g === takeGen) go(3); }, recordingError ? 2600 : 600);
       },
     });
   }

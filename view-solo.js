@@ -37,8 +37,9 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>
 //   presetDuration— seconds; pre-selects the duration
 //   onStart(durationSec)          — measurement (and recording) just started
 //   onFinished(stats, {verified}) — measurement done, results screen shown (stats may be null)
-//   onSaved(resultId, stats, {recording}) — result row saved; fires AFTER the
-//     recording upload settled (recording: 'video'|'audio'|null)
+//   onSaving(hasRecording)        — Save clicked; the (possibly slow) upload begins
+//   onSaved(resultId, stats, {recording, recordingError}) — result row saved;
+//     fires AFTER the recording upload settled (recording: 'video'|'audio'|null)
 export function mount(el, opts = {}){
   let duration = 60;          // seconds
   let measuring = false, finished = false;
@@ -372,6 +373,7 @@ export function mount(el, opts = {}){
 
   async function saveMeasurement(){
     if(saved || !lastStats) return;
+    try { opts.onSaving?.(soloVoice.armed); } catch {}
     soloVoice.endPostRoll();   // close the closing-words recording before we store it
     const a = auth.getState();
     const identity = (a.displayName || '').trim() || 'Me';
