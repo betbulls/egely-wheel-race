@@ -29,7 +29,17 @@ const SIGNAL_GAP_MS = 10000;  // a continuous BLE loss this long during a measur
 const racerId = name => name.trim().toLowerCase().replace(/\s+/g, '_');
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
-export function mount(el){
+// opts (all optional — the router passes none): the Creator Studio wizard
+// embeds this view and orchestrates around it via these hooks.
+//   presetLabel   — pre-fills the measurement-name input
+//   hideLabel     — hides the name field (the wizard owns the title)
+//   hideHeader    — hides the page title block
+//   presetDuration— seconds; pre-selects the duration
+//   onStart(durationSec)          — measurement (and recording) just started
+//   onFinished(stats, {verified}) — measurement done, results screen shown (stats may be null)
+//   onSaved(resultId, stats, {recording}) — result row saved; fires AFTER the
+//     recording upload settled (recording: 'video'|'audio'|null)
+export function mount(el, opts = {}){
   let duration = 60;          // seconds
   let measuring = false, finished = false;
   let finalizing = false;     // countdown done, draining the last delayed frame
@@ -97,6 +107,13 @@ export function mount(el){
 
   const $ = id => el.querySelector('#' + id);
 
+  // Wizard embedding: preset/hide bits (no-ops for the plain #/solo route).
+  if(opts.hideHeader){ const h = el.querySelector('.view-head'); if(h) h.hidden = true; }
+  if(opts.presetLabel) $('sLabel').value = String(opts.presetLabel).slice(0, 60);
+  if(opts.hideLabel){ const f = $('sLabel').closest('.field'); if(f) f.hidden = true; }
+  const startDur = Math.max(5, Math.min(600, parseInt(opts.presetDuration, 10) || 60));
+  if(opts.presetDuration) $('sDur').value = String(startDur);
+
   // Duration presets (pill control) — writes into the hidden #sDur input so the
   // measurement engine below stays untouched. Capped at 10 minutes (600s).
   const soloDur = durationPicker($('sDurPick'), {
@@ -105,7 +122,7 @@ export function mount(el){
       { label: '2 min', value: 120 }, { label: '5 min', value: 300 },
       { label: '10 min', value: 600 },
     ],
-    value: 60,
+    value: startDur,
     custom: { min: 10, max: MAX_SOLO_SECONDS, step: 10, format: fmtSeconds },
     onChange: v => { $('sDur').value = String(v); },
   });
@@ -283,6 +300,7 @@ export function mount(el){
     presence.setMeasuring(true);   // show me as "measuring" on the Live wall
     wakeLock.acquire();
     soloVoice.start();             // optional mic recording (no-op unless armed)
+    try { opts.onStart?.(duration); } catch {}
   }
 
   // Countdown hit zero (or the user pressed Stop): stop SAMPLING immediately —
@@ -320,6 +338,7 @@ export function mount(el){
     else if(soloVoice.armed) soloVoice.endPostRoll();   // no results screen → close the recording so it never runs on
     closeLive();
     wakeLock.release();
+    try { opts.onFinished?.(lastStats, { verified: !cheatDetected && !signalLost }); } catch {}
   }
 
   function showEval(stats){
@@ -375,13 +394,19 @@ export function mount(el){
     $('sSaveMsg').className = 'form-msg ok';
     $('sSaveMsg').textContent = 'Saved to your measurements.';
     // Voice recorded? Attach it to the saved result — the share video plays it.
+    let storedMedia = null, recError = null;
     if(soloVoice.armed && savedRow && savedRow.id){
       $('sSaveMsg').textContent = 'Storing your recording…';   // a camera take can be big — show that we're working
       const vr = await soloVoice.saveFor(savedRow.id, a.user?.id);
       $('sSaveMsg').textContent = vr.ok
         ? (vr.media === 'video' ? 'Saved with your camera recording. 🎥' : 'Saved with your voice recording. 🎙')
         : 'Saved — but the recording could not be stored (' + vr.reason + ').';
+      if(vr.ok) storedMedia = vr.media || 'audio';
+      else recError = vr.reason || 'upload failed';
     }
+    // Wizard hook: fires only after the recording upload settled, so a render
+    // kicked off right away can never miss the camera take.
+    try { opts.onSaved?.(savedRow.id, s, { recording: storedMedia, recordingError: recError }); } catch {}
   }
 
   function setMsg(text, state){ const m = $('sMsg'); m.className = 'solo-msg ' + (state || ''); m.textContent = text; }

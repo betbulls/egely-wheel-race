@@ -24,6 +24,7 @@ import { mount as mountSpiritualMakers } from './view-spiritual-makers.js';
 import { mount as mountRender } from './view-render.js';
 import { mount as mountShowcase } from './view-showcase.js';
 import { mount as mountPartnerOnboarding } from './view-partner-onboarding.js';
+import { mount as mountCreator } from './view-creator.js';
 import * as presence from './presence.js';
 import { supabase } from './db.js';
 
@@ -113,6 +114,7 @@ function router(){
   else if(path === '/spiritual-makers') setView(mountSpiritualMakers);
   else if(path === '/showcase') setView(mountShowcase);
   else if(path === '/onboarding') setView(mountPartnerOnboarding);
+  else if(path === '/creator') setView(mountCreator);
   else if(path === '/clients') setView(mountClients, param);
   else if(path === '/leaderboard') setView(mountLeaderboard);
   else if(path === '/connect') setView(mountConnect, param);
@@ -323,6 +325,11 @@ function renderAuthArea(){
     const partnerItem = isPartner
       ? `<a href="#/onboarding" data-route="/onboarding">Partner Hub</a>`
       : '';
+    // Creator Studio: approved Spiritual Makers only. approvedMaker is already in
+    // auth state (no RPC needed) — false on the first emit, settles with accessReady.
+    const creatorItem = a.approvedMaker
+      ? `<a href="#/creator" data-route="/creator">Creator Studio</a>`
+      : '';
     authArea.innerHTML = `
       ${levelPillHtml()}
       <button type="button" class="account-trigger" id="accountTrigger" aria-haspopup="true" aria-expanded="false">
@@ -331,6 +338,7 @@ function renderAuthArea(){
         <span class="account-chevron">▾</span>
       </button>
       <div class="account-menu" id="accountMenu" hidden>
+        ${creatorItem}
         ${partnerItem}
         <a href="#/me" data-route="/me">My measurements</a>
         <a href="#/my-sessions" data-route="/my-sessions">My sessions</a>
@@ -385,6 +393,11 @@ let partnerCheckedFor = null;
 function togglePartnerNav(){
   document.querySelectorAll('.nav-partner').forEach(n => { n.hidden = !isPartner; });
 }
+// Creator Studio nav: driven straight off auth state (approvedMaker), no RPC.
+function toggleCreatorNav(a){
+  const show = !!(a.user && a.approvedMaker);
+  document.querySelectorAll('.nav-creator').forEach(n => { n.hidden = !show; });
+}
 async function checkPartner(a){
   const uid = a.user?.id || null;
   if(!uid){ isPartner = false; partnerCheckedFor = null; togglePartnerNav(); return; }
@@ -418,6 +431,7 @@ auth.subscribeAuth(a => {
   prevUid = uid;
   renderAuthArea();
   checkPartner(a);
+  toggleCreatorNav(a);
 });
 
 // ---- "More" nav menu (mobile only — surfaces Sessions + Global Ranking) -----

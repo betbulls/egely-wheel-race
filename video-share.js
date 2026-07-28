@@ -52,7 +52,9 @@ function injectCss() {
 
 const shell = inner => `<div class="vs-card"><div class="vs-head"><b>🎬 Share as a video</b></div>${inner}</div>`;
 
-export function mountVideoShare(el, { kind, targetId, notBeforeMs = 0 }) {
+// introStyle (optional, Creator Studio): 'light'|'gold'|'navy' — passed through
+// to the render chain; absent = the classic intro (existing call sites unchanged).
+export function mountVideoShare(el, { kind, targetId, notBeforeMs = 0, introStyle = null }) {
   injectCss();
   let destroyed = false, timer = 0;
   const jobs = {};   // fmt → row | null (none yet) | undefined (table/column missing)
@@ -60,10 +62,19 @@ export function mountVideoShare(el, { kind, targetId, notBeforeMs = 0 }) {
 
   const latestJob = async fmt => {
     try {
-      const { data, error } = await supabase.from('render_jobs').select('*')
-        .eq('kind', kind).eq('target_id', Number(targetId)).eq('format', fmt)
-        .order('id', { ascending: false }).limit(1).maybeSingle();
-      return error ? undefined : (data || null);   // undefined = table/format missing → hide
+      // Filter by intro style too — a classic row for the same result (made on
+      // the detail page) must not shadow the wizard's styled render, and vice
+      // versa. Pre-migration DBs (no intro_style column) error on the filtered
+      // query → retry unfiltered so the old behavior survives any deploy order.
+      const q = withStyle => {
+        let b = supabase.from('render_jobs').select('*')
+          .eq('kind', kind).eq('target_id', Number(targetId)).eq('format', fmt);
+        if (withStyle) b = b.eq('intro_style', introStyle || 'classic');
+        return b.order('id', { ascending: false }).limit(1).maybeSingle();
+      };
+      let { data, error } = await q(true);
+      if (error) ({ data, error } = await q(false));
+      return error ? undefined : (data || null);   // undefined = table missing → hide
     } catch (_) { return undefined; }
   };
   const refresh = async () => {
@@ -98,7 +109,10 @@ export function mountVideoShare(el, { kind, targetId, notBeforeMs = 0 }) {
   };
 
   const paint = () => {
-    if (destroyed || !el.isConnected) { stop(); return; }
+    if (destroyed) { stop(); return; }
+    // Detached ≠ dead: the Creator Studio re-parents this card between steps —
+    // skip the tick and keep polling; only destroy() ends the card for good.
+    if (!el.isConnected) return;
     const a = auth.getState();
     if (!a.user || FORMATS.some(f => jobs[f.fmt] === undefined)) { el.innerHTML = ''; return; }   // degrade silently / logged-out
     const gated = !!(notBeforeMs && Date.now() < notBeforeMs);
@@ -133,7 +147,7 @@ export function mountVideoShare(el, { kind, targetId, notBeforeMs = 0 }) {
       const r = await fetch(FN_URL, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: 'Bearer ' + session.access_token },
-        body: JSON.stringify({ kind, id: Number(targetId), format: fmt }),
+        body: JSON.stringify({ kind, id: Number(targetId), format: fmt, ...(introStyle ? { introStyle } : {}) }),
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok || !j.ok) throw new Error(j.error || ('HTTP ' + r.status));
@@ -152,5 +166,5 @@ export function mountVideoShare(el, { kind, targetId, notBeforeMs = 0 }) {
   };
 
   refresh();
-  return { destroy() { destroyed = true; stop(); el.innerHTML = ''; } };
+  return { destroy() { destroyed = true; stop(); el.innerHTML = ''; }, refresh };
 }

@@ -990,6 +990,11 @@ export function mount(el, kind, id) {
     // render (1920×1080 studio layout); anything else is the classic 9:16.
     const FMT = window.__rvFormat === '169' ? '169' : '916';
     d._fmt = FMT;
+    // Intro style (Creator Studio): the worker injects __rvIntroStyle for a
+    // selectable intro skin. Absent/unknown → 'classic' = the untouched look.
+    // Styles only reskin the INTRO frame; board + finale stay the dark cinema.
+    const ISTYLE = ['light', 'gold', 'navy'].includes(window.__rvIntroStyle) ? window.__rvIntroStyle : '';
+    if (ISTYLE) stage.classList.add('rv-i-' + ISTYLE);
     // Camera composite (Broadcast layout): the worker injects __rvCamUrl when the
     // event has a camera recording. Without it every layout is byte-identical to
     // the voice-only render — all camera styling hangs off .rv-with-cam.
@@ -1054,7 +1059,7 @@ export function mount(el, kind, id) {
     // __rvPlay(), then waits for __rvDone. __rvShow is a manual phase switch.
     window.__rvShow = ph => showPhase(stage, ph);
     window.__rvPlay = () => playSequence(stage, d, paintFrame, defSpeed, fn => { stopSeq = fn; });
-    window.__rvData = { kind: d.kind, id, count: d.count, durationMs: d.durationMs, speed: defSpeed(d.durationMs), cam: !!d.cam, fmt: FMT };
+    window.__rvData = { kind: d.kind, id, count: d.count, durationMs: d.durationMs, speed: defSpeed(d.durationMs), cam: !!d.cam, fmt: FMT, intro: ISTYLE || 'classic' };
     window.__rvReady = true;
     window.__rvDone = false;
   })();
@@ -1165,6 +1170,42 @@ body.rv-mode > header, body.rv-mode #navMoreMenu, body.rv-mode .fab, body.rv-mod
 .rv-mini-track{position:relative;width:660px;height:20px;border-radius:12px;margin-top:96px;background:rgba(255,255,255,.07)}
 .rv-mini-track .rv-finish{right:4px}
 .rv-mini-track .rv-ava.pk{width:46px;height:46px}.rv-mini-track .rv-ava.pk>span{font-size:18px}
+
+/* Intro styles (Creator Studio) — reskin the INTRO frame only; the board and
+   finale phases keep the classic dark cinema. Scoped to the intro frame so a
+   style can never bleed into the replay. */
+.rv-i-light .rv-frame[data-phase="intro"]{
+  background:
+    radial-gradient(900px 520px at 50% -120px, rgba(82,48,218,.12), transparent 70%),
+    radial-gradient(700px 400px at 88% 16%, rgba(55,219,255,.10), transparent 60%),
+    linear-gradient(180deg,#ffffff 0%, #eef1f5 100%)}
+.rv-i-light .rv-frame[data-phase="intro"] .rv-brand,
+.rv-i-light .rv-frame[data-phase="intro"] .rv-in-name{color:#011624}
+.rv-i-light .rv-frame[data-phase="intro"] .rv-in-host{color:#67737c}
+.rv-i-light .rv-frame[data-phase="intro"] .rv-in-host b{color:#011624}
+.rv-i-light .rv-frame[data-phase="intro"] .rv-in-meta{color:#67737c}
+.rv-i-light .rv-frame[data-phase="intro"] .rv-url{color:#67737c}
+.rv-i-light .rv-frame[data-phase="intro"] .rv-pill{border-color:rgba(82,48,218,.35);background:rgba(82,48,218,.08);color:#401d91}
+.rv-i-gold .rv-frame[data-phase="intro"]{
+  background:
+    radial-gradient(900px 560px at 50% -120px, rgba(232,184,75,.34), transparent 70%),
+    radial-gradient(700px 420px at 12% 24%, rgba(255,215,94,.10), transparent 60%),
+    linear-gradient(180deg,#20180a 0%, #0d0a04 100%)}
+.rv-i-gold .rv-frame[data-phase="intro"] .rv-in-name{
+  background:linear-gradient(135deg,#ffd75e,#e6a417);-webkit-background-clip:text;background-clip:text;color:transparent}
+.rv-i-gold .rv-frame[data-phase="intro"] .rv-pill{border-color:rgba(232,184,75,.55);background:rgba(232,184,75,.12);color:#e8b84b}
+.rv-i-gold .rv-frame[data-phase="intro"] .rv-ava.hero{box-shadow:0 0 0 6px rgba(232,184,75,.55), 0 24px 60px rgba(0,0,0,.5)}
+.rv-i-navy .rv-frame[data-phase="intro"]{
+  background:
+    radial-gradient(2.5px 2.5px at 18% 22%, rgba(154,223,255,.9), transparent 60%),
+    radial-gradient(2px 2px at 78% 14%, rgba(154,223,255,.7), transparent 60%),
+    radial-gradient(1.8px 1.8px at 64% 66%, rgba(255,255,255,.5), transparent 60%),
+    radial-gradient(2.2px 2.2px at 32% 78%, rgba(154,223,255,.6), transparent 60%),
+    radial-gradient(2px 2px at 88% 44%, rgba(255,255,255,.45), transparent 60%),
+    radial-gradient(1000px 620px at 50% 30%, #16324a, transparent 75%),
+    linear-gradient(180deg,#04101c 0%, #010b14 100%)}
+.rv-i-navy .rv-frame[data-phase="intro"] .rv-ava.hero{box-shadow:0 0 0 6px rgba(55,219,255,.45), 0 24px 60px rgba(0,0,0,.6)}
+.rv-i-navy .rv-frame[data-phase="intro"] .rv-pill{border-color:rgba(55,219,255,.5);background:rgba(55,219,255,.10);color:#7ee8ff}
 
 /* session intro: group-pulse wave (the race track's calm sibling) */
 .rv-mini-pulse{position:relative;width:660px;height:96px;margin-top:90px}
