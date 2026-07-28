@@ -558,7 +558,8 @@ export function mount(el){
   }
 
   function unboxingBody(s){
-    return proofBody(s, `<div class="pob-note">Film the moment you open the box — your audience loves the first reaction. Post it anywhere (YouTube, Instagram, TikTok), then paste the link to the post here.</div>`, 'https://…');
+    return proofBody(s, `<div class="pob-note">Film the moment you open the box — your audience loves the first reaction. Post it anywhere (YouTube, Instagram, TikTok), then paste the link to the post here.</div>
+      <div class="pob-note" style="margin-top:8px">🎬 And this is just the start — once you're live, <a href="#/creator"><b>Creator Studio</b></a> guides you from a live measurement to a ready-to-post video, step by step.</div>`, 'https://…');
   }
 
   function shareVideoBody(s){
@@ -779,6 +780,7 @@ export function mount(el){
           ${act2.map(stepRow).join('')}
           <div class="pob-acth"><h3>Act 3 · Over to you</h3><div class="rule"></div></div>
           <div class="pob-tease">🎉 Once you launch, the stage is yours. Host your sessions, share your videos, and your commissions land right here — we wish you great work and a thriving business.</div>
+          <div class="pob-tease" style="margin-top:10px;flex-wrap:wrap">🎬 <div style="flex:1;min-width:200px">And when it's content time, <b>Creator Studio</b> is your fast lane — a guided wizard from a live camera measurement to a ready-to-post video, with a branded intro in your style.</div><a class="pob-btn" style="margin-left:auto;text-decoration:none;flex:none" href="#/creator">Open Creator Studio →</a></div>
         </main>
 
         ${railHtml(a, commission)}
@@ -892,6 +894,7 @@ export function mount(el){
         <main>
           ${earnBand()}
           <div class="pob-tease" style="margin-top:14px">🎬 After every event you host, the ready-to-post replay video lands in your inbox — with a caption you can copy straight to TikTok, Reels or Shorts.</div>
+          <div class="pob-tease" style="margin-top:10px;flex-wrap:wrap">✨ <div style="flex:1;min-width:200px">Creating solo content? <b>Creator Studio</b> takes you from a live camera measurement to a ready-to-post video, step by step.</div><a class="pob-btn" style="margin-left:auto;text-decoration:none;flex:none" href="#/creator">Open →</a></div>
           ${steps.length ? `<div class="pob-journeylink"><a href="#" data-show-journey>View your onboarding checklist →</a></div>` : ''}
         </main>
         ${railHtml(a, commission)}
