@@ -123,6 +123,17 @@
   }
   .ble-bar button:hover:not(:disabled){background:#6a47f0}
   #bleText{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px}
+  /* Wheel battery telltale — latched by app.js from the frames' battery field.
+     Links to the troubleshooting page; stays up across drops so a battery-killed
+     link still shows its cause next to the Connect button. */
+  .ble-batt{
+    display:inline-flex;align-items:center;gap:4px;flex-shrink:0;
+    background:rgba(255,92,92,.1);border:1px solid rgba(255,92,92,.35);color:#d64545;
+    border-radius:24px;padding:3px 9px;font-size:11px;font-weight:600;
+    white-space:nowrap;text-decoration:none;
+  }
+  .ble-batt:hover{background:rgba(255,92,92,.18)}
+  .ble-batt[hidden]{display:none}
   /* The header shows the full status on desktop and a terse one on mobile. */
   .ble-short{display:none}
 
@@ -1416,6 +1427,8 @@
   <div class="ble-bar idle" id="bleBar">
     <span class="dot"></span>
     <span id="bleText">Egely Wheel not connected</span>
+    <a id="bleBatt" class="ble-batt" href="#/how-to-connect" hidden
+       title="The wheel's 9V battery is running low — replace it to avoid connection drops."><svg width="14" height="9" viewBox="0 0 14 9" aria-hidden="true"><rect x="0.5" y="0.5" width="11" height="8" rx="2" fill="none" stroke="currentColor"/><rect x="12.2" y="2.6" width="1.5" height="3.8" rx="0.75" fill="currentColor"/><rect x="2" y="2" width="2.6" height="5" rx="1" fill="currentColor"/></svg> <span class="ble-full">Battery low</span><span class="ble-short">Low</span></a>
     <button id="bleBtn">Connect</button>
   </div>
   <div class="auth-area" id="authArea"></div>

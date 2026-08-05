@@ -241,7 +241,7 @@ function shortStatusText(s){
   if(s.status === 'connected') return 'Connected';
   if(s.status === 'connecting') return 'Connecting…';
   if(s.status === 'reconnecting') return 'Reconnecting…';
-  if(s.status === 'error') return 'Error';
+  if(s.status === 'error') return 'Connection problem';
   return 'Not connected';
 }
 
@@ -257,8 +257,10 @@ function updateBleButton(){
   else if(!a.user){ bleBtn.textContent = 'Log in to measure'; bleBtn.dataset.mode = 'login'; bleBtn.disabled = false; }
   else if(!a.subscriber){ bleBtn.textContent = 'Subscribe to measure'; bleBtn.dataset.mode = 'subscribe'; bleBtn.disabled = false; }
   // A previously-granted wheel can come back without the chooser — one tap.
-  else if(s.canReconnect){ bleBtn.textContent = 'Reconnect'; bleBtn.dataset.mode = 'reconnect'; bleBtn.disabled = s.status === 'connecting'; }
-  else { bleBtn.textContent = 'Connect'; bleBtn.dataset.mode = 'connect'; bleBtn.disabled = s.status === 'connecting'; }
+  // While a connect is in flight the button is disabled — say so on the label,
+  // or an inert "Connect" reads as the app being frozen.
+  else if(s.canReconnect){ bleBtn.textContent = s.status === 'connecting' ? 'Connecting…' : 'Reconnect'; bleBtn.dataset.mode = 'reconnect'; bleBtn.disabled = s.status === 'connecting'; }
+  else { bleBtn.textContent = s.status === 'connecting' ? 'Connecting…' : 'Connect'; bleBtn.dataset.mode = 'connect'; bleBtn.disabled = s.status === 'connecting'; }
 }
 
 ble.subscribeStatus(s => {
@@ -267,6 +269,32 @@ ble.subscribeStatus(s => {
     `<span class="ble-full">${esc(statusText(s))}</span>` +
     `<span class="ble-short">${esc(shortStatusText(s))}</span>`;
   updateBleButton();
+});
+
+// --- Wheel battery telltale ---------------------------------------------------
+// Every frame carries the wheel's battery health ('OK' | 'LOW'). Flip the header
+// chip only after 3 consecutive frames agree (a lone glitched frame never
+// flickers it), and do NOT clear it on disconnect: a weak 9V cell is the #1
+// cause of dropped links, so the chip must survive the drop to explain it. A
+// fresh battery clears it naturally once the next link reports OK.
+const bleBatt = document.getElementById('bleBatt');
+let battLow = false, battStreak = 0, lastBatt = '';
+ble.subscribeFrames(f => {
+  lastBatt = f.battery;
+  const low = f.battery === 'LOW';
+  if(low === battLow){ battStreak = 0; return; }
+  if(++battStreak >= 3){ battLow = low; battStreak = 0; bleBatt.hidden = !low; }
+});
+ble.subscribeStatus(s => {
+  // Fresh link: don't let a leftover 2-frame streak from the previous wheel
+  // complete against this one's first frames.
+  if(s.connected){ battStreak = 0; return; }
+  // A collapsing 9V cell can kill the link before 3 clean LOW frames arrive —
+  // the exact case the chip exists to explain. If the very last frame before
+  // the drop said LOW, latch the chip now, alongside the reconnect/error pill.
+  if((s.status === 'reconnecting' || s.status === 'error') && lastBatt === 'LOW' && !battLow){
+    battLow = true; battStreak = 0; bleBatt.hidden = false;
+  }
 });
 
 bleBtn.addEventListener('click', () => {

@@ -127,6 +127,7 @@ const PLATFORMS = [
 
 const CHECKLIST = [
   'Your Egely Wheel is turned on',
+  'The wheel has a fresh <b>9V battery</b> — a weak battery causes connection drops',
   'Bluetooth is enabled',
   'Keep the wheel near your phone or laptop',
   'You are on <b>live.egelywheel.com</b> (a secure page)',
@@ -143,11 +144,13 @@ const HAPPENS = [
 
 const TROUBLE = [
   ['I don’t see my wheel in the list', 'Make sure the wheel is switched on and close by, then tap Connect again. Only nearby, powered-on devices appear in the picker.'],
+  ['The app says “Battery low”', 'Your wheel runs on a standard <b>9V battery</b>. When it runs low, the wheel still turns on and shows up in the list, but the Bluetooth link becomes unstable and keeps dropping. Put in a fresh 9V battery, switch the wheel off and on, then tap Connect.'],
   ['The connection failed', 'Close any other app or browser tab that might already be connected to the wheel, then try once more. Only one app can use the wheel at a time.'],
   ['My iPhone keeps opening Safari', 'On iPhone and iPad, open the page inside <b>Bluefy</b> instead of Safari. Safari cannot connect to Bluetooth devices — Bluefy can.'],
   ['Bluefy is asking for permission', 'That is expected — tap Allow. Bluefy needs Bluetooth permission once so the page can find your wheel.'],
-  ['The wheel keeps disconnecting', 'Keep the wheel within a few metres and avoid locking the screen during a measurement. A weak battery in the wheel can also cause drops.'],
+  ['The wheel keeps disconnecting', 'Keep the wheel within a few metres, and check its <b>9V battery</b> — a weak battery is the most common cause of drops. On iPhone and iPad, the screen locking also pauses Bluetooth: set <b>Settings → Display &amp; Brightness → Auto-Lock</b> to <b>Never</b> (or 15 minutes) while you measure, and keep the device plugged in.'],
   ['Another app is already connected', 'If the wheel is connected elsewhere (another tab, app, or a paired Bluetooth setting), disconnect it there first — only one connection is allowed at a time.'],
+  ['Nothing helps — it still won’t connect', 'Fully close the browser app (swipe it away), reopen it, go to <b>live.egelywheel.com</b> and tap Connect. On iPhone and iPad, also switch Bluetooth off and back on in <b>Settings → Bluetooth</b>. If it keeps failing after that, replace the wheel’s 9V battery.'],
 ];
 
 function styles(){

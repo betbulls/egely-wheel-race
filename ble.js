@@ -25,6 +25,9 @@
 //   Best-effort, not a native-app forever connection: out of range, a dead
 //   battery, or an OS that suspends Bluetooth in the background can still drop
 //   it — and then we recover when the wheel/page comes back.
+//   iOS exception (IS_IOS below): retained handles rarely survive a drop there,
+//   so the burst is short and, after a real failed attempt, we drop the handle
+//   and route the user to Connect (the chooser) with a one-line explanation.
 
 const SERVICE_UUID = '49535343-fe7d-4ae5-8fa9-9fafd205e455';
 const TX_CHAR_UUID = '49535343-1e4d-4bd9-ba61-23c647249616';
@@ -33,10 +36,24 @@ const REMEMBER_KEY = 'ewr_ble_wheel';   // localStorage: minimal, non-sensitive 
 const RECONNECT_DELAYS = [400, 800, 1500, 3000, 5000, 8000];  // backoff schedule
 const RECONNECT_CAP = 10000;            // delay cap once the schedule runs out
 const RECONNECT_BUDGET_MS = 60000;      // how long one loud reconnect burst keeps trying
-const CONNECT_TIMEOUT_MS = 12000;       // bound a wedged gatt.connect so it can't hang forever
+const IOS_BUDGET_MS = 8000;             // ...but on iOS the burst stays SHORT (see loudReconnect)
+const CONNECT_TIMEOUT_MS = 12000;       // bound a wedged link establishment so it can't hang forever
 const RECENT_MS = 15 * 60 * 1000;       // auto-reconnect only this long after the last live link
 const KEEPALIVE_MIN = 30000;            // gentle background retry of an in-session dropped wheel
 const KEEPALIVE_MAX = 300000;           // ...backing off to this when it keeps failing
+
+// iOS/iPadOS WebKit (= Bluefy and friends; Safari itself has no Web Bluetooth).
+// Production evidence: after a drop there, the retained device handle is
+// usually dead for good — retries can never succeed and the ONLY reliable
+// recovery is a fresh chooser. So the reconnect policy differs on iOS (short
+// burst, then drop the handle and offer Connect). NOTE: do NOT gate this on
+// getDevices() absence — stock desktop/Android Chrome doesn't expose
+// getDevices either (still flag-gated as of Chrome 150), yet its retained
+// handles DO reconnect fine, and it must keep the full backoff burst.
+// iPadOS ≥13 masquerades as macOS in the UA, hence the touch-points check.
+const IS_IOS = typeof navigator !== 'undefined' &&
+  (/iPad|iPhone|iPod/.test(navigator.userAgent || '') ||
+   ((navigator.maxTouchPoints || 0) > 1 && /Mac/.test(navigator.platform || '')));
 
 let device = null;
 let txChar = null;
@@ -153,21 +170,27 @@ function withTimeout(p, ms, onTimeout){
 // its GATT torn down) without ever clobbering a live connection. Tears the link
 // down itself on ANY failure, so it never leaves a half-open GATT.
 async function openLink(dev){
-  const server = await withTimeout(dev.gatt.connect(), CONNECT_TIMEOUT_MS, () => { try { dev.gatt.disconnect(); } catch {} });
-  try {
-    const service = await server.getPrimaryService(SERVICE_UUID);
-    const char = await service.getCharacteristic(TX_CHAR_UUID);
-    await char.startNotifications();
-    return { server, char };
-  } catch(err){
-    try { server.disconnect(); } catch {}
-    if(err && err.name === 'NotFoundError'){
-      // The service lookup failing means this isn't an Egely Wheel (possible
-      // since the picker lists everything). Give the user a clear nudge.
-      throw new Error('That device is not an Egely Wheel. Turn the wheel ON and pick it from the list.');
+  // The timeout bounds the WHOLE establishment, not just gatt.connect():
+  // iOS caches GATT aggressively, and a stale handle can connect at the link
+  // layer and then wedge forever inside service discovery — which would pin
+  // 'connecting'/'reconnecting' with no escape if discovery were unbounded.
+  return withTimeout((async () => {
+    const server = await dev.gatt.connect();
+    try {
+      const service = await server.getPrimaryService(SERVICE_UUID);
+      const char = await service.getCharacteristic(TX_CHAR_UUID);
+      await char.startNotifications();
+      return { server, char };
+    } catch(err){
+      try { server.disconnect(); } catch {}
+      if(err && err.name === 'NotFoundError'){
+        // The service lookup failing means this isn't an Egely Wheel (possible
+        // since the picker lists everything). Give the user a clear nudge.
+        throw new Error('That device is not an Egely Wheel. Turn the wheel ON and pick it from the list.');
+      }
+      throw err;
     }
-    throw err;
-  }
+  })(), CONNECT_TIMEOUT_MS, () => { try { dev.gatt.disconnect(); } catch {} });
 }
 
 // Commit a freshly-opened link as the live connection. Only the generation
@@ -344,27 +367,63 @@ async function loudReconnect(allowAcquire){
     }
     const start = Date.now();
     let i = 0;
+    let tried = false;   // did we make at least one REAL radio attempt?
+    // iOS (Bluefy): keep the burst SHORT. A still-live handle heals a
+    // mid-measurement blip within the first quick tries (~1-3s, silent); a dead
+    // one — the common case there — would just pin the yellow spinner on
+    // retries that can never succeed. The ~8s wall-clock budget serves both:
+    // a fast-failing handle gets 3-4 tries, a hanging one gets exactly one
+    // (the connect timeout overruns the budget), and either way the user
+    // reaches a working button within seconds.
+    const budgetMs = IS_IOS ? IOS_BUDGET_MS : RECONNECT_BUDGET_MS;
     while(gen === attemptGen && !manualDisconnect){
       await sleep(RECONNECT_DELAYS[i] ?? RECONNECT_CAP);
       if(gen !== attemptGen) return;                 // superseded mid-wait
       if(manualDisconnect) break;
       // Budget bounds the burst regardless of visibility, so a tab left hidden
-      // doesn't pin 'reconnecting' + the mutex forever — it returns to idle and
-      // the next focus/visibility trigger starts a fresh burst.
-      if(Date.now() - start > RECONNECT_BUDGET_MS) break;
-      // Don't burn the radio attempting while backgrounded — it would just fail.
-      // We resume on a fresh visibility/focus trigger after this burst ends.
-      if(typeof document !== 'undefined' && document.visibilityState === 'hidden'){ i++; continue; }
+      // doesn't pin 'reconnecting' + the mutex forever.
+      if(Date.now() - start > budgetMs) break;
+      // Don't burn the radio attempting while backgrounded — it would just
+      // fail. Note: no i++ here — backoff paces RADIO attempts, and hidden
+      // iterations make none, so the first post-unlock attempt shouldn't be
+      // stuck behind an inflated sleep rung.
+      if(typeof document !== 'undefined' && document.visibilityState === 'hidden'){ continue; }
       try {
         if(!device) break;
+        tried = true;
         const link = await openLink(device);
         if(gen !== attemptGen || manualDisconnect){ try { link.server.disconnect(); } catch {} return; }
         commitLink(link);
         return;
-      } catch { /* still down — keep trying within budget */ }
+      } catch(err){
+        // Support breadcrumb: Bluefy has no devtools, and "why did the retry
+        // die" (fast reject vs 12s timeout) is exactly the datum the next
+        // support case needs — record it before we (possibly) drop the handle.
+        try { localStorage.setItem('ewr_ble_lastfail', JSON.stringify({
+          ts: Date.now(), name: (err && err.name) || '', msg: ((err && err.message) || '').slice(0, 200), ios: IS_IOS,
+        })); } catch {}
+        /* still down — keep trying within budget */
+      }
       i++;
     }
-    if(gen === attemptGen && status === 'reconnecting'){ status = 'idle'; emitStatus(); }
+    if(gen === attemptGen && status === 'reconnecting'){
+      if(IS_IOS && tried){
+        // iOS: a handle that failed a real attempt is almost certainly dead for
+        // good, and with no chooser-free re-acquire the header would pin a
+        // "Reconnect" that can never succeed (the incident dead-end). Drop the
+        // handle so the header offers Connect (the chooser — the only reliable
+        // recovery on iOS), and say WHY in one line instead of silently
+        // reverting to the never-connected look. `tried` matters: a burst spent
+        // entirely hidden (screen lock) made no attempt, so the handle may be
+        // perfectly alive — keep it and let the post-unlock trigger retry.
+        clearDevice(); device = null; txChar = null; forget();
+        status = 'error';
+        errorMsg = 'Connection lost — tap Connect and pick your wheel to continue.';
+        emitStatus();
+      } else {
+        status = 'idle'; emitStatus();
+      }
+    }
   } finally {
     if(gen === attemptGen) attempting = false;   // only the current owner releases the mutex
   }
