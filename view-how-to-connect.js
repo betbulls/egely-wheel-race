@@ -95,14 +95,14 @@ const PLATFORMS = [
       'Turn on Bluetooth.',
       'Open EWR Live in <b>Chrome</b>.',
       'Tap <b>Connect</b>.',
-      'Choose your Egely Wheel from the Bluetooth picker.',
+      'Choose your Egely Wheel from the list that pops up.',
       'Start measuring.',
     ],
   },
   {
     key: 'ios', icon: ICONS.apple, name: 'iPhone & iPad', tag: 'Use Bluefy', featured: true,
     badge: 'Recommended for iPhone',
-    intro: 'iPhone and iPad connect through Bluefy, a Web BLE browser.',
+    intro: 'iPhone and iPad connect through <b>Bluefy</b> — a free browser app that can talk to Bluetooth devices (Safari can’t).',
     list: [
       'Install <b>Bluefy — Web BLE Browser</b> from the App Store.',
       'Open Bluefy.',
@@ -110,12 +110,12 @@ const PLATFORMS = [
       'Log in.',
       'Tap <b>Connect</b> and choose your Egely Wheel.',
     ],
-    why: 'Bluefy is a Web BLE browser. It works just like a browser: open Bluefy, visit <b>live.egelywheel.com</b>, then tap Connect inside EWR Live. Your Egely Wheel connects only after you tap Connect — nothing happens in the background.',
+    why: 'Bluefy is a normal web browser with one extra ability: it can connect to Bluetooth devices. Open Bluefy, visit <b>live.egelywheel.com</b>, then tap Connect inside EWR Live. Your Egely Wheel connects only after you tap Connect — nothing happens in the background.',
     cta: { href: BLUEFY_URL, label: 'Install Bluefy from the App Store' },
   },
   {
     key: 'desktop', icon: ICONS.laptop, name: 'Mac & Windows', tag: 'Use Chrome',
-    intro: 'Use Chrome on Mac or Windows and connect from the page.',
+    intro: 'Use Chrome on Mac or Windows and connect from the page. Don’t have Chrome? It’s a free download from <b>google.com/chrome</b>.',
     list: [
       'Open <b>Chrome</b> on Mac or Windows.',
       'Make sure Bluetooth is enabled.',
@@ -142,15 +142,44 @@ const HAPPENS = [
   ['Saved only when you save', 'A measurement is stored only when you save or complete a session.'],
 ];
 
-const TROUBLE = [
-  ['I don’t see my wheel in the list', 'Make sure the wheel is switched on and close by, then tap Connect again. Only nearby, powered-on devices appear in the picker.'],
-  ['The app says “Battery low”', 'Your wheel runs on a standard <b>9V battery</b>. When it runs low, the wheel still turns on and shows up in the list, but the Bluetooth link becomes unstable and keeps dropping. Put in a fresh 9V battery, switch the wheel off and on, then tap Connect.'],
-  ['The connection failed', 'Close any other app or browser tab that might already be connected to the wheel, then try once more. Only one app can use the wheel at a time.'],
-  ['My iPhone keeps opening Safari', 'On iPhone and iPad, open the page inside <b>Bluefy</b> instead of Safari. Safari cannot connect to Bluetooth devices — Bluefy can.'],
-  ['Bluefy is asking for permission', 'That is expected — tap Allow. Bluefy needs Bluetooth permission once so the page can find your wheel.'],
-  ['The wheel keeps disconnecting', 'Keep the wheel within a few metres, and check its <b>9V battery</b> — a weak battery is the most common cause of drops. On iPhone and iPad, the screen locking also pauses Bluetooth: set <b>Settings → Display &amp; Brightness → Auto-Lock</b> to <b>Never</b> (or 15 minutes) while you measure, and keep the device plugged in.'],
-  ['Another app is already connected', 'If the wheel is connected elsewhere (another tab, app, or a paired Bluetooth setting), disconnect it there first — only one connection is allowed at a time.'],
-  ['Nothing helps — it still won’t connect', 'Fully close the browser app (swipe it away), reopen it, go to <b>live.egelywheel.com</b> and tap Connect. On iPhone and iPad, also switch Bluetooth off and back on in <b>Settings → Bluetooth</b>. If it keeps failing after that, replace the wheel’s 9V battery.'],
+// The universal remedy — fixes the vast majority of support cases. Shown
+// prominently above the detailed troubleshooting groups.
+const QUICKFIX = [
+  'Put a <b>fresh 9V battery</b> in the wheel — even if it still turns on. A weak battery is the #1 cause of connection problems. (No fresh battery at hand? Do steps 2–5 now and change the battery as soon as you can.)',
+  'Switch the wheel <b>off</b>, wait 10 seconds, switch it back <b>on</b>.',
+  'Make sure <b>no other phone, tablet or app</b> is connected to the wheel — it can only talk to one device at a time.',
+  '<b>Fully close your browser</b> — on a phone or iPad swipe it away in the app switcher; on a computer quit the browser completely — then reopen it and go to <b>live.egelywheel.com</b>.',
+  'Tap <b>Connect</b> and pick your Egely Wheel from the list.',
+];
+
+// Grouped troubleshooting: every in-app message and every common symptom gets
+// its own entry, phrased in the user's words. Keep answers short and concrete.
+const TROUBLE_GROUPS = [
+  ['I can’t connect', [
+    ['I don’t see my wheel in the list', 'Only nearby, powered-on devices appear in the list. Check the wheel is switched on and within arm’s reach, and that its <b>9V battery</b> is fresh — a nearly-empty battery can make the wheel invisible. If another phone, tablet or app is already connected to the wheel, it won’t appear either — disconnect it there first. Finally, open your phone’s <b>Settings → Bluetooth</b>: if “Egely Wheel” is listed under My Devices, tap the ⓘ next to it and choose <b>Forget This Device</b> — being paired there hides the wheel from the app.'],
+    ['It says “That device is not an Egely Wheel”', 'The list shows every Bluetooth device around you, and the one you picked wasn’t the wheel. Tap <b>Connect</b> again and choose the entry named <b>Egely Wheel</b>. If no names are shown, switch the wheel off and on and pick the entry that newly appears.'],
+    ['It says “Connection problem” or the connection failed', 'Technical-looking messages like “BLE connect timed out” all mean the same thing: the link didn’t come up. Close any other app or browser tab that might already be using the wheel, then try once more. If it fails again, follow the five steps under <b>“Having trouble? Try this first”</b>, just above these questions.'],
+    ['It says “Web Bluetooth is not available”', 'Your current browser can’t talk to Bluetooth devices. On a computer or Android phone, open <b>live.egelywheel.com</b> in <b>Chrome</b> (or Edge). On iPhone and iPad, use the <b>Bluefy</b> app instead — see the iPhone &amp; iPad card above.'],
+    ['I paired the wheel in my phone’s Bluetooth settings', 'The wheel should <b>never</b> be paired in <b>Settings → Bluetooth</b> — that blocks the app from reaching it. If “Egely Wheel” appears there under My Devices, tap the ⓘ next to it and choose <b>Forget This Device</b>. Then connect only from inside EWR Live, with the Connect button.'],
+  ]],
+  ['It disconnects or gets stuck', [
+    ['It connects, then drops after a few seconds', 'This is almost always the <b>9V battery</b>: a weak battery has enough power to switch on and appear in the list, but not enough to hold the Bluetooth link. Put in a brand-new battery. If it still drops, bring the wheel closer and move it away from other electronics.'],
+    ['It says “Connection lost — tap Connect…”', 'The Bluetooth link dropped — usually a weak <b>9V battery</b>, the screen locking, or the wheel moving out of range. Tap <b>Connect</b>, pick your wheel, and you’re back. If this keeps happening, replace the battery first.'],
+    ['It’s stuck on “Connecting…” or “Reconnecting…”', '“Reconnecting…” simply means the app is trying to bring a lost connection back. On iPhone and iPad it gives up by itself within about 15 seconds and shows “Connection lost — tap Connect…”. On a computer or Android phone it can keep trying for up to a minute — you don’t have to wait: tap <b>Stop</b> to halt it right away. Either way, then follow the five steps under <b>“Having trouble? Try this first”</b>, just above these questions.'],
+    ['The app says “Battery low”', 'Your wheel runs on a standard <b>9V battery</b>. When it runs low, the wheel still turns on, but the Bluetooth link becomes unstable and keeps dropping. Put in a fresh 9V battery, switch the wheel off and on, then tap Connect. The indicator next to the connection bar shows <b>Battery OK</b> in green or <b>Battery low</b> in red (shortened to “OK” / “Low” on phones) — and the red warning stays visible even after the wheel drops, so you can see why it dropped.'],
+    ['The wheel keeps disconnecting', 'Three things to check, in order: the <b>9V battery</b> (most common — replace it), the <b>distance</b> (keep the wheel within a few feet — same room, close by), and on iPhone/iPad the <b>screen locking</b> — see the next section.'],
+  ]],
+  ['iPhone & iPad', [
+    ['My screen locked and the wheel disconnected', 'iPhones and iPads pause Bluetooth when the screen locks — an Apple rule that affects every app. Before a longer session, set <b>Settings → Display &amp; Brightness → Auto-Lock</b> to <b>Never</b> (you can set it back afterwards), and keep the device plugged in if you can. Switching to another app or answering a call pauses the connection the same way — go back to Bluefy and tap <b>Connect</b> if the wheel dropped.'],
+    ['My iPhone keeps opening Safari', 'On iPhone and iPad, open the page inside <b>Bluefy</b> instead of Safari. Safari cannot connect to Bluetooth devices — Bluefy can.'],
+    ['Bluefy is asking for permission', 'That is expected — tap <b>Allow</b>. Bluefy needs Bluetooth permission once so the page can find your wheel. If you tapped <b>Don’t Allow</b> earlier, open your iPhone’s <b>Settings → Bluefy</b> and switch <b>Bluetooth</b> on, then try Connect again.'],
+    ['Bluefy worked before, but now nothing helps', 'Fully close Bluefy (swipe it away in the app switcher) and reopen it. Then switch Bluetooth off and back on in <b>Settings → Bluetooth</b>, and try Connect again. This clears the two most common iPhone/iPad glitches.'],
+  ]],
+  ['Login & access', [
+    ['The button says “Log in to measure”', 'Watching live sessions is free and needs no account. To measure with your own wheel, log in first: tap the button, enter your email address, and we send you an <b>8-digit code</b> — no password needed.'],
+    ['I never got the login code', 'Check your <b>Spam or Junk</b> folder first — the code email sometimes lands there. Make sure your email address was typed correctly, then request a new code. If you asked more than once, only the <b>newest</b> code works.'],
+    ['The button says “Subscribe to measure”', 'Measuring requires an active EWR Live subscription. Make sure you are logged in with the <b>same email address</b> you used when you subscribed or bought your wheel. If you are sure your subscription is active but the button still says Subscribe, email us — we’ll sort it out quickly.'],
+  ]],
 ];
 
 function styles(){
@@ -245,6 +274,12 @@ function styles(){
   .htc-mini-t{display:flex;align-items:center;gap:8px;font-family:'Montserrat',sans-serif;font-weight:600;font-size:14px;color:#011624;margin-bottom:6px}
   .htc-mini-t .htc-dot{width:8px;height:8px;border-radius:50%;background:linear-gradient(135deg,#37dbff,#5230da);flex-shrink:0}
   .htc-mini-d{color:#67737c;font-size:13px;line-height:1.5}
+  /* Quick-fix panel — the universal remedy, visually elevated */
+  .htc-quick{border-color:rgba(82,48,218,.35);background:linear-gradient(180deg,rgba(55,219,255,.07),rgba(82,48,218,.05)),#fff}
+  .htc-quick-h{font-family:'Montserrat',sans-serif;font-weight:600;font-size:14.5px;color:#011624;margin-bottom:14px}
+  .htc-quick .htc-steps li{font-size:14px}
+  .htc-quick .htc-step-n{background:rgba(82,48,218,.14);color:#401d91}
+  .htc-h3{font-family:'Montserrat',sans-serif;font-weight:600;font-size:14.5px;color:#401d91;margin:20px 0 10px;letter-spacing:.01em}
   /* Troubleshooting accordion */
   .htc-acc{background:#fff;border:1px solid #dfe3e6;border-radius:14px;overflow:hidden;box-shadow:0 6px 18px rgba(1,22,36,.05)}
   .htc-acc details{border-bottom:1px solid #eef1f3}
@@ -312,7 +347,7 @@ export function mount(el){
       <div class="htc-hero-text">
         <span class="htc-eyebrow">${ICONS.bluetooth} Measure from the browser</span>
         <h1>Connect your Egely Wheel</h1>
-        <p>EWR Live reads your vitality directly from the wheel over Bluetooth — <b>no cable, no pairing screen</b>. Pick your device below and follow the steps.</p>
+        <p>EWR Live reads your vitality directly from the wheel over Bluetooth — <b>no cable, no pairing screen</b>. Pick your device below and follow the steps. Already set up but it won’t connect? <a href="#/how-to-connect" id="htcJump"><b>Jump straight to the 5-step fix.</b></a></p>
       </div>
       ${heroStage()}
     </section>
@@ -341,14 +376,22 @@ export function mount(el){
       ${HAPPENS.map(([t, d]) => `<div class="htc-mini"><div class="htc-mini-t"><span class="htc-dot"></span>${esc(t)}</div><div class="htc-mini-d">${esc(d)}</div></div>`).join('')}
     </div>
 
-    <h2 class="htc-h2">Having trouble?</h2>
-    <div class="htc-acc">
-      ${TROUBLE.map(([q, a], i) => `<details name="htc-trouble"${i === 0 ? ' open' : ''}><summary>${esc(q)}</summary><div class="htc-acc-body">${a}</div></details>`).join('')}
+    <h2 class="htc-h2" id="htcQuickTitle">Having trouble? Try this first</h2>
+    <div class="htc-panel htc-quick">
+      <div class="htc-quick-h">These five steps fix most connection problems in about 2 minutes:</div>
+      ${steps(QUICKFIX)}
     </div>
 
+    <h2 class="htc-h2">Find your exact problem</h2>
+    ${TROUBLE_GROUPS.map(([group, items], gi) => `
+      <h3 class="htc-h3">${esc(group)}</h3>
+      <div class="htc-acc">
+        ${items.map(([q, a], i) => `<details name="htc-trouble"${gi === 0 && i === 0 ? ' open' : ''}><summary>${esc(q)}</summary><div class="htc-acc-body">${a}</div></details>`).join('')}
+      </div>`).join('')}
+
     <div class="htc-support">
-      <div class="htc-support-h">Still having trouble?</div>
-      <p>Make sure Bluetooth is on, keep the wheel nearby, and open EWR Live from the recommended browser for your device. If it still won’t connect, send us a screenshot of your device and browser.</p>
+      <div class="htc-support-h">Still stuck? We’ll fix it together.</div>
+      <p>Email us and include three things: <b>which device</b> you use (iPhone, iPad, Android or computer), <b>a photo or screenshot</b> of the message at the top of the page, and <b>what the wheel does</b> when you try. If needed, we’ll set up a short call and connect together.</p>
       <a class="htc-btn secondary" href="mailto:${esc(SUPPORT_EMAIL)}">Contact support</a>
     </div>
 
@@ -360,6 +403,17 @@ export function mount(el){
       </div>
     </div>
   </div>`;
+
+  // Hero shortcut for the already-frustrated visitor. A plain #anchor would be
+  // swallowed by the hash router, so scroll programmatically instead.
+  const jump = el.querySelector('#htcJump');
+  if(jump){
+    jump.addEventListener('click', (e) => {
+      e.preventDefault();
+      const target = el.querySelector('#htcQuickTitle');
+      if(target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
 
   // Mobile segmented device chooser — shows one platform card at a time.
   const seg = el.querySelector('.htc-seg');
