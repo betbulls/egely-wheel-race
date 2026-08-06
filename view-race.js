@@ -712,10 +712,14 @@ export function mount(el, raceId, inviteToken = null){
 
   // ---- Sampling / scoring (canonical slots) ----------------------------------
   function sample(){
-    // Keep the screen awake while racing with a wheel — a sleep would drop BLE
-    // right when a gap costs slots. Held through lobby+active (the wheel-connected
-    // race window), released once the race ends or we leave. Spectators never hold.
-    if(bleConnected && phase() !== 'post' && !raceEnded) wakeLock.acquire(); else wakeLock.release();
+    // Keep the screen awake for EVERYONE in a live race room — racers AND
+    // spectators (the session room already does this: a dimming phone broke the
+    // experience for watchers too). Crucially the lock must NOT depend on
+    // bleConnected: gating on it released the lock the instant a racer's wheel
+    // dropped — the screen slept during the exact reconnect window, iOS froze
+    // BLE, and a recoverable blip became a zero-filled unverified score.
+    // acquire() is idempotent; re-calling every tick heals a lost lock.
+    if(phase() !== 'post' && !raceEnded) wakeLock.acquire(); else wakeLock.release();
     const raw = bleConnected ? myLed : 0;
     myEma = myEma == null ? raw : myEma * 0.7 + raw * 0.3;
     // Keep my OWN roster entry fresh in EVERY phase (lobby too) — the broadcast is
@@ -748,6 +752,7 @@ export function mount(el, raceId, inviteToken = null){
         me.clientId = myClientId; me.slot = slot; me.cum = myCumulative;
         me.verified = myVerified; me.firstSlot = myFirstSlot;
       }
+      if(myFirstSlot != null) persistResume();   // racers only — a spectator snapshot would be rejected on restore anyway
     }
   }
 
@@ -780,15 +785,64 @@ export function mount(el, raceId, inviteToken = null){
     }
   }
 
+  // ---- Mid-race resume (memory-pressure reloads / route-away-and-back) -------
+  // iOS silently reloads a Bluefy tab under memory pressure, wiping this whole
+  // closure — without a snapshot the racer's accumulated score vanished, they
+  // re-entered as an unranked latecomer, and (worse) the reload hole could save
+  // as VERIFIED, because the signal-loss latch only arms once myFirstSlot is
+  // set. Snapshot my canonical state to sessionStorage while the race is
+  // active; restore on a remount into the SAME still-active race, and treat the
+  // blackout like any other signal gap (a ≥ SIGNAL_GAP_MS hole → unverified).
+  // Identity-scoped: without myId in the key, a same-tab account switch
+  // mid-race would resurrect the previous user's score under the new uid.
+  const resumeKey = () => 'ewr_race_resume_' + raceId + '_' + myId;
+  let lastResumeMs = 0;
+  function persistResume(){
+    const now = Date.now();
+    if(now - lastResumeMs < 2000) return;              // ~every 2s is plenty
+    lastResumeMs = now;
+    try { sessionStorage.setItem(resumeKey(), JSON.stringify({
+      ts: now, cum: myCumulative, firstSlot: myFirstSlot,
+      verified: myVerified, signalLost, disc: disconnectStartMs,
+      slots: Array.from({ length: TOTAL_SLOTS }, (_, i) => mySlots[i] === undefined ? null : mySlots[i]),
+    })); } catch {}
+  }
+  function restoreResume(){
+    try {
+      const raw = sessionStorage.getItem(resumeKey());
+      if(!raw) return;
+      const r = JSON.parse(raw);
+      if(!r || !Array.isArray(r.slots) || r.slots.length !== TOTAL_SLOTS) return;
+      if(!(r.ts >= startMs && r.ts <= endMs)) return;  // stale snapshot from another run
+      if(r.firstSlot == null) return;                  // was a pure spectator — nothing to resume
+      for(let i = 0; i < TOTAL_SLOTS; i++) if(r.slots[i] != null) mySlots[i] = r.slots[i];
+      myCumulative = r.cum || 0;
+      myFirstSlot = r.firstSlot;
+      signalLost = !!r.signalLost;
+      myVerified = !!r.verified;
+      // The blackout between snapshot and now is a real signal gap: arm the
+      // latch so the hole is judged by the same ≥ SIGNAL_GAP_MS rule as a live
+      // outage (short reload → still verified). If an outage was ALREADY
+      // running before the reload, count from its persisted start, not from
+      // the snapshot — otherwise each reload forgives up to ~10s of gap. Time
+      // after the race end never counts (the scored window is over).
+      disconnectStartMs = Math.min(r.disc ?? r.ts, r.ts);
+      const ref = Math.min(Date.now(), endMs);
+      if(ref - disconnectStartMs >= SIGNAL_GAP_MS){ signalLost = true; myVerified = false; }
+    } catch {}
+  }
+  function clearResume(){ try { sessionStorage.removeItem(resumeKey()); } catch {} }
+
   function onRaceStart(){
     // Drop practice scaffolding; the official window begins at slot 0.
     signalLost = false; disconnectStartMs = null;   // lobby/practice drops never carry into the race
     mySlots = new Array(TOTAL_SLOTS); myCumulative = 0;
     myFirstSlot = (phase() === 'active' && bleConnected) ? Math.max(0, curSlot()) : null;
+    restoreResume();   // remounting into a still-active race → pick up where we left off
     // Reflect the reset on my own roster entry right away so my lane doesn't briefly
     // render as "Late · Unranked" before the next sample() tick syncs it.
     const me = roster.get(myId);
-    if(me){ me.cum = 0; me.slot = curSlot(); me.firstSlot = myFirstSlot; me.lastSeen = Date.now(); }
+    if(me){ me.cum = myCumulative; me.slot = curSlot(); me.firstSlot = myFirstSlot; me.lastSeen = Date.now(); }
     // A client opening mid-race is a late entry; firstSlot may already be > grace.
   }
 
@@ -1036,6 +1090,13 @@ export function mount(el, raceId, inviteToken = null){
 
   function onRaceEnd(){
     if(raceEnded) return; raceEnded = true;
+    // A memory-pressure reload can bring the racer back only AFTER the race
+    // ended: onRaceStart (and its restore) never ran this mount, yet the
+    // snapshot may hold their whole scored run. Consume it now so the normal
+    // save below persists it; the snapshot itself is cleared only once the
+    // save settles (see saveMyResult), so a reload during the finalize grace
+    // window can't destroy the only surviving copy either.
+    if(mySlots == null){ mySlots = new Array(TOTAL_SLOTS); restoreResume(); }
     wakeLock.release();    // the scored window is over — stop holding the screen
 
     // Tail-drain: a short grace for the wheel's delayed final frame, then save. The
@@ -1050,7 +1111,7 @@ export function mount(el, raceId, inviteToken = null){
   function saveMyResult(){
     if(myResultSaved) return;
     myResultSaved = true;
-    if(!mySlots || myFirstSlot == null || !myUid) return;   // spectator / no wheel data → nothing official to save
+    if(!mySlots || myFirstSlot == null || !myUid){ clearResume(); return; }   // spectator / no wheel data → nothing official to save
     // mySlots is a SPARSE array (undefined = unmeasured slot). Densify with
     // Array.from (it visits every index) so unmeasured slots become 0 — otherwise
     // .map() keeps the holes and Math.max(...holes) → NaN (peak saved as null).
@@ -1069,7 +1130,12 @@ export function mount(el, raceId, inviteToken = null){
       race_score: myCumulative,
       race_normalized_score: Number((myCumulative / (24 * TOTAL_SLOTS)).toFixed(4)),
       first_slot: myFirstSlot,
-    }).then(({ error }) => { if(error && error.code !== '23505') console.warn('race result save:', error.message); });
+    }).then(({ error }) => {
+      // Keep the resume snapshot until the result actually landed (23505 = a
+      // previous client's save already did) — a reload mid-save can retry.
+      if(!error || error.code === '23505') clearResume();
+      else console.warn('race result save:', error.message);
+    });
   }
 
   // The authoritative ranking is the finalize_race RPC (fixed deadline = race end + 8s),

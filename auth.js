@@ -43,11 +43,43 @@ function state(){
 }
 function emit(){ const s = state(); listeners.forEach(cb => cb(s)); }
 
+// Transient-failure-safe subscriber check. This refetch runs on EVERY auth
+// event — including the hourly TOKEN_REFRESHED and the first moments after an
+// iPad wakes from sleep, exactly when the radio is most likely to drop one
+// request. A failed query must therefore NEVER demote a paying member (the
+// header would flip to "Subscribe to measure" and stick for up to an hour):
+// keep the last known answer and quietly re-ask with backoff. Only a
+// SUCCESSFUL query may change the flag, in either direction.
+let subRetryTimer = null, subRetryDelay = 5000;
+function scheduleSubscriberRetry(){
+  if(subRetryTimer) return;
+  subRetryTimer = setTimeout(async () => {
+    subRetryTimer = null;
+    if(!user) return;
+    await refreshSubscriber();   // reschedules itself (with backoff) on repeated failure
+    emit();
+  }, subRetryDelay);
+  subRetryDelay = Math.min(subRetryDelay * 2, 60000);
+}
 async function refreshSubscriber(){
-  if(!user?.email){ subscriber = false; return; }
+  if(!user?.email){
+    subscriber = false;
+    // Logged out: drop any pending retry and reset the backoff for the next login.
+    if(subRetryTimer){ clearTimeout(subRetryTimer); subRetryTimer = null; }
+    subRetryDelay = 5000;
+    return;
+  }
+  const email = user.email.toLowerCase();
   const { data, error } = await supabase
-    .from('subscribers').select('active').eq('email', user.email.toLowerCase()).maybeSingle();
-  subscriber = !error && !!(data && data.active);
+    .from('subscribers').select('active').eq('email', email).maybeSingle();
+  // The user may have changed (logout / account switch) while the query was in
+  // flight — a late answer for the OLD identity must not touch the flag or the
+  // retry machinery of the new one.
+  if(user?.email?.toLowerCase() !== email) return;
+  if(error){ scheduleSubscriberRetry(); return; }
+  if(subRetryTimer){ clearTimeout(subRetryTimer); subRetryTimer = null; }
+  subRetryDelay = 5000;
+  subscriber = !!(data && data.active);
 }
 
 async function refreshProfile(){

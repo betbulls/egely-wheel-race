@@ -61,6 +61,7 @@ const IS_IOS = typeof navigator !== 'undefined' &&
 
 let device = null;
 let txChar = null;
+let liveServer = null;        // the committed live GATT server (guards teardown of shared gatt objects)
 let buffer = '';
 let status = 'idle';          // 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'error'
 let errorMsg = null;
@@ -187,7 +188,7 @@ async function openLink(dev){
       await char.startNotifications();
       return { server, char };
     } catch(err){
-      try { server.disconnect(); } catch {}
+      discardLink(server);
       if(err && err.name === 'NotFoundError'){
         // The service lookup failing means this isn't an Egely Wheel (possible
         // since the picker lists everything). Give the user a clear nudge.
@@ -195,7 +196,7 @@ async function openLink(dev){
       }
       throw err;
     }
-  })(), CONNECT_TIMEOUT_MS, () => { try { dev.gatt.disconnect(); } catch {} });
+  })(), CONNECT_TIMEOUT_MS, () => { try { if(dev.gatt !== liveServer) dev.gatt.disconnect(); } catch {} });
 }
 
 // Translate raw Web Bluetooth errors into short, actionable header messages.
@@ -208,7 +209,7 @@ function friendlyError(err){
   const raw = (err && err.message) || '';
   if(/not an Egely Wheel/.test(raw)) return raw;   // our own copy — already friendly
   if((err && err.name === 'NetworkError') || /GATT Server is disconnected|GATT operation/i.test(raw)){
-    return 'The wheel disconnected right away — unpair it in your Bluetooth settings (Forget/Remove device), then tap Connect.';
+    return 'The wheel disconnected right away — if it’s paired in your Bluetooth settings, remove it there, then tap Connect.';
   }
   if(/timed out/i.test(raw)){
     return 'Couldn’t reach the wheel — make sure it is ON and close by, then tap Connect.';
@@ -218,8 +219,19 @@ function friendlyError(err){
 
 // Commit a freshly-opened link as the live connection. Only the generation
 // winner calls this. Swaps the frame listener so we never double-count frames.
+// Tear down a link that lost the establish race — but NEVER the committed live
+// one. For the same physical wheel every attempt shares the ONE dev.gatt
+// object, so a superseded attempt's cleanup used to hang up the fresh
+// connection the winner had just committed (up to 12s later via the timeout
+// watchdog). The same-object check limits teardown to genuinely different or
+// uncommitted links.
+function discardLink(server){
+  try { if(server !== liveServer) server.disconnect(); } catch {}
+}
+
 function commitLink(link){
   if(txChar){ try { txChar.removeEventListener('characteristicvaluechanged', onData); } catch {} }
+  liveServer = link.server;
   txChar = link.char;
   txChar.addEventListener('characteristicvaluechanged', onData);
   buffer = ''; cleanLed = null;     // fresh spike-filter state for the new session
@@ -262,7 +274,12 @@ async function acquireDeviceIfNeeded(){
 export async function connect(){
   if(!navigator.bluetooth){
     status = 'error';
-    errorMsg = 'Web Bluetooth is not available (needs HTTPS + Chrome/Edge).';
+    // Platform-aware: the old "needs Chrome/Edge" copy actively misdirected
+    // iPhone/iPad users — they installed Chrome from the App Store (also
+    // WebKit, also no Web Bluetooth) and gave up. On iOS the answer is Bluefy.
+    errorMsg = IS_IOS
+      ? 'This browser can’t connect to Bluetooth. On iPhone and iPad, please use the free Bluefy app.'
+      : 'This browser can’t connect to Bluetooth. Please use Chrome or Edge.';
     emitStatus();
     return;
   }
@@ -300,7 +317,7 @@ export async function connect(){
   try {
     bindDevice(dev);
     const link = await openLink(dev);
-    if(gen !== attemptGen || manualDisconnect){ try { link.server.disconnect(); } catch {} return; }
+    if(gen !== attemptGen || manualDisconnect){ discardLink(link.server); return; }
     commitLink(link);
   } catch(err){
     if(gen !== attemptGen) return;
@@ -349,6 +366,13 @@ export function reconnect(){
 // Fired by the OS when the GATT link drops (our own gatt.disconnect() and an
 // unexpected drop both route here).
 function onDisconnect(){
+  // While a manual connect is in flight ('connecting'), a disconnect event can
+  // only belong to a superseded/discarded link — the chooser flow owns the
+  // state. Reacting here used to paint a phantom "Reconnecting…" UNDER the
+  // open picker, and its Stop button could then silently discard the user's
+  // successful pick. There is no committed link to mourn in this state.
+  if(status === 'connecting') return;
+  liveServer = null;
   txChar = null; buffer = ''; cleanLed = null; lastFrame = null;
   if(manualDisconnect){
     clearDevice(); device = null;
@@ -419,7 +443,7 @@ async function loudReconnect(allowAcquire){
         if(!device) break;
         tried = true;
         const link = await openLink(device);
-        if(gen !== attemptGen || manualDisconnect){ try { link.server.disconnect(); } catch {} return; }
+        if(gen !== attemptGen || manualDisconnect){ discardLink(link.server); return; }
         commitLink(link);
         return;
       } catch(err){
@@ -467,7 +491,7 @@ async function quietAttempt(){
   attempting = true;
   try {
     const link = await openLink(device);
-    if(gen !== attemptGen || manualDisconnect){ try { link.server.disconnect(); } catch {} return; }
+    if(gen !== attemptGen || manualDisconnect){ discardLink(link.server); return; }
     commitLink(link);
   } catch { /* stay idle, silently */ }
   finally { if(gen === attemptGen) attempting = false; }
