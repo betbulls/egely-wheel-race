@@ -256,10 +256,13 @@ function updateBleButton(){
   else if(s.connected){ bleBtn.textContent = 'Disconnect'; bleBtn.dataset.mode = 'disconnect'; bleBtn.disabled = false; }
   else if(!a.user){ bleBtn.textContent = 'Log in to measure'; bleBtn.dataset.mode = 'login'; bleBtn.disabled = false; }
   else if(!a.subscriber){ bleBtn.textContent = 'Subscribe to measure'; bleBtn.dataset.mode = 'subscribe'; bleBtn.disabled = false; }
-  // A previously-granted wheel can come back without the chooser — one tap.
-  // While a connect is in flight the button is disabled — say so on the label,
-  // or an inert "Connect" reads as the app being frozen.
-  else if(s.canReconnect){ bleBtn.textContent = s.status === 'connecting' ? 'Connecting…' : 'Reconnect'; bleBtn.dataset.mode = 'reconnect'; bleBtn.disabled = s.status === 'connecting'; }
+  // Product decision (2026-08-05): the MANUAL button is always "Connect" — it
+  // always opens the chooser, which is self-explanatory and always works. The
+  // retained device handle serves only the AUTOMATIC recovery (silent burst
+  // after a drop, focus/visibility retriggers); a manual "Reconnect" that can
+  // spin on a dead handle was exactly the incident pattern. While a connect is
+  // in flight the button is disabled — say so on the label, or an inert
+  // "Connect" reads as the app being frozen.
   else { bleBtn.textContent = s.status === 'connecting' ? 'Connecting…' : 'Connect'; bleBtn.dataset.mode = 'connect'; bleBtn.disabled = s.status === 'connecting'; }
 }
 
@@ -278,23 +281,47 @@ ble.subscribeStatus(s => {
 // cause of dropped links, so the chip must survive the drop to explain it. A
 // fresh battery clears it naturally once the next link reports OK.
 const bleBatt = document.getElementById('bleBatt');
+const battLabelFull = bleBatt.querySelector('.ble-full');
+const battLabelShort = bleBatt.querySelector('.ble-short');
 let battLow = false, battStreak = 0, lastBatt = '';
+// Three chip states: connected + battery fine => steady green "Battery OK";
+// battery low => red "Battery low" (kept up across drops, so a battery-killed
+// link still shows its cause next to the Connect button); otherwise hidden.
+// The wheel only reports OK|LOW — there is no percentage to show.
+function renderBatt(){
+  if(battLow){
+    bleBatt.hidden = false;
+    bleBatt.classList.remove('ok');
+    battLabelFull.textContent = 'Battery low';
+    battLabelShort.textContent = 'Low';
+    bleBatt.title = 'The wheel’s 9V battery is running low — replace it to avoid connection drops.';
+  } else if(ble.getState().connected){
+    bleBatt.hidden = false;
+    bleBatt.classList.add('ok');
+    battLabelFull.textContent = 'Battery OK';
+    battLabelShort.textContent = 'OK';
+    bleBatt.title = 'The wheel’s 9V battery is fine.';
+  } else {
+    bleBatt.hidden = true;
+  }
+}
 ble.subscribeFrames(f => {
   lastBatt = f.battery;
   const low = f.battery === 'LOW';
   if(low === battLow){ battStreak = 0; return; }
-  if(++battStreak >= 3){ battLow = low; battStreak = 0; bleBatt.hidden = !low; }
+  if(++battStreak >= 3){ battLow = low; battStreak = 0; renderBatt(); }
 });
 ble.subscribeStatus(s => {
   // Fresh link: don't let a leftover 2-frame streak from the previous wheel
   // complete against this one's first frames.
-  if(s.connected){ battStreak = 0; return; }
+  if(s.connected){ battStreak = 0; }
   // A collapsing 9V cell can kill the link before 3 clean LOW frames arrive —
   // the exact case the chip exists to explain. If the very last frame before
   // the drop said LOW, latch the chip now, alongside the reconnect/error pill.
-  if((s.status === 'reconnecting' || s.status === 'error') && lastBatt === 'LOW' && !battLow){
-    battLow = true; battStreak = 0; bleBatt.hidden = false;
+  else if((s.status === 'reconnecting' || s.status === 'error') && lastBatt === 'LOW' && !battLow){
+    battLow = true; battStreak = 0;
   }
+  renderBatt();
 });
 
 bleBtn.addEventListener('click', () => {
@@ -303,7 +330,6 @@ bleBtn.addEventListener('click', () => {
   else if(mode === 'stop') ble.stopReconnect();
   else if(mode === 'login') location.hash = '#/login';
   else if(mode === 'subscribe') location.hash = '#/subscribe';
-  else if(mode === 'reconnect') ble.reconnect();
   else ble.connect();
 });
 

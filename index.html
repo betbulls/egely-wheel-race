@@ -133,6 +133,13 @@
     white-space:nowrap;text-decoration:none;
   }
   .ble-batt:hover{background:rgba(255,92,92,.18)}
+  /* Steady-state "battery OK" look while connected; app.js swaps the class,
+     the labels and which SVG fill bar shows. */
+  .ble-batt.ok{background:rgba(61,220,132,.1);border-color:rgba(31,158,88,.35);color:#1f8a52}
+  .ble-batt.ok:hover{background:rgba(61,220,132,.18)}
+  .ble-batt .bb-full{display:none}
+  .ble-batt.ok .bb-low{display:none}
+  .ble-batt.ok .bb-full{display:inline}
   .ble-batt[hidden]{display:none}
   /* The header shows the full status on desktop and a terse one on mobile. */
   .ble-short{display:none}
@@ -1428,7 +1435,7 @@
     <span class="dot"></span>
     <span id="bleText">Egely Wheel not connected</span>
     <a id="bleBatt" class="ble-batt" href="#/how-to-connect" hidden
-       title="The wheel's 9V battery is running low — replace it to avoid connection drops."><svg width="14" height="9" viewBox="0 0 14 9" aria-hidden="true"><rect x="0.5" y="0.5" width="11" height="8" rx="2" fill="none" stroke="currentColor"/><rect x="12.2" y="2.6" width="1.5" height="3.8" rx="0.75" fill="currentColor"/><rect x="2" y="2" width="2.6" height="5" rx="1" fill="currentColor"/></svg> <span class="ble-full">Battery low</span><span class="ble-short">Low</span></a>
+       title="The wheel's 9V battery is running low — replace it to avoid connection drops."><svg width="14" height="9" viewBox="0 0 14 9" aria-hidden="true"><rect x="0.5" y="0.5" width="11" height="8" rx="2" fill="none" stroke="currentColor"/><rect x="12.2" y="2.6" width="1.5" height="3.8" rx="0.75" fill="currentColor"/><rect class="bb-low" x="2" y="2" width="2.6" height="5" rx="1" fill="currentColor"/><rect class="bb-full" x="2" y="2" width="8" height="5" rx="1" fill="currentColor"/></svg> <span class="ble-full">Battery low</span><span class="ble-short">Low</span></a>
     <button id="bleBtn">Connect</button>
   </div>
   <div class="auth-area" id="authArea"></div>

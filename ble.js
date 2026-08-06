@@ -19,8 +19,12 @@
 //       connection, and never while the tab is hidden, so a wheel left off does
 //       not grind the radio forever.
 //     - After a full RELOAD (no in-memory device) we do NOT silently power the
-//       wheel on; the header shows a one-tap, chooser-free "Reconnect" instead,
-//       so merely opening the site to browse never puts you on-air.
+//       wheel on — the user connects via the chooser, so merely opening the
+//       site to browse never puts you on-air.
+//     - The MANUAL header button is always "Connect" (the chooser): it is
+//       self-explanatory and always works. The retained handle powers ONLY the
+//       automatic recovery — a manual "Reconnect" that could spin on a dead
+//       handle was the 2026-08 support-incident pattern, so it was removed.
 //     - NEVER auto-reconnect after the user pressed Disconnect.
 //   Best-effort, not a native-app forever connection: out of range, a dead
 //   battery, or an OS that suspends Bluetooth in the background can still drop
@@ -100,8 +104,9 @@ export function getState(){
     deviceName: device ? (device.name || null) : null,
     remembered: !!getRemembered(),
     // Whether a chooser-free reconnect is even possible (in-memory device, or a
-    // usable remembered wheel on a browser that supports getDevices). Drives the
-    // header showing "Reconnect" vs "Connect".
+    // usable remembered wheel on a browser that supports getDevices). No longer
+    // drives the header (the manual button is always "Connect"); kept for
+    // diagnostics/future use.
     canReconnect: !!device || (hasUsableRemembered() && isGetDevices()),
     errorMsg,
     lastFrame,
@@ -309,9 +314,10 @@ export function stopReconnect(){
   if(status === 'reconnecting' || status === 'connecting'){ status = 'idle'; emitStatus(); }
 }
 
-// --- "Reconnect" affordance (header button) ---------------------------------
+// --- "Reconnect" affordance -------------------------------------------------
 // User-initiated and chooser-free when possible; falls back to the chooser if
-// no chooser-free path exists.
+// no chooser-free path exists. NOTE: no longer wired to the header button
+// (manual action is always Connect/chooser) — kept for potential callers.
 export function reconnect(){
   manualDisconnect = false;
   armKeepalive();
