@@ -266,6 +266,14 @@ function updateBleButton(){
   else { bleBtn.textContent = s.status === 'connecting' ? 'Connecting…' : 'Connect'; bleBtn.dataset.mode = 'connect'; bleBtn.disabled = s.status === 'connecting'; }
 }
 
+// Full-width error strip under the header: the pill ellipsizes long messages
+// and touch devices have no tooltips, so failed connects explain themselves
+// here — complete advice + a link to the connect guide.
+const bleErrorBar = document.getElementById('bleErrorBar');
+const bleErrorMsg = document.getElementById('bleErrorMsg');
+const bleErrorClose = document.getElementById('bleErrorClose');
+if(bleErrorClose) bleErrorClose.addEventListener('click', () => { bleErrorBar.hidden = true; });
+
 ble.subscribeStatus(s => {
   bleBar.className = 'ble-bar ' + s.status;
   bleText.innerHTML =
@@ -274,6 +282,10 @@ ble.subscribeStatus(s => {
   // Long error messages get ellipsized by #bleText's max-width — keep the full
   // advice reachable on hover.
   bleText.title = (s.status === 'error' && s.errorMsg) ? s.errorMsg : '';
+  if(bleErrorBar){
+    if(s.status === 'error' && s.errorMsg){ bleErrorMsg.textContent = s.errorMsg; bleErrorBar.hidden = false; }
+    else bleErrorBar.hidden = true;
+  }
   updateBleButton();
 });
 

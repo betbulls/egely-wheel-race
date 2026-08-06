@@ -141,6 +141,24 @@
   .ble-batt.ok .bb-low{display:none}
   .ble-batt.ok .bb-full{display:inline}
   .ble-batt[hidden]{display:none}
+  /* Full-width connection-error strip. The pill ellipsizes long messages and
+     tooltips don't exist on touch — so when connecting fails, the COMPLETE
+     advice + a link to the guide get their own row under the header. */
+  .ble-error-bar{
+    flex-basis:100%;display:flex;align-items:flex-start;gap:12px;
+    background:rgba(255,92,92,.08);border:1px solid rgba(255,92,92,.3);
+    border-radius:12px;padding:10px 14px;font-size:13.5px;line-height:1.5;color:#8f2f2f;
+  }
+  .ble-error-bar[hidden]{display:none}
+  .beb-msg{flex:1;min-width:0}
+  .beb-link{flex-shrink:0;font-weight:700;color:#b83232;text-decoration:underline;white-space:nowrap}
+  .beb-link:hover{color:#5f1717}
+  .beb-close{flex-shrink:0;background:none;border:none;cursor:pointer;color:#b83232;font-size:14px;line-height:1.3;padding:2px 4px}
+  .beb-close:hover{color:#5f1717}
+  @media (max-width:600px){
+    .ble-error-bar{font-size:12.5px;padding:9px 12px;flex-wrap:wrap}
+    .beb-link{margin-left:auto}
+  }
   /* The header shows the full status on desktop and a terse one on mobile. */
   .ble-short{display:none}
 
@@ -1439,6 +1457,11 @@
     <button id="bleBtn">Connect</button>
   </div>
   <div class="auth-area" id="authArea"></div>
+  <div class="ble-error-bar" id="bleErrorBar" hidden>
+    <span class="beb-msg" id="bleErrorMsg"></span>
+    <a class="beb-link" href="#/how-to-connect">See how to fix it →</a>
+    <button type="button" class="beb-close" id="bleErrorClose" aria-label="Dismiss">✕</button>
+  </div>
 </header>
 
 <main id="view"></main>
