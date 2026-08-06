@@ -158,9 +158,9 @@ const TROUBLE_GROUPS = [
   ['I can’t connect', [
     ['I don’t see my wheel in the list', 'Only nearby, powered-on devices appear in the list. Check the wheel is switched on and within arm’s reach, and that its <b>9V battery</b> is fresh — a nearly-empty battery can make the wheel invisible. If another phone, tablet or app is already connected to the wheel, it won’t appear either — disconnect it there first. Finally, open your phone’s <b>Settings → Bluetooth</b>: if “Egely Wheel” is listed under My Devices, tap the ⓘ next to it and choose <b>Forget This Device</b> — being paired there hides the wheel from the app.'],
     ['It says “That device is not an Egely Wheel”', 'The list shows every Bluetooth device around you, and the one you picked wasn’t the wheel. Tap <b>Connect</b> again and choose the entry named <b>Egely Wheel</b>. If no names are shown, switch the wheel off and on and pick the entry that newly appears.'],
-    ['It says “Connection problem” or the connection failed', 'Technical-looking messages like “BLE connect timed out” all mean the same thing: the link didn’t come up. Close any other app or browser tab that might already be using the wheel, then try once more. If it fails again, follow the five steps under <b>“Having trouble? Try this first”</b>, just above these questions.'],
+    ['It says “Connection problem” or the connection failed', 'Technical-looking messages like “BLE connect timed out” or “GATT Server is disconnected” all mean the same thing: the link didn’t come up. The most common cause is that the wheel is <b>paired in your device’s Bluetooth settings</b> — remove it there (see below), close any other app or tab that might be using the wheel, then try again. If it still fails, follow the five steps under <b>“Having trouble? Try this first”</b>, just above these questions.'],
     ['It says “Web Bluetooth is not available”', 'Your current browser can’t talk to Bluetooth devices. On a computer or Android phone, open <b>live.egelywheel.com</b> in <b>Chrome</b> (or Edge). On iPhone and iPad, use the <b>Bluefy</b> app instead — see the iPhone &amp; iPad card above.'],
-    ['I paired the wheel in my phone’s Bluetooth settings', 'The wheel should <b>never</b> be paired in <b>Settings → Bluetooth</b> — that blocks the app from reaching it. If “Egely Wheel” appears there under My Devices, tap the ⓘ next to it and choose <b>Forget This Device</b>. Then connect only from inside EWR Live, with the Connect button.'],
+    ['I paired the wheel in my phone’s or computer’s Bluetooth settings', 'The wheel should <b>never</b> be paired in your device’s Bluetooth settings — that blocks the app from reaching it and causes “disconnected right away” errors. Remove it: on <b>iPhone/iPad</b>, Settings → Bluetooth → tap the ⓘ next to Egely Wheel → <b>Forget This Device</b>. On <b>Windows</b>, Settings → Bluetooth &amp; devices → Egely Wheel → <b>Remove device</b>. On <b>Mac</b>, System Settings → Bluetooth → hover Egely Wheel → <b>Disconnect/Forget</b>. Then connect only from inside EWR Live, with the Connect button.'],
   ]],
   ['It disconnects or gets stuck', [
     ['It connects, then drops after a few seconds', 'This is almost always the <b>9V battery</b>: a weak battery has enough power to switch on and appear in the list, but not enough to hold the Bluetooth link. Put in a brand-new battery. If it still drops, bring the wheel closer and move it away from other electronics.'],
@@ -367,7 +367,7 @@ export function mount(el){
       </ul>
       <div class="htc-important">
         <span class="htc-imp-label">${ICONS.bluetooth} Important</span>
-        <span>Connect from inside EWR Live — <b>not</b> from your phone’s Bluetooth Settings.</span>
+        <span>Connect from inside EWR Live — <b>not</b> from your phone’s or computer’s Bluetooth Settings. The wheel should never be paired there.</span>
       </div>
     </div>
 

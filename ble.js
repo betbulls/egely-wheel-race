@@ -198,6 +198,24 @@ async function openLink(dev){
   })(), CONNECT_TIMEOUT_MS, () => { try { dev.gatt.disconnect(); } catch {} });
 }
 
+// Translate raw Web Bluetooth errors into short, actionable header messages.
+// The raw texts ("GATT Server is disconnected. Cannot retrieve services…") are
+// developer jargon that scares non-technical customers. The instant-drop
+// pattern behind that particular error is nearly always the wheel being
+// paired/held at the OS Bluetooth level or by another app — say THAT, with the
+// remedy. The raw error is still preserved in the ewr_ble_lastfail breadcrumb.
+function friendlyError(err){
+  const raw = (err && err.message) || '';
+  if(/not an Egely Wheel/.test(raw)) return raw;   // our own copy — already friendly
+  if((err && err.name === 'NetworkError') || /GATT Server is disconnected|GATT operation/i.test(raw)){
+    return 'The wheel disconnected right away — unpair it in your Bluetooth settings (Forget/Remove device), then tap Connect.';
+  }
+  if(/timed out/i.test(raw)){
+    return 'Couldn’t reach the wheel — make sure it is ON and close by, then tap Connect.';
+  }
+  return 'Couldn’t connect — turn the wheel off and on, then tap Connect.';
+}
+
 // Commit a freshly-opened link as the live connection. Only the generation
 // winner calls this. Swaps the frame listener so we never double-count frames.
 function commitLink(link){
@@ -289,7 +307,10 @@ export async function connect(){
     // A wrong/failed pick leaves no usable connection — drop the handle so the
     // auto-reconnect machinery never targets a non-wheel.
     clearDevice(); device = null; txChar = null;
-    status = 'error'; errorMsg = err.message; emitStatus();
+    try { localStorage.setItem('ewr_ble_lastfail', JSON.stringify({
+      ts: Date.now(), name: (err && err.name) || '', msg: ((err && err.message) || '').slice(0, 200), ios: IS_IOS, path: 'connect',
+    })); } catch {}
+    status = 'error'; errorMsg = friendlyError(err); emitStatus();
   } finally {
     if(gen === attemptGen) attempting = false;   // only the current owner releases the mutex
   }
@@ -406,7 +427,7 @@ async function loudReconnect(allowAcquire){
         // die" (fast reject vs 12s timeout) is exactly the datum the next
         // support case needs — record it before we (possibly) drop the handle.
         try { localStorage.setItem('ewr_ble_lastfail', JSON.stringify({
-          ts: Date.now(), name: (err && err.name) || '', msg: ((err && err.message) || '').slice(0, 200), ios: IS_IOS,
+          ts: Date.now(), name: (err && err.name) || '', msg: ((err && err.message) || '').slice(0, 200), ios: IS_IOS, path: 'reconnect',
         })); } catch {}
         /* still down — keep trying within budget */
       }

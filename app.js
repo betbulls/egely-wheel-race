@@ -271,6 +271,9 @@ ble.subscribeStatus(s => {
   bleText.innerHTML =
     `<span class="ble-full">${esc(statusText(s))}</span>` +
     `<span class="ble-short">${esc(shortStatusText(s))}</span>`;
+  // Long error messages get ellipsized by #bleText's max-width — keep the full
+  // advice reachable on hover.
+  bleText.title = (s.status === 'error' && s.errorMsg) ? s.errorMsg : '';
   updateBleButton();
 });
 
