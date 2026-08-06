@@ -184,6 +184,7 @@ export function mountExperimentDetail(el, experimentId){
 
   let unsubAuth = null;
   let teardownMeasure = null;
+  let midnightTimer = null;      // re-render just past local midnight while the day-gate is on
   let viewDayId = null;          // which day the user is currently looking at
 
   async function render(){
@@ -209,6 +210,15 @@ export function mountExperimentDetail(el, experimentId){
       const r = resultsByDay.get(id);
       return r && r.createdAt && localDay(r.createdAt) === today;
     });
+    // The midnight gate used to clear by ACCIDENT (the hourly auth event
+    // re-rendered the page); the renderedKey guard removed that accident, so
+    // schedule a precise re-render just past local midnight instead.
+    if(midnightTimer){ clearTimeout(midnightTimer); midnightTimer = null; }
+    if(dateLocked){
+      const now = new Date();
+      const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5);
+      midnightTimer = setTimeout(() => { midnightTimer = null; render(); }, Math.min(next - now, 2147483647));
+    }
 
     // Which day to show: the one the user picked (if still unlocked) else the current
     // one — but never the date-locked next day (its intro/task would leak early).
@@ -296,17 +306,34 @@ export function mountExperimentDetail(el, experimentId){
     }
   }
 
-  unsubAuth = auth.subscribeAuth(() => { render(); });
-  return () => { if(unsubAuth) unsubAuth(); if(teardownMeasure) teardownMeasure(); };
+  // Re-render only when the ACCESS identity actually changes (login/logout or
+  // subscriber flip). The hourly TOKEN_REFRESHED (and the subscriber-retry
+  // re-emits) used to call render() unconditionally, and render() tears down
+  // the measurement card — silently resetting an in-progress measurement to
+  // "Start Measurement" and discarding the minutes already measured.
+  let renderedKey = null;
+  unsubAuth = auth.subscribeAuth(a => {
+    const key = (a.user?.id || 'anon') + '|' + (a.subscriber ? 1 : 0);
+    if(key === renderedKey) return;
+    renderedKey = key;
+    render();
+  });
+  return () => { if(unsubAuth) unsubAuth(); if(teardownMeasure) teardownMeasure(); if(midnightTimer) clearTimeout(midnightTimer); };
 }
 
 // ---- Inline measurement card -----------------------------------------------
 // Reuses the BLE stream + the same stats/save as Solo, rendered compactly.
 function setupMeasure(host, exp, day, onSaved){
+  // Signal-loss fairness — the same 10s rule Solo and the session room enforce.
+  // Without it, a wheel dropping mid-measure (weak 9V battery, or the terminal
+  // iOS error path) froze curLed and the fabricated tail saved as VERIFIED —
+  // both a false result for honest users and a spin-high-then-switch-off cheat.
+  const SIGNAL_GAP_MS = 10000;
   let connected = ble.getState().connected;
   let curLed = ble.getState().lastFrame ? ble.getState().lastFrame.led : 0;
   let measuring = false, finished = false;
   let samples = [], swingWin = [], swings = 0, wasSwing = false, cheat = false, endMs = 0, stats = null;
+  let signalLost = false, discStart = null;   // continuous-disconnect latch (reset on reconnect)
   let sampleTimer = null, uiTimer = null;
 
   const unsubStatus = ble.subscribeStatus(s => { connected = s.connected; if(!measuring && !finished) renderIdle(); });
@@ -356,7 +383,11 @@ function setupMeasure(host, exp, day, onSaved){
           <div class="xp-live-cell"><div class="xp-live-val" style="color:${zText(curLed)}">${curLed}</div><div class="xp-live-lbl">Live</div></div>
           <div class="xp-live-cell"><div class="xp-live-val" style="color:${zText(avg)}">${avg.toFixed(1)}</div><div class="xp-live-lbl">Avg</div></div>
         </div>
-        <div class="xp-verify ${cheat ? 'bad' : 'good'}">${cheat ? 'Unverified — irregular spinning' : '✓ Looks genuine'}</div>
+        <div class="xp-verify ${cheat || signalLost || !connected ? 'bad' : 'good'}">${
+          cheat ? 'Unverified — irregular spinning'
+          : signalLost ? 'Unverified — signal lost'
+          : !connected ? 'Signal lost — reconnect your wheel'
+          : '✓ Looks genuine'}</div>
         <button class="btn-secondary" data-m="stop">Stop</button>
       </div>`;
   }
@@ -368,10 +399,10 @@ function setupMeasure(host, exp, day, onSaved){
         <div class="xp-review-row">
           <span><b style="color:${zText(stats.avg)}">${stats.avg.toFixed(1)}</b> Avg</span>
           <span><b style="color:${zText(stats.peak)}">${stats.peak}</b> Peak</span>
-          <span class="${cheat ? 'warn' : 'v-badge verified'}">${cheat ? 'Not verified' : '✓ Verified'}</span>
+          <span class="${cheat || signalLost ? 'warn' : 'v-badge verified'}">${cheat || signalLost ? 'Not verified' : '✓ Verified'}</span>
         </div>
         <div class="xp-review-level" style="color:${zText(stats.avg)}">${esc(lvl.name)}</div>
-        ${cheat ? `<p class="xp-measure-hint">This one won't count toward your progression. You can save it anyway, or discard and retry.</p>` : ''}
+        ${cheat || signalLost ? `<p class="xp-measure-hint">${signalLost && !cheat ? 'The wheel’s signal was lost for 10+ seconds during this measurement.' : ''} This one won't count toward your progression. You can save it anyway, or discard and retry.</p>` : ''}
         <div class="xp-reflect">
           <div class="xp-reflect-head"><span class="xp-reflect-lbl">Reflection</span><span class="xp-reflect-opt">optional</span></div>
           <p class="xp-reflect-q">${esc(day.reflectionPrompt || 'What did you notice during this practice?')}</p>
@@ -388,12 +419,22 @@ function setupMeasure(host, exp, day, onSaved){
   function start(){
     if(gate() !== 'ready') { renderIdle(); return; }
     samples = []; swingWin = []; swings = 0; wasSwing = false; cheat = false; finished = false; stats = null;
+    signalLost = false; discStart = null;
     measuring = true;
     endMs = Date.now() + day.measureSeconds * 1000;
     wakeLock.acquire();
     presence.setExperiment(true);   // show me as "in an experiment" on the Live wall
     sampleTimer = setInterval(() => samples.push(curLed), SAMPLE_MS);
-    uiTimer = setInterval(() => { if(measuring){ if(Date.now() >= endMs) finish(); else renderMeasuring(); } }, 250);
+    uiTimer = setInterval(() => {
+      if(!measuring) return;
+      // Continuous BLE gap ≥ SIGNAL_GAP_MS → unverified. Reset on reconnect,
+      // so a short hiccup healed by the auto-reconnect never penalises.
+      if(!connected){
+        if(discStart === null) discStart = Date.now();
+        else if(Date.now() - discStart >= SIGNAL_GAP_MS) signalLost = true;
+      } else discStart = null;
+      if(Date.now() >= endMs) finish(); else renderMeasuring();
+    }, 250);
     renderMeasuring();
   }
 
@@ -426,7 +467,7 @@ function setupMeasure(host, exp, day, onSaved){
     const comment = (host.querySelector('#xpComment')?.value || '').trim();
     const r1 = await saveExperimentMeasurement({
       userId: a.user?.id, identity: (a.displayName || '').trim() || 'Me',
-      experiment: exp, day, stats, samples, verified: !cheat, comment,
+      experiment: exp, day, stats, samples, verified: !cheat && !signalLost, comment,
     });
     if(r1.error){ if(btn) btn.disabled = false; if(msg){ msg.className = 'form-msg err'; msg.textContent = 'Error: ' + r1.error.message; } return; }
     await markDayComplete(a.user.id, exp.id, day.id);

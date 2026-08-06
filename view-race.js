@@ -300,6 +300,7 @@ export function mount(el, raceId, inviteToken = null){
 
   let channel = null, lastRx = 0;
   let bleConnected = false, myLed = 0, myEma = 0;
+  let hadWheel = false;         // this client raced with a wheel at least once (gates the reconnect banner)
   let view = null;              // 'lobby' | 'race' | 'final'
   let countin = null;           // last 3-2-1 number shown
 
@@ -544,7 +545,7 @@ export function mount(el, raceId, inviteToken = null){
   function begin(){
     presence.setRace(true);   // show "In a race" on the global Live wall while in the room
     joinChannel();
-    unsubStatus = ble.subscribeStatus(s => { bleConnected = s.connected; if(!s.connected){ myLed = 0; } trackPresence(); });
+    unsubStatus = ble.subscribeStatus(s => { bleConnected = s.connected; if(s.connected) hadWheel = true; else myLed = 0; trackPresence(); });
     unsubFrames = ble.subscribeFrames(f => {
       myLed = f.led; lastCounter = f.counter; frameFresh = true;
       if(phase() === 'active'){
@@ -710,8 +711,76 @@ export function mount(el, raceId, inviteToken = null){
     if(view) (view === 'race' ? renderRaceList() : renderLobbyList());
   }
 
+  // ---- In-race "connection lost" banner --------------------------------------
+  // The header (with the Connect button and the red error strip) is NOT sticky:
+  // a racer scrolled down to the lanes never saw "Connection lost — tap
+  // Connect" and silently scored zeros for the rest of the race, screen lit.
+  // Surface the recovery INSIDE the race: a fixed strip visible at any scroll
+  // position while my wheel is down mid-race. Gated on hadWheel, so spectators
+  // (and non-subscribers, who can never have connected) never see it.
+  let connBanner = null;
+  function updateConnBanner(){
+    // (hadWheel || myFirstSlot): after a memory-pressure reload hadWheel is
+    // mount-local and false, but a resumed racer has myFirstSlot restored from
+    // the identity-scoped snapshot — they need this banner the most. Pure
+    // spectators have neither. manualStop: a deliberate header Disconnect/Stop
+    // must not be nagged about — the banner returns once they reconnect.
+    const show = (hadWheel || myFirstSlot !== null) && !bleConnected &&
+                 !ble.getState().manualStop && phase() === 'active' && !raceEnded;
+    if(show && !connBanner){
+      if(!document.getElementById('rlConnCss')){
+        const st = document.createElement('style');
+        st.id = 'rlConnCss';
+        st.textContent = `
+          /* z-index above the FAB (1000) but under modal backdrops; on narrow
+             viewports also LIFT the strip above the FAB's bottom-right zone —
+             otherwise the FAB painted over the Reconnect button and stole the
+             taps of exactly the phone racers this banner exists for. */
+          #rlConnLost{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:1150;
+            display:flex;align-items:center;gap:12px;max-width:min(92vw,560px);
+            background:#fff;border:1.5px solid rgba(255,92,92,.55);border-radius:999px;
+            padding:10px 12px 10px 18px;box-shadow:0 12px 34px rgba(1,22,36,.25);
+            font-family:'Inter',sans-serif;font-size:13.5px;color:#8f2f2f;line-height:1.35}
+          #rlConnLost b{color:#6e1f1f}
+          #rlConnLost button{flex-shrink:0;background:#d64545;color:#fff;border:none;cursor:pointer;
+            font-family:'Inter',sans-serif;font-size:13px;font-weight:700;padding:9px 16px;border-radius:999px}
+          #rlConnLost button:hover:not(:disabled){background:#b83232}
+          #rlConnLost button:disabled{opacity:.7;cursor:default}
+          @media (max-width:728px){#rlConnLost{bottom:calc(96px + env(safe-area-inset-bottom));font-size:12.5px;padding-left:14px}}`;
+        document.head.appendChild(st);
+      }
+      connBanner = document.createElement('div');
+      connBanner.id = 'rlConnLost';
+      connBanner.setAttribute('role', 'alert');
+      connBanner.innerHTML = `<span><b>Wheel connection lost</b> — you’re scoring zeros until it’s back.</span><button type="button">Reconnect</button>`;
+      const btn = connBanner.querySelector('button');
+      btn.addEventListener('click', () => {
+        // Only reachable by someone who already connected this session, so the
+        // login/subscriber gate was passed at the header button.
+        btn.disabled = true; btn.textContent = 'Connecting…';
+        ble.connect();
+      });
+      // The banner can be born while an auto-reconnect burst is already running
+      // — start the button in the matching busy state, not a stale 'Reconnect'.
+      const st0 = ble.getState().status;
+      if(st0 === 'connecting' || st0 === 'reconnecting'){ btn.disabled = true; btn.textContent = 'Connecting…'; }
+      document.body.appendChild(connBanner);
+    } else if(!show && connBanner){
+      connBanner.remove(); connBanner = null;
+    } else if(show && connBanner){
+      // Keep the button honest across connect attempts (a failed try must
+      // re-offer Reconnect, not stay stuck on a disabled "Connecting…").
+      const st = ble.getState().status;
+      const busy = st === 'connecting' || st === 'reconnecting';
+      const btn = connBanner.querySelector('button');
+      if(btn.disabled !== busy){ btn.disabled = busy; btn.textContent = busy ? 'Connecting…' : 'Reconnect'; }
+    }
+  }
+  function removeConnBanner(){ if(connBanner){ connBanner.remove(); connBanner = null; } }
+
   // ---- Sampling / scoring (canonical slots) ----------------------------------
   function sample(){
+    updateConnBanner();
     // Keep the screen awake for EVERYONE in a live race room — racers AND
     // spectators (the session room already does this: a dimming phone broke the
     // experience for watchers too). Crucially the lock must NOT depend on
@@ -1312,6 +1381,7 @@ export function mount(el, raceId, inviteToken = null){
     if(voicePlayer) voicePlayer.destroy();
     if(racePlayback) racePlayback.destroy();
     if(videoShare) videoShare.destroy();
+    removeConnBanner();
     wakeLock.release();
     // If the race already ended but my own result hasn't saved yet (e.g. I navigated
     // away during the finalize grace), save it now. Idempotent: the myResultSaved guard

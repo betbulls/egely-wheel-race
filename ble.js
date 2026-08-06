@@ -109,6 +109,9 @@ export function getState(){
     // drives the header (the manual button is always "Connect"); kept for
     // diagnostics/future use.
     canReconnect: !!device || (hasUsableRemembered() && isGetDevices()),
+    // The user deliberately halted (Disconnect / Stop) and hasn't re-initiated:
+    // in-view reconnect prompts should stay quiet in this state.
+    manualStop: manualDisconnect,
     errorMsg,
     lastFrame,
   };

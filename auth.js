@@ -137,10 +137,15 @@ async function maybeDetectCountry(){
 }
 
 function applyUser(u){
+  // A re-auth of the SAME identity (hourly TOKEN_REFRESHED, wake-from-sleep)
+  // must not drop the resolved access state: the header button and FAB key off
+  // accessReady, and resetting it flicked them to a neutral/disabled state
+  // every hour — and pinned them there if the refetch hung.
+  const sameUser = !!u && !!user && u.id === user.id;
   user = u;
   // Anon is resolved immediately; a logged-in user's access is only known once
   // the subscriber flag is fetched below (prevents a wrong FAB/upsell flash).
-  ready = !u;
+  ready = !u || (sameUser && ready);
   emit();
   // Defer Supabase calls OUTSIDE the auth callback (avoids the auth-lock deadlock).
   setTimeout(async () => { await refreshSubscriber(); await refreshProfile(); ready = true; emit(); maybeDetectCountry(); }, 0);

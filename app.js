@@ -254,6 +254,11 @@ function updateBleButton(){
   // remembered wheel (mode 'stop', not 'disconnect'), so it stays one-tap away.
   if(s.status === 'reconnecting'){ bleBtn.textContent = 'Stop'; bleBtn.dataset.mode = 'stop'; bleBtn.disabled = false; }
   else if(s.connected){ bleBtn.textContent = 'Disconnect'; bleBtn.dataset.mode = 'disconnect'; bleBtn.disabled = false; }
+  // Access still resolving (initial session fetch / subscriber check in
+  // flight): show a neutral disabled Connect instead of flashing "Log in to
+  // measure" → "Subscribe to measure" at a paying member on every page load.
+  // The FAB already guards on accessReady — the header button forgot to.
+  else if(!a.accessReady){ bleBtn.textContent = 'Connect'; bleBtn.dataset.mode = 'connect'; bleBtn.disabled = true; }
   else if(!a.user){ bleBtn.textContent = 'Log in to measure'; bleBtn.dataset.mode = 'login'; bleBtn.disabled = false; }
   else if(!a.subscriber){ bleBtn.textContent = 'Subscribe to measure'; bleBtn.dataset.mode = 'subscribe'; bleBtn.disabled = false; }
   // Product decision (2026-08-05): the MANUAL button is always "Connect" — it
