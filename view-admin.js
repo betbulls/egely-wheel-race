@@ -351,7 +351,7 @@ export function mount(el){
     <div>
       <div class="adm-head">
         <h1>Usage</h1>
-        <p>Every registered member, sorted by most recent activity. “Last activity” is their latest saved measurement. “Last sign-in” is the last time they typed a login code — long-lived sessions don’t refresh it, so regulars who never re-log-in can look older there than they are.</p>
+        <p>Every registered member, sorted by most recent activity. “Last activity” is their latest saved measurement <b>or</b> app/connection activity (opening the app, connecting a wheel — recorded since the diagnostics went live). “Last sign-in” is the last time they typed a login code — long-lived sessions don’t refresh it.</p>
       </div>
       <div class="admu-chips" id="usChips"></div>
       <div class="adm-card" style="padding:14px 16px;margin-bottom:14px">
@@ -398,10 +398,21 @@ export function mount(el){
       return `<span title="${abs}">${fresh}${esc(rel)}</span>`;
     };
     const num = v => (v && Number(v) > 0) ? esc(String(v)) : '<span class="admu-dim">·</span>';
+    // Latest of "saved a measurement" and "was in the app / touched the wheel"
+    // (ble_events). Tolerates an older deployed RPC without last_event_at.
+    const lastActivityTs = r => {
+      const m = r.last_measure_at ? +new Date(r.last_measure_at) : 0;
+      const e = r.last_event_at ? +new Date(r.last_event_at) : 0;
+      const t = Math.max(m, e);
+      return t ? new Date(t).toISOString() : null;
+    };
 
     function paintChips(){
       const vis = visibleRows();
-      const lastAct = r => Math.max(r.last_measure_at ? +new Date(r.last_measure_at) : 0, r.last_sign_in_at ? +new Date(r.last_sign_in_at) : 0);
+      const lastAct = r => Math.max(
+        r.last_measure_at ? +new Date(r.last_measure_at) : 0,
+        r.last_event_at ? +new Date(r.last_event_at) : 0,
+        r.last_sign_in_at ? +new Date(r.last_sign_in_at) : 0);
       const act7 = vis.filter(r => Date.now() - lastAct(r) < 7 * DAY).length;
       const act30 = vis.filter(r => Date.now() - lastAct(r) < 30 * DAY).length;
       const subs = vis.filter(r => r.subscriber).length;
@@ -426,7 +437,7 @@ export function mount(el){
             <div class="n">${esc(r.display_name || '—')}${r.subscriber ? '<span class="admu-badge sub">Sub</span>' : ''}${r.maker ? '<span class="admu-badge maker">Maker</span>' : ''}${r.seed ? '<span class="admu-badge seed">Bot</span>' : ''}</div>
             <div class="e">${esc(r.email || '')}${r.country ? ' · ' + esc(r.country) : ''}</div>
           </td>
-          <td>${fmtAgo(r.last_measure_at)}</td>
+          <td>${fmtAgo(lastActivityTs(r))}</td>
           <td>${fmtAgo(r.last_sign_in_at)}</td>
           <td class="num"><b>${num(r.measures_total)}</b></td>
           <td class="num">${num(r.measures_30d)}</td>

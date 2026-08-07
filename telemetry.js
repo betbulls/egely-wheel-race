@@ -63,17 +63,26 @@ function readBreadcrumb(){
 
 function ownerUid(){ try { return (auth.getState().user && auth.getState().user.id) || ''; } catch { return ''; } }
 
+// One session_start per page-load. Pushed EAGERLY from init() — it doubles as
+// the "member opened the app" activity marker for the admin Usage view (just
+// browsing the Live wall counts as activity) — and lazily before any BLE
+// event, so the device context always precedes the events it explains.
+function ensureSessionCtx(){
+  if(sentSessionCtx) return;
+  sentSessionCtx = true;
+  queue.push({ cid: pageSession + '-' + (++seq), uid: ownerUid(), event: 'session_start',
+    client_ts: new Date().toISOString(), page: pageSession, detail: {
+      ua: (navigator.userAgent || '').slice(0, 300),
+      screen: (typeof screen !== 'undefined' ? screen.width + 'x' + screen.height : ''),
+      ios: IS_IOS, lang: navigator.language || '',
+    } });
+  saveQueue();
+  scheduleFlush(FLUSH_DEBOUNCE_MS);
+}
+
 function push(event, detail){
   try {
-    if(!sentSessionCtx){
-      sentSessionCtx = true;
-      queue.push({ cid: pageSession + '-' + (++seq), uid: ownerUid(), event: 'session_start',
-        client_ts: new Date().toISOString(), page: pageSession, detail: {
-          ua: (navigator.userAgent || '').slice(0, 300),
-          screen: (typeof screen !== 'undefined' ? screen.width + 'x' + screen.height : ''),
-          ios: IS_IOS, lang: navigator.language || '',
-        } });
-    }
+    ensureSessionCtx();
     const d = Object.assign({}, detail || {});
     d.route = route();
     // cid = idempotency/tracking id; uid = who the event BELONGS to, so a
@@ -128,6 +137,7 @@ async function flush(includeForeign){
 export function init(){
   try {
     loadQueue();
+    try { ensureSessionCtx(); } catch {}
     let prev = ble.getState();
     let connectedAt = 0, dropAt = 0, wheelInfoSent = false, lastBatt = '';
 
