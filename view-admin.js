@@ -90,6 +90,27 @@ function styles(){
   .admu-badge.seed{background:#f2f3f4;color:#99a2a7}
   .admu-toggle{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:#67737c;white-space:nowrap;cursor:pointer;user-select:none}
   .admu-toggle input{accent-color:#5230da}
+  .admu-table tr.clickable{cursor:pointer}
+  /* Member datasheet (expanded row) */
+  .admd-cell{background:#fafbfc !important;padding:18px 16px !important;white-space:normal !important}
+  .admd-head{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;margin-bottom:12px;font-size:13px;color:#27384e}
+  .admd-head b{color:#011624}
+  .admd-refresh{margin-left:auto;font-family:'Inter',sans-serif;font-size:12px;font-weight:700;padding:7px 14px;
+    border-radius:999px;cursor:pointer;background:#fff;border:1px solid #dfe3e6;color:#401d91}
+  .admd-refresh:hover{border-color:#5230da}
+  .admd-diag{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+  .admd-diag-row{display:flex;gap:9px;align-items:flex-start;background:#fff;border:1px solid #dfe3e6;
+    border-radius:10px;padding:9px 12px;font-size:13px;line-height:1.45;color:#27384e}
+  .admd-diag-row.bad{border-color:rgba(255,92,92,.4);background:rgba(255,92,92,.05)}
+  .admd-diag-row.warn{border-color:rgba(184,134,11,.35);background:rgba(184,134,11,.05)}
+  .admd-diag-row.ok{border-color:rgba(32,178,107,.3);background:rgba(32,178,107,.05)}
+  .admd-tl{list-style:none;margin:0;padding:0;max-height:340px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+  .admd-tl li{display:flex;gap:10px;align-items:flex-start;font-size:12.5px;padding:6px 8px;border-radius:8px;color:#27384e;line-height:1.4}
+  .admd-tl li:nth-child(odd){background:#fff}
+  .admd-dot{flex-shrink:0;width:8px;height:8px;border-radius:50%;margin-top:4px;background:#c9ced2}
+  .admd-dot.g{background:#3ddc84}.admd-dot.y{background:#f5b700}.admd-dot.r{background:#ff5c5c}
+  .admd-ts{flex-shrink:0;color:#99a2a7;font-variant-numeric:tabular-nums;width:118px}
+  .admd-raw{display:block;color:#99a2a7;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;margin-top:1px;word-break:break-all}
   .admu-live{display:inline-block;width:7px;height:7px;border-radius:50%;background:#3ddc84;margin-right:6px}
   .admu-dim{color:#99a2a7}
   @media (max-width:600px){
@@ -393,13 +414,14 @@ export function mount(el){
     }
 
     function paint(){
+      openDetail = null;   // a repaint wipes the tbody — the datasheet row goes with it
       const q = (search.value || '').trim().toLowerCase();
       const base = visibleRows();
       const list = q ? base.filter(r =>
         (r.display_name || '').toLowerCase().includes(q) || (r.email || '').toLowerCase().includes(q)) : base;
       if(!list.length){ body.innerHTML = `<tr><td colspan="11" class="adm-empty" style="padding:16px">No members match.</td></tr>`; return; }
       body.innerHTML = list.map(r => `
-        <tr>
+        <tr class="clickable" data-uid="${esc(r.uid)}" title="Click for the connection datasheet">
           <td class="admu-member">
             <div class="n">${esc(r.display_name || '—')}${r.subscriber ? '<span class="admu-badge sub">Sub</span>' : ''}${r.maker ? '<span class="admu-badge maker">Maker</span>' : ''}${r.seed ? '<span class="admu-badge seed">Bot</span>' : ''}</div>
             <div class="e">${esc(r.email || '')}${r.country ? ' · ' + esc(r.country) : ''}</div>
@@ -420,6 +442,133 @@ export function mount(el){
     let usDebounce = null;
     search.addEventListener('input', () => { clearTimeout(usDebounce); usDebounce = setTimeout(paint, 200); });
     seedsToggle.addEventListener('change', () => { paintChips(); paint(); });
+
+    // ---- Member datasheet (click a row) — remote connection diagnostics ------
+    const uaSummary = ua => {
+      ua = ua || '';
+      const dev = /iPad/.test(ua) ? 'iPad' : /iPhone/.test(ua) ? 'iPhone' : /Android/.test(ua) ? 'Android'
+        : /Windows/.test(ua) ? 'Windows PC' : /Macintosh/.test(ua) ? 'Mac (or iPad in desktop mode)' : 'Unknown device';
+      const br = /Bluefy/i.test(ua) ? 'Bluefy' : /Edg\//.test(ua) ? 'Edge' : /Chrome\//.test(ua) ? 'Chrome'
+        : /Safari\//.test(ua) ? 'Safari/WebKit' : 'browser?';
+      return dev + ' · ' + br;
+    };
+    const fmtDur = ms => ms == null ? '?' : ms < 60000 ? Math.max(1, Math.round(ms / 1000)) + 's' : Math.round(ms / 60000) + 'm';
+    const fmtTs = ts => { try { return new Date(ts).toLocaleString('en-GB', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch { return '' + ts; } };
+
+    // Every event as one plain-language line + a severity dot.
+    function humanEvent(e){
+      const d = e.detail || {};
+      switch(e.event){
+        case 'session_start':     return ['', 'Opened the app — ' + uaSummary(d.ua) + (d.screen ? ' · ' + d.screen : '')];
+        case 'connect_start':     return ['', 'Opened the device picker'];
+        case 'picker_cancel':     return ['y', 'Closed the picker without choosing (wheel not in the list?)'];
+        case 'connected':         return ['g', 'Wheel connected' + (d.device ? ' · ' + d.device : '')];
+        case 'wheel_info':        return ['g', 'Wheel details — firmware ' + (d.fw || '?') + ', battery ' + (d.battery || '?')];
+        case 'reconnected':       return ['g', 'Connection healed by itself after ' + fmtDur(d.afterMs)];
+        case 'reconnect_retry':   return ['', 'Retried the connection automatically (no new drop)'];
+        case 'link_drop':         return ['y', 'Link dropped after ' + fmtDur(d.aliveMs) +
+                                      (d.visible === 'hidden' ? ' — screen was OFF/locked' : '') +
+                                      (d.battery === 'LOW' ? ' — battery was LOW' : '')];
+        case 'reconnect_giveup':  return ['y', 'Auto-reconnect gave up (needed a manual Connect)'];
+        case 'reconnect_stopped': return ['', 'Member pressed Stop during reconnecting'];
+        case 'connect_fail':      return ['r', 'Connect failed: ' + (d.friendly || 'unknown error')];
+        case 'terminal_error':    return ['r', 'Gave up: ' + (d.friendly || 'unknown error')];
+        case 'manual_disconnect': return ['', 'Member disconnected the wheel'];
+        case 'battery_low':       return ['r', 'Wheel battery turned LOW'];
+        case 'battery_ok':        return ['g', 'Battery reads OK again (fresh battery?)'];
+        default:                  return ['', e.event];
+      }
+    }
+
+    // Rule-based diagnosis — pattern counts over the fetched window, each with
+    // ready-to-send advice + the matching guide entry.
+    function diagnose(evs){
+      const out = [];
+      const det = e => e.detail || {};
+      const drops = evs.filter(e => e.event === 'link_drop');
+      const shortDrops = drops.filter(e => det(e).aliveMs != null && det(e).aliveMs < 60000);
+      const lowSeen = evs.some(e => e.event === 'battery_low') || drops.some(e => det(e).battery === 'LOW');
+      const hiddenDrops = drops.filter(e => det(e).visible === 'hidden');
+      const gattErr = evs.filter(e => /GATT Server is disconnected/i.test((det(e).raw && det(e).raw.msg) || ''));
+      const noBt = evs.filter(e => /connect to Bluetooth/i.test(det(e).friendly || ''));
+      const wrongPick = evs.filter(e => /not an Egely Wheel/i.test(det(e).friendly || ''));
+      if(lowSeen || shortDrops.length >= 3)
+        out.push(['bad', '🔋', `Weak 9V battery pattern — ${shortDrops.length} short-lived link(s)` +
+          (lowSeen ? ' and the wheel reported LOW' : '') +
+          '. Advice: replace the 9V battery. Guide entry: “The app says Battery low”.']);
+      if(hiddenDrops.length >= 2)
+        out.push(['warn', '📱', `${hiddenDrops.length} drop(s) happened with the screen off/locked. ` +
+          'Advice: Settings → Display & Brightness → Auto-Lock → Never while measuring. Guide entry: “My screen locked…”.']);
+      if(gattErr.length)
+        out.push(['warn', '⚙️', `${gattErr.length}× “GATT Server is disconnected” — classic OS-level pairing. ` +
+          'Advice: remove Egely Wheel from the device’s Bluetooth settings. Guide entry: “I paired the wheel…”.']);
+      if(noBt.length)
+        out.push(['warn', '🌐', `Tried a browser without Bluetooth support ${noBt.length}×. ` +
+          'Advice: iPhone/iPad → the free Bluefy app; computer → Chrome or Edge.']);
+      if(wrongPick.length >= 2)
+        out.push(['warn', '🎯', `Picked a wrong device ${wrongPick.length}× — the wheel probably shows unnamed in their picker. ` +
+          'Advice: switch the wheel off and on, pick the entry that newly appears.']);
+      if(!out.length)
+        out.push(['ok', '✅', evs.length
+          ? 'No obvious problem pattern in the recorded events.'
+          : 'No connection events yet — they appear once the member uses the app after this feature went live.']);
+      return out;
+    }
+
+    let openDetail = null;   // { uid, tr } of the currently open datasheet row
+    function closeDetail(){ if(openDetail){ openDetail.tr.remove(); openDetail = null; } }
+
+    async function openDatasheet(rowTr, uid, name){
+      closeDetail();
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td class="admd-cell" colspan="11"><span class="adm-empty">Loading events…</span></td>`;
+      rowTr.after(tr);
+      openDetail = { uid, tr };
+      const cell = tr.firstElementChild;
+
+      const load = async () => {
+        const { data, error } = await supabase.rpc('admin_user_events', { p_uid: uid });
+        if(openDetail?.uid !== uid) return;   // closed / another row opened meanwhile
+        if(error){
+          cell.innerHTML = `<span class="adm-empty">Could not load: ${esc(error.message)}${/function/i.test(error.message) ? ' — run the ble_events SQL first.' : ''}</span>`;
+          return;
+        }
+        const evs = data || [];
+        // Offline-queued events arrive late: created_at is upload time, but
+        // client_ts is when it actually happened — order the timeline by that.
+        evs.sort((a, b) => new Date(b.client_ts || b.created_at) - new Date(a.client_ts || a.created_at));
+        const sess = evs.find(e => e.event === 'session_start');
+        const winfo = evs.find(e => e.event === 'wheel_info');
+        const diag = diagnose(evs);
+        cell.innerHTML = `
+          <div class="admd-head">
+            <span><b>${esc(name)}</b> · connection datasheet (last 60 days, newest first)</span>
+            ${sess ? `<span title="${esc((sess.detail || {}).ua || '')}">📟 <b>${esc(uaSummary((sess.detail || {}).ua))}</b></span>` : ''}
+            ${winfo ? `<span>⚙️ firmware <b>${esc((winfo.detail || {}).fw || '?')}</b> · battery <b>${esc((winfo.detail || {}).battery || '?')}</b></span>` : ''}
+            <button type="button" class="admd-refresh">↻ Refresh</button>
+          </div>
+          <div class="admd-diag">${diag.map(([lv, ic, tx]) =>
+            `<div class="admd-diag-row ${lv}"><span>${ic}</span><span>${esc(tx)}</span></div>`).join('')}</div>
+          <ul class="admd-tl">${evs.map(e => {
+            const [dot, text] = humanEvent(e);
+            const raw = e.detail && e.detail.raw && e.detail.raw.msg ? `<span class="admd-raw">${esc(e.detail.raw.msg)}</span>` : '';
+            return `<li><span class="admd-dot ${dot}"></span><span class="admd-ts">${esc(fmtTs(e.client_ts || e.created_at))}</span><span>${esc(text)}${raw}</span></li>`;
+          }).join('') || '<li class="adm-empty">No events recorded.</li>'}</ul>`;
+        const rf = cell.querySelector('.admd-refresh');
+        if(rf) rf.addEventListener('click', () => { cell.innerHTML = '<span class="adm-empty">Loading events…</span>'; load(); });
+      };
+      load();
+    }
+
+    body.addEventListener('click', (e) => {
+      const tr = e.target.closest('tr.clickable');
+      if(!tr || !body.contains(tr)) return;
+      const uid = tr.dataset.uid;
+      if(!uid) return;
+      if(openDetail && openDetail.uid === uid){ closeDetail(); return; }
+      const r = rows.find(x => x.uid === uid);
+      openDatasheet(tr, uid, (r && (r.display_name || r.email)) || 'Member');
+    });
 
     (async () => {
       const { data, error } = await supabase.rpc('admin_user_activity');

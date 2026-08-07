@@ -26,6 +26,7 @@ import { mount as mountShowcase } from './view-showcase.js';
 import { mount as mountPartnerOnboarding } from './view-partner-onboarding.js';
 import { mount as mountCreator } from './view-creator.js';
 import * as presence from './presence.js';
+import * as telemetry from './telemetry.js';
 import { supabase } from './db.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
@@ -592,6 +593,7 @@ if(fab && fabMenu){
 
 // ---- Boot -------------------------------------------------------------------
 presence.init();   // app-level Live presence (joins the shared channel)
+telemetry.init();  // connection diagnostics — observer-only, never breaks the app
 window.addEventListener('hashchange', router);
 if(!location.hash) location.hash = '#/home';
 router();
