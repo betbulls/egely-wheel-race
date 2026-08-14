@@ -58,14 +58,17 @@ const Y_TICKS = [2, 5, 10, 24, 50, 100, 200, 400];
 const PALETTE = ['#0a7a5c', '#b8860b', '#0033ff', '#c2415b', '#7c3aed', '#0e7490', '#b45309', '#be185d', '#4d7c0f', '#6b7280'];
 
 // Integrate the ideal model downward from 450 rpm and anchor t=0 at 24 rpm.
-function buildIdealPts(){
+// Also computes where the ideal wheel comes to a FULL STOP in dead-calm air
+// (the Coulomb term guarantees a finite stop): ~29 s after the 24-rpm crossing.
+function buildIdealModel(){
   const pts = [];
   let w = 450, t = 0;
-  while(w > Y_MIN && t < 120){
-    pts.push({ t, w });
+  while(w > 0.05 && t < 300){
+    if(w >= Y_MIN) pts.push({ t, w });
     w -= (IDEAL_A + IDEAL_B * w + IDEAL_K * Math.pow(w, 1.5)) * 0.02;
     t += 0.02;
   }
+  const tStop = t;
   let t24 = null;
   for(let i = 1; i < pts.length; i++){
     if(pts[i].w <= 24){
@@ -77,9 +80,11 @@ function buildIdealPts(){
   const out = [];
   for(let i = 0; i < pts.length; i += 10)   // thin to ~5/s for drawing
     out.push({ x: pts[i].t - t24, y: pts[i].w });
-  return out;
+  return { pts: out, stopX: tStop - t24 };
 }
-const IDEAL_PTS = buildIdealPts();
+const IDEAL_MODEL = buildIdealModel();
+const IDEAL_PTS = IDEAL_MODEL.pts;
+const IDEAL_STOP_X = IDEAL_MODEL.stopX;   // ~29.4 s: dead-calm full-stop mark
 
 // Saved wheels + chart curves survive tab switches (mount closures die, the
 // day's test work must not): module-level stores + a repaint hook for the
@@ -175,6 +180,17 @@ function downloadJson(payload){
 }
 
 // ---- scoring ----------------------------------------------------------------
+// Tail verdict: human-readable read of the untouched-tail metrics. Depends on
+// the room's air as much as the wheel, so the label is descriptive and the
+// real comparison is the session-relative ratio shown next to it.
+function tailVerdict(tail){
+  if(!tail) return null;
+  if(tail.stopped) return { label: 'STILL', color: '#99a2a7' };
+  if(tail.avg_rpm < 0.8) return { label: 'QUIET', color: '#67737c' };
+  if(tail.avg_rpm < 2) return { label: 'RESPONSIVE', color: '#0f8a52' };
+  return { label: 'LIVELY', color: '#b8860b' };
+}
+
 function scoreOf(T245){
   if(T245 == null) return { score: null, grade: 'n/a', cls: 'awb-sN' };
   const score = Math.min(110, Math.round(T245 / SCORE_REF_T245 * 100));
@@ -327,6 +343,16 @@ function drawTestChart(canvas, curves, liveCurve){
   // ideal center line
   ctx.setLineDash([6, 4]); ctx.lineWidth = 1.6; ctx.strokeStyle = '#011624';
   poly(IDEAL_PTS, 1); ctx.stroke(); ctx.setLineDash([]);
+
+  // dead-calm full-stop mark: in perfectly still air the ideal wheel is
+  // completely stopped here — anything still moving to the right of this mark
+  // is the room's air working on the wheel, not the wheel itself
+  const sx = xOf(IDEAL_STOP_X);
+  ctx.setLineDash([3, 3]); ctx.strokeStyle = 'rgba(1,22,36,0.35)'; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(sx, padT + plotH); ctx.lineTo(sx, padT + plotH - 30); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#67737c'; ctx.font = '10px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  ctx.fillText('ideal stop — calm air', sx, padT + plotH - 33);
 
   // recorded curves
   for(const c of curves){
@@ -865,18 +891,32 @@ export function mountWheelBench(host){
     if(!chartCurves.length){
       ul.innerHTML = '<li style="background:none;border:none;color:#99a2a7">No spins on the chart yet — record a wheel and spin it above 24 rpm.</li>';
     } else {
-      ul.innerHTML = chartCurves.map((c, i) => `
+      // session-relative tail ratio: this spin's tail activity vs the median of
+      // the session's OTHER non-still tails (same room, same air => comparable)
+      const tailRel = c => {
+        if(!c.tail || c.tail.stopped) return '';
+        const others = chartCurves.filter(o => o !== c && o.tail && !o.tail.stopped)
+          .map(o => o.tail.avg_rpm).sort((a, b) => a - b);
+        if(!others.length) return '';
+        const med = others[Math.floor(others.length / 2)];
+        return med >= 0.1 ? ` · ×${(c.tail.avg_rpm / med).toFixed(1)} vs session` : '';
+      };
+      ul.innerHTML = chartCurves.map((c, i) => {
+        const tv = tailVerdict(c.tail);
+        return `
         <li>
           <span class="awb-cdot" style="background:${c.color}"></span>
           <span class="awb-cserial">${esc(c.serial)}</span>
           <span>spin ${c.spinN}</span>
           <span>${c.T245 != null ? 'T24→5: <b>' + c.T245.toFixed(1) + 's</b>' : '—'}</span>
           <span class="awb-score ${c.cls}">${c.score != null ? c.score + ' · ' + c.grade : 'n/a'}</span>
-          <span class="awb-tail">${c.tail
-            ? (c.tail.stopped ? 'tail: stopped' : `tail Ø${c.tail.avg_rpm.toFixed(1)} rpm · ${c.tail.pickups} pickup${c.tail.pickups === 1 ? '' : 's'}`)
+          <span class="awb-tail">${tv
+            ? `tail: <b style="color:${tv.color}">${tv.label}</b>` +
+              (c.tail.stopped ? '' : ` Ø${c.tail.avg_rpm.toFixed(1)} · ${c.tail.pickups} pickup${c.tail.pickups === 1 ? '' : 's'}${tailRel(c)}`)
             : ''}</span>
           <button type="button" class="awb-cx" data-rm="${i}" title="Remove from chart">×</button>
-        </li>`).join('');
+        </li>`;
+      }).join('');
     }
     paintCharts();
   }
@@ -998,9 +1038,15 @@ export function mountWheelBench(host){
         <span style="color:#8a6a08;font-weight:700">amber</span> = extra air drag (wheel shape),
         <span style="color:#2c4bbd;font-weight:700">blue</span> = a draft is pushing the wheel (environment, not the wheel).
         One weak spin proves nothing — judge a wheel on its <b>best</b> spin of 3 (bad seating can only subtract, never add).
-        The <b>tail reading</b> (30&nbsp;s untouched after the coast-down) is the SENSITIVITY axis: higher average rpm and more
-        pickups = the wheel catches the room's faint air movement more easily. It depends on the room too, so compare tails
-        only <b>within one session</b> — and it deliberately does not enter the score.
+        The <b>tail reading</b> (30&nbsp;s untouched after the coast-down) is the SENSITIVITY axis: in dead-calm air the ideal
+        wheel is <b>fully stopped ~29&nbsp;s</b> after the 24-rpm crossing (the “ideal stop” mark on the chart) — anything still
+        moving past that mark is the room's air acting on the wheel. Verdicts:
+        <span style="color:#99a2a7;font-weight:700">STILL</span> = came to rest (calm air, or low pickup) ·
+        <span style="color:#67737c;font-weight:700">QUIET</span> = barely moving (Ø&lt;0.8 rpm) ·
+        <span style="color:#0f8a52;font-weight:700">RESPONSIVE</span> = clearly riding the air (Ø0.8–2) ·
+        <span style="color:#b8860b;font-weight:700">LIVELY</span> = catches the faintest current (Ø≥2).
+        The room matters as much as the wheel, so trust the <b>“×N vs session”</b> ratio (same room, minutes apart):
+        a wheel consistently ×1.5 over its session-mates is genuinely more sensitive. Deliberately not part of the score.
       </p>
     </div>
 
