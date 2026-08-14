@@ -14,7 +14,7 @@ import * as auth from './auth.js';
 import * as ble from './ble.js';
 import {
   createCapture, buildCurve, downloadJson, liveRpmOf, fmtRpm,
-  FACTORY_COEF, TAIL_OBS_MS,
+  FACTORY_COEF, RPM_MIN_COUNTER,
 } from './wheel-capture.js';
 import * as store from './research-store.js';
 import { createPanelStack } from './research-panels.js';
@@ -152,6 +152,8 @@ function styles(){
   .rs-guide-big{font-family:'Montserrat',sans-serif;font-weight:600;font-size:40px;line-height:1;color:#401d91;
     font-variant-numeric:tabular-nums;min-width:110px;text-align:center}
   .rs-guide-text{color:#27384e;font-size:13.5px;line-height:1.5;margin-top:10px}
+  .rs-phase{font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;
+    background:#401d91;color:#fff;border-radius:999px;padding:6px 14px;white-space:nowrap}
   .rs-caltable{width:100%;border-collapse:collapse;font-size:13px}
   .rs-caltable td{padding:7px 8px;border-bottom:1px solid #eef1f3;color:#27384e;vertical-align:middle}
   .rs-caltable b{color:#011624}
@@ -359,18 +361,52 @@ function mountCalibration(host, a){
   let unsubStatus = null, uiTimer = null;
   let spins = [], curves = [], calCurves = [];
 
-  const CAL_SPINS = 3;   // guided protocol: 3 spins, then it saves ITSELF
+  // Guided protocol (owner decisions): ONE calibration = ONE spin, a SHORT
+  // (15 s) untouched-tail countdown closes it, then it saves ITSELF.
+  const CAL_SPINS = 1;
+  const CAL_TAIL_MS = 15000;
   const cap = createCapture({
     maxMs: 15 * 60 * 1000,
-    onSpinClosed(spin, curve){
+    tailMs: CAL_TAIL_MS,
+    onSpinClosed(spin, curve, r){
       spins.push(spin); curves.push(curve);
-      if(curve) calCurves.push({ color: PALETTE[(calCurves.length) % PALETTE.length], pts: curve.pts, T245: curve.T245 });
+      // display curve from the RAW lines: continuous down to the floor (zero)
+      const disp = calDisplayCurve(r, spin.t_start_ms, spin.t_end_ms);
+      if(disp) calCurves.push({ color: PALETTE[(calCurves.length) % PALETTE.length], pts: disp.pts });
       paintSpins(); paintCharts();
       // The protocol completes on its own — no Stop button to remember.
       if(spins.length >= CAL_SPINS) stopAndSave();
     },
     onAutoStop(){ stopAndSave('Auto-stopped after 15 minutes.'); },
   });
+
+  // Dense DISPLAY curve for the calibration charts, built from the RAW lines
+  // (~2 pts/s) with standstill included as 0 — the shared chart clamps 0 to
+  // its floor, so the curve visibly lands on the bottom and runs along it
+  // instead of vanishing (owner request: continuous down to zero).
+  // The SCIENCE numbers (T24→5, fit) still come from the engine's own curve.
+  function calDisplayCurve(rec, fromMs, toMs){
+    const raw = [];
+    let lastT = -Infinity;
+    for(const f of rec.frames){
+      if(f[0] < fromMs - 12000) continue;
+      if(f[0] > toMs) break;
+      if(f[0] - lastT < 450) continue;
+      lastT = f[0];
+      raw.push({ t: f[0] / 1000, rpm: f[1] >= RPM_MIN_COUNTER ? 6000 / f[1] : 0 });
+    }
+    // anchor at the LAST downward 24-crossing (guided flow: one coast per spin)
+    let t24 = null;
+    for(let i = 1; i < raw.length; i++){
+      const a = raw[i - 1], b = raw[i];
+      if(a.rpm > 24 && b.rpm <= 24 && b.rpm > 0){
+        t24 = a.t + (Math.log(a.rpm) - Math.log(24)) / (Math.log(a.rpm) - Math.log(b.rpm)) * (b.t - a.t);
+      }
+    }
+    if(t24 == null) return null;
+    const pts = raw.map(p => ({ x: p.t - t24, y: p.rpm })).filter(p => p.x >= -12 && p.x <= 48);
+    return pts.length > 3 ? { pts } : null;
+  }
 
   host.innerHTML = `
     <div class="rs-card">
@@ -379,8 +415,8 @@ function mountCalibration(host, a){
       Every experiment is measured against this baseline. <b>Re-calibrate when you move to a different room.</b></p>
       <ol class="rs-steps">
         <li>Pick the wheel, fill in the environment, press <b>Start calibration</b>. From then on the settings lock and the process runs itself.</li>
-        <li><b>Spin the wheel hard</b> (above 140 rpm), let go, and <b>hands off to the very end</b> — after each coast-down a 30&nbsp;s countdown watches the untouched wheel, then the spin closes on its own.</li>
-        <li>Do this <b>3 times</b>. After the third spin the calibration <b>saves itself</b>. If one spin is much shorter than the others, lift the wheel off and reseat it before the next.</li>
+        <li><b>ONE strong spin</b> (above 140 rpm), let go, and <b>hands off to the very end</b> — the wheel coasts down, a short 15&nbsp;s countdown watches the still wheel, and the calibration <b>saves itself</b>. About a minute in total.</li>
+        <li>If the curve falls below the green band, lift the wheel off, reseat it, and run a new calibration — seating is the #1 cause of a weak spin.</li>
       </ol>
     </div>
     <div class="rs-card">
@@ -398,6 +434,7 @@ function mountCalibration(host, a){
       </div>
       <div id="rscGuide" class="rs-guide" style="display:none">
         <div class="rs-guide-row">
+          <span class="rs-phase" id="rscPhase">READY</span>
           <span class="rs-guide-rpm"><b id="rscRpm">0</b> rpm</span>
           <span class="rs-guide-big" id="rscCount"></span>
           <span class="rs-progress"><i id="rscBar" style="width:0%"></i></span>
@@ -454,11 +491,11 @@ function mountCalibration(host, a){
     $('rscStart').disabled = cap.isRecording() || (!bleState.connected && !cap.simActive());
   }
 
-  // In-progress spin as an anchored live curve (same as the bench).
+  // In-progress spin as an anchored live curve — display grade, floor included.
   function liveCalCurve(){
     const rec = cap.rec();
     if(!rec || !rec.spinning) return null;
-    return buildCurve(rec.rpmPts, rec.spinStartMs, cap.now());
+    return calDisplayCurve(rec, rec.spinStartMs, cap.now());
   }
   // The full Wheel test chart trio — same renderers, same look.
   function paintCharts(){
@@ -486,20 +523,27 @@ function mountCalibration(host, a){
     const { rpm: trueRpm } = liveRpmOf(rec);
     $('rscRpm').textContent = fmtRpm(trueRpm);
     const t = cap.now();
-    const count = $('rscCount'), bar = $('rscBar'), badge = $('rscBadge');
+    const phase = $('rscPhase'), count = $('rscCount'), bar = $('rscBar'), badge = $('rscBadge');
     if(!rec.spinning){
-      count.textContent = `spin ${Math.min(CAL_SPINS, spins.length + 1)} / ${CAL_SPINS}`;
-      bar.style.width = Math.round(spins.length / CAL_SPINS * 100) + '%';
-      badge.textContent = 'Spin the wheel HARD (above 140 rpm), then let go and don\'t touch it.';
-    } else if(rec.lowSinceMs != null){
-      const left = Math.max(0, Math.ceil((TAIL_OBS_MS - (t - rec.lowSinceMs)) / 1000));
-      count.textContent = left + ' s';
-      bar.style.width = Math.round((1 - left / (TAIL_OBS_MS / 1000)) * 100) + '%';
-      badge.textContent = 'Hands off! The wheel is nearly still — this countdown records how the untouched wheel reacts to the room\'s air, then the spin closes by itself.';
-    } else {
-      count.textContent = `spin ${spins.length + 1} / ${CAL_SPINS}`;
+      phase.textContent = '1 · SPIN IT';
+      count.textContent = '';
       bar.style.width = '0%';
-      badge.textContent = `Coasting — hands off. Peak ${Math.round(rec.maxRpm)} rpm; the chart below draws as it slows.`;
+      badge.textContent = 'Give the wheel ONE strong spin (above 140 rpm), then let go and don\'t touch it again.';
+    } else if(rec.lowSinceMs != null){
+      const left = Math.max(0, Math.ceil((CAL_TAIL_MS - (t - rec.lowSinceMs)) / 1000));
+      phase.textContent = '3 · COUNTDOWN';
+      count.textContent = left + ' s';
+      bar.style.width = Math.round((1 - left / (CAL_TAIL_MS / 1000)) * 100) + '%';
+      badge.textContent = 'Almost done — the wheel is still, the countdown finishes and the calibration SAVES ITSELF. Keep hands off.';
+    } else {
+      phase.textContent = '2 · COASTING';
+      count.textContent = '';
+      // progress: how far the coast has come down from the peak toward ~5 rpm
+      const p = rec.maxRpm > 30
+        ? Math.max(0, Math.min(1, (Math.log(rec.maxRpm) - Math.log(Math.max(5, trueRpm || 5))) / (Math.log(rec.maxRpm) - Math.log(5))))
+        : 0;
+      bar.style.width = Math.round(p * 80) + '%';   // countdown fills the last 20%
+      badge.textContent = `Hands off — recording the slow-down (peak ${Math.round(rec.maxRpm)} rpm). The charts below draw live; a short countdown follows, then it saves itself.`;
     }
     paintCharts();
   }

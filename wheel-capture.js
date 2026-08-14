@@ -176,6 +176,7 @@ export function setupCanvas(canvas, hPx){
 // the wake lock and the leave-warning. Sync + idempotent release on every path.
 export function createCapture(opts = {}){
   const maxMs = opts.maxMs || 15 * 60 * 1000;
+  const tailMs = opts.tailMs || TAIL_OBS_MS;   // untouched-tail window (bench: 30 s; research calibration: shorter)
   let rec = null;          // active recording (null = idle)
   let sim = null;          // simulator state (dev/dry-run without a wheel)
   let unsubFrames = null, unsubStatus = null;
@@ -254,7 +255,7 @@ export function createCapture(opts = {}){
       // a gust lifting it above resets the watch (the wheel is active again)
       if(frame.rawLed <= TAIL_LOW_RPM){
         if(rec.lowSinceMs == null) rec.lowSinceMs = t;
-        else if(t - rec.lowSinceMs >= TAIL_OBS_MS) endSpin();
+        else if(t - rec.lowSinceMs >= tailMs) endSpin();
       } else rec.lowSinceMs = null;
     }
     if(!glitch) rec.prevRaw = frame.rawLed;
@@ -313,7 +314,7 @@ export function createCapture(opts = {}){
     }
     r.spinning = false; r.lowSinceMs = null; r.maxLed = 0; r.maxRpm = 0;
   }
-  function endSpin(){ closeSpin(rec, rec.lowSinceMs + TAIL_OBS_MS, false); }
+  function endSpin(){ closeSpin(rec, rec.lowSinceMs + tailMs, false); }
 
   // ---- simulator (only meaningful while no wheel is connected) --------------
   // Mimics the real stream: ~14 lines/s, a NEW counter only every ~700 ms,
