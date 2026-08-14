@@ -29,7 +29,7 @@ const MAX_CAPTURE_MS   = 15 * 60 * 1000; // safety stop for a forgotten recorder
 const X_MIN = CURVE_X_MIN, X_MAX = CURVE_X_MAX;
 const Y_MIN = CURVE_Y_MIN, Y_MAX = CURVE_Y_MAX;
 const Y_TICKS = [2, 5, 10, 24, 50, 100, 200, 400];
-const PALETTE = ['#0a7a5c', '#b8860b', '#0033ff', '#c2415b', '#7c3aed', '#0e7490', '#b45309', '#be185d', '#4d7c0f', '#6b7280'];
+export const PALETTE = ['#0a7a5c', '#b8860b', '#0033ff', '#c2415b', '#7c3aed', '#0e7490', '#b45309', '#be185d', '#4d7c0f', '#6b7280'];
 
 // ---- Ideal wheel model (fitted 2026-08-14 from the batch-1 best-seating spins;
 // 8 wheels, 50+ recordings; grid-fit with physical constraints A,B,K >= 0):
@@ -168,7 +168,9 @@ function idealAt(x){
 }
 
 // ---- chart renderers (setupCanvas comes from the shared engine) -------------
-function drawTestChart(canvas, curves, liveCurve){
+// drawTestChart is exported: the Research calibration tab shows the exact same
+// anchored comparison chart (owner request — "ahogy a tesztnél").
+export function drawTestChart(canvas, curves, liveCurve){
   const s = setupCanvas(canvas);
   if(!s) return;
   const { ctx, w, h } = s;

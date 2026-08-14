@@ -287,7 +287,7 @@ export function createPanelStack(host, opts){
     timeline: {
       title: 'Speed timeline + ghost', h: 300,
       formula: 'ω = 6000 / counter [rpm]    ·    ghost: dω̂/dt = −(A + B·ω̂ + K·ω̂^1.5)',
-      explain: 'The wheel\'s true speed, dot by dot. The dashed ghost is how this wheel should coast down on its own in this room — the space between the line and the ghost is exactly what the coast-down model cannot explain.',
+      explain: 'WHAT: the wheel\'s speed over time — the main chart. LOOK AT: the dashed grey "ghost" line — it shows what the wheel would do all by itself in this room. MEANS: if the real line stays above the ghost, something kept the wheel going beyond plain physics; below it, something extra slowed it down.',
       draw(ctx, W, H){
         const { xOf } = timeAxis(W);
         const { yOf, max } = rpmScale(H);
@@ -341,7 +341,7 @@ export function createPanelStack(host, opts){
     torque: {
       title: 'Drive-torque instrument', h: 280,
       formula: 'τ_drive = I·(α_meas − α_base(ω))    ·    I = 1.7×10⁻⁷ kg·m²',
-      explain: 'The turning force on the wheel beyond calibrated friction and air — violet means something is driving it, amber means something is braking it extra. Inside the grey band the reading is indistinguishable from this room\'s own noise.',
+      explain: 'WHAT: the push or drag acting on the wheel right now, beyond normal friction and air. LOOK AT: the bar — purple to the right = something is driving the wheel; amber to the left = something is braking it. MEANS: while the reading sits inside the grey band, it is too small to tell apart from the room\'s own air — only readings outside the band count.',
       draw(ctx, W, H){
         const p = ensurePipe();
         const gaugeH = 84;
@@ -416,7 +416,7 @@ export function createPanelStack(host, opts){
     logspeed: {
       title: 'Log-scale speed', h: 260,
       formula: 'y = log ω    ·    ω = 6000 / counter [rpm]',
-      explain: 'The same speed on a log axis: every gridline step is a fixed multiple of speed, so the delicate range below 10 rpm gets as much room as the fast range. This is the axis where small, steady differences in a coast-down become visible.',
+      explain: 'WHAT: the same speed chart, stretched so the slow range is easy to see. LOOK AT: the shape of the slow-down below 10 rpm — on the normal chart this part is squashed flat. MEANS: small, steady differences in how the wheel dies down show up here first; the little squares at the bottom mean "near standstill".',
       draw(ctx, W, H){
         const { xOf } = timeAxis(W);
         const yOf = logY(H);
@@ -459,7 +459,7 @@ export function createPanelStack(host, opts){
     deviation: {
       title: 'Ghost deviation strip', h: 190,
       formula: 'Δ = 100 · (ω / ω̂ − 1) [%]',
-      explain: 'How far the wheel is running above or below its predicted coast, in percent — the magnifier. A steady climb of even a few percent, invisible on the speed charts, is unmistakable here.',
+      explain: 'WHAT: a magnifying glass — how far the wheel is from its predicted slow-down, in percent. LOOK AT: where the line sits versus the 0% middle line. MEANS: 0% = exactly as predicted; a steady climb above 0% means the wheel keeps doing a little better than physics predicts — this chart notices that long before any other.',
       draw(ctx, W, H){
         const p = ensurePipe();
         const { xOf } = timeAxis(W);
@@ -512,7 +512,7 @@ export function createPanelStack(host, opts){
     phase: {
       title: 'Deceleration–speed phase map', h: 260,
       formula: '−dω/dt vs ω    ·    baseline: A + B·ω + K·ω^1.5 [rpm/s]',
-      explain: 'Each dot shows how hard the wheel was slowing at a given speed; free coasting lands on the dashed baseline curve. Dots below the curve mean less braking than physics predicts — dots below zero mean the wheel was actually speeding up.',
+      explain: 'WHAT: each dot = one moment; how strongly the wheel was slowing (up-down) at a given speed (left-right). LOOK AT: where the dots fall versus the dashed curve. MEANS: dots ON the curve = normal coasting; dots BELOW it = less braking than physics expects; dots below the zero line = the wheel was actually speeding up.',
       draw(ctx, W, H){
         const p = ensurePipe();
         const RPM_MAX = Math.max(30, ...samples.filter((s, i) => p.decel[i] != null).map(s => s.rpm)) * 1.05;
@@ -571,7 +571,7 @@ export function createPanelStack(host, opts){
     revs: {
       title: 'Revolutions integral N(t)', h: 220,
       formula: 'N(t) = ∫ ω/60 dt  [rev]',
-      explain: 'Total turns since the run started, drawn as a curve: steeper is faster, flat is stopped. The gap above the dashed ghost counts the turns the wheel made beyond its predicted coast.',
+      explain: 'WHAT: the total number of turns the wheel has made since the start. LOOK AT: the steepness — steeper = spinning faster, flat = stopped. MEANS: the dashed line is how many turns coasting alone would give; any gap the solid line opens above it is "extra" turns that plain coasting cannot explain.',
       draw(ctx, W, H){
         const p = ensurePipe();
         const { xOf } = timeAxis(W);
@@ -612,7 +612,7 @@ export function createPanelStack(host, opts){
     energy: {
       title: 'Kinetic energy E(t)', h: 220,
       formula: 'E = ½ · I · ω²    ·    0.54 µJ at 24 rpm',
-      explain: 'The energy of motion stored in the wheel, in millionths of a joule. Select any two moments to read off exactly how much energy the wheel gained or lost between them. (I known to ±10%; comparisons within a run unaffected.)',
+      explain: 'WHAT: how much energy of motion the wheel holds, moment by moment (in millionths of a joule — the wheel is feather-light). LOOK AT: the rises — every rise means energy flowed INTO the wheel from somewhere. MEANS: drag the mouse across a stretch to read off exactly how much energy the wheel gained or lost there.',
       draw(ctx, W, H){
         const p = ensurePipe();
         const { xOf } = timeAxis(W);
@@ -643,7 +643,7 @@ export function createPanelStack(host, opts){
     work: {
       title: 'Work ledger W(t)', h: 220,
       formula: 'W(t) = ΔE(t) + ∫ τ_base(ω)·ω dt    ·    flat at 0 = only ordinary physics',
-      explain: 'The running total of energy delivered to the wheel beyond what calibrated friction and air account for. If only ordinary physics is acting, this line stays flat at zero — the shaded ribbon shows how sure the calibration lets us be.',
+      explain: 'WHAT: the bottom line of the whole experiment — the running total of energy that reached the wheel BEYOND normal friction and air. LOOK AT: whether the line leaves the grey ribbon around zero. MEANS: flat at zero = only ordinary physics happened; a climb outside the ribbon = energy arrived that the calibration cannot account for. (Note: spinning the wheel by hand also counts as energy in — judge the hands-off stretches.)',
       draw(ctx, W, H){
         const p = ensurePipe();
         const { xOf } = timeAxis(W);
@@ -693,7 +693,7 @@ export function createPanelStack(host, opts){
     coasts: {
       title: 'Coast comparator', h: 0, dom: true,
       formula: 'R = T_meas(24→5) / T_cal(24→5)    ·    T_cal = ' + '—',
-      explain: 'Every hands-off coast is timed through fixed speed gates and compared with this wheel\'s own calibrated time. A ratio above 1.00 means the wheel took longer to slow down than its baseline predicts.',
+      explain: 'WHAT: every time the wheel freely slowed down, it got timed like a stopwatch lap and compared with your calibration. LOOK AT: the ratio at the end of each row. MEANS: ×1.00 = the wheel slowed exactly as calibrated; ×1.20 = it kept spinning 20% longer than it should — the simplest number to quote from a session.',
       renderDom(el){
         if(!coasts.length){ el.innerHTML = '<div class="rsp-empty">no hands-off coast yet — spin the wheel above 24 rpm and let go</div>'; return; }
         const rows = coasts.map(s => {
@@ -737,7 +737,7 @@ export function createPanelStack(host, opts){
     quality: {
       title: 'Data quality / sample cadence', h: 180,
       formula: 'Δt = t_i − t_{i−1}    ·    expected ≈ max(0.7 s, 60/ω)',
-      explain: 'The heartbeat of the instrument: how often a genuinely new reading arrived. Sparse dots at slow speeds are physics — the wheel reports once per turn — and red spans are radio dropouts, so every gap in the charts above is accounted for here.',
+      explain: 'WHAT: a health check of the measurement itself — how often a genuinely new reading arrived. LOOK AT: the red stripes: those are radio dropouts, and they explain any missing pieces in the charts above. MEANS: sparse dots at low speed are NORMAL (the wheel reports once per turn, so a slow wheel reports rarely) — only the red stripes are actual data loss.',
       draw(ctx, W, H){
         const p = ensurePipe();
         const { xOf } = timeAxis(W);
@@ -822,7 +822,7 @@ export function createPanelStack(host, opts){
             <canvas class="rsp-overlay" data-overlay="${id}"></canvas>
           </div>`}
           <div class="rsp-formula">${esc(P.formula)}</div>
-          <p class="rsp-explain">${esc(P.explain)}</p>
+          <p class="rsp-explain">${esc(P.explain).replace(/(WHAT:|LOOK AT:|MEANS:)/g, '<b>$1</b>')}</p>
         </div>
       </div>`;
     }).join('');
@@ -1193,7 +1193,8 @@ function styles(){
   .rsp-overlay{z-index:2}
   .rsp-formula{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;color:#401d91;
     background:#f7f6fd;border-radius:8px;padding:6px 10px;margin-top:8px;overflow-x:auto;white-space:nowrap}
-  .rsp-explain{color:#67737c;font-size:12.5px;line-height:1.5;margin:8px 0 0}
+  .rsp-explain{color:#67737c;font-size:12.5px;line-height:1.55;margin:8px 0 0}
+  .rsp-explain b{color:#27384e;font-size:10.5px;letter-spacing:.05em}
   .rsp-empty,.rsp-dim{color:#99a2a7;font-size:12.5px}
   .rsp-coast{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;background:#f7f8f8;border:1px solid #dfe3e6;
     border-radius:10px;padding:8px 12px;margin-bottom:6px;font-size:12.5px;color:#27384e;font-variant-numeric:tabular-nums}

@@ -18,6 +18,9 @@ import {
 } from './wheel-capture.js';
 import * as store from './research-store.js';
 import { createPanelStack } from './research-panels.js';
+// The calibration tab shows the exact same anchored comparison chart as the
+// admin Wheel test (owner request) — the renderer is shared from there.
+import { drawTestChart, PALETTE } from './admin-wheel-bench.js';
 
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
 const fmtClock = s => Math.floor(s / 60) + ':' + String(Math.floor(s) % 60).padStart(2, '0');
@@ -137,6 +140,9 @@ function styles(){
   .rs-honesty{border:1px solid #dfe3e6;border-radius:12px;background:#fafbfc;color:#67737c;font-size:12.5px;
     line-height:1.55;padding:10px 14px;margin-top:14px}
   .rs-dl{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .rs-calchart{width:100%;height:340px;display:block;margin-top:12px}
+  .rs-progress{height:10px;border-radius:999px;background:#eef1f3;overflow:hidden;flex:1;min-width:140px}
+  .rs-progress i{display:block;height:100%;background:linear-gradient(90deg,#37dbff,#5230da);border-radius:999px;transition:width .25s}
   .rs-caltable{width:100%;border-collapse:collapse;font-size:13px}
   .rs-caltable td{padding:7px 8px;border-bottom:1px solid #eef1f3;color:#27384e;vertical-align:middle}
   .rs-caltable b{color:#011624}
@@ -342,11 +348,15 @@ function mountCalibration(host, a){
   const c = cacheFor(uid);
   let bleState = ble.getState();
   let unsubStatus = null, uiTimer = null;
-  let spins = [], curves = [];
+  let spins = [], curves = [], calCurves = [];
 
   const cap = createCapture({
     maxMs: 15 * 60 * 1000,
-    onSpinClosed(spin, curve){ spins.push(spin); curves.push(curve); paintSpins(); },
+    onSpinClosed(spin, curve){
+      spins.push(spin); curves.push(curve);
+      if(curve) calCurves.push({ color: PALETTE[(calCurves.length) % PALETTE.length], pts: curve.pts, T245: curve.T245 });
+      paintSpins(); paintChart();
+    },
     onAutoStop(){ stopAndSave('Auto-stopped after 15 minutes.'); },
   });
 
@@ -380,6 +390,10 @@ function mountCalibration(host, a){
           <span class="rs-rec"></span> <b id="rscRpm">0</b> rpm · <span id="rscBadge"></span></span>
       </div>
       <span class="rs-msg" id="rscMsg"></span>
+      <canvas id="rscChart" class="rs-calchart"></canvas>
+      <p class="rs-note" style="margin:6px 0 0">Every spin lands on the chart, lined up at the moment it slows through 24 rpm.
+      The dashed line is the reference wheel and the green band is the healthy zone — a curve inside the band is a good spin.
+      Longer to the right = less braking (better seating / calmer air).</p>
       <div id="rscSpins" style="margin-top:12px"></div>
       <div id="rscFit"></div>
     </div>
@@ -416,6 +430,17 @@ function mountCalibration(host, a){
     $('rscStart').disabled = cap.isRecording() || (!bleState.connected && !cap.simActive());
   }
 
+  // In-progress spin as an anchored live curve (same as the bench).
+  function liveCalCurve(){
+    const rec = cap.rec();
+    if(!rec || !rec.spinning) return null;
+    return buildCurve(rec.rpmPts, rec.spinStartMs, cap.now());
+  }
+  function paintChart(){
+    const cv = $('rscChart');
+    if(cv) drawTestChart(cv, calCurves, liveCalCurve());
+  }
+
   function paintLive(){
     const rec = cap.rec();
     $('rscStop').style.display = rec ? '' : 'none';
@@ -423,15 +448,21 @@ function mountCalibration(host, a){
     $('rscSimSpin').style.display = (rec && cap.simActive()) ? '' : 'none';
     $('rscLive').style.display = rec ? '' : 'none';
     $('rscStart').disabled = !!rec || (!bleState.connected && !cap.simActive());
-    if(!rec) return;
+    // A running calibration LOCKS its setup — changing the wheel or the
+    // environment mid-recording would corrupt the baseline it is measuring.
+    for(const id of ['rscWheel', 'rscLoc', 'rscTemp', 'rscRh']){
+      const n = $(id); if(n) n.disabled = !!rec;
+    }
+    if(!rec){ paintChart(); return; }
     const { rpm: trueRpm } = liveRpmOf(rec);
     $('rscRpm').textContent = fmtRpm(trueRpm);
     const t = cap.now();
     $('rscBadge').textContent = !rec.spinning
-      ? `${spins.length} spin${spins.length === 1 ? '' : 's'} — waiting for a spin`
+      ? `${spins.length} spin${spins.length === 1 ? '' : 's'} done of 3 — spin the wheel hard, then hands off`
       : rec.lowSinceMs != null
-        ? `TAIL WATCH, hands off! ${Math.max(0, Math.ceil((TAIL_OBS_MS - (t - rec.lowSinceMs)) / 1000))}s`
-        : `spin ${spins.length + 1} — max ${Math.round(rec.maxRpm)} rpm`;
+        ? `hands off — closing this spin in ${Math.max(0, Math.ceil((TAIL_OBS_MS - (t - rec.lowSinceMs)) / 1000))} s…`
+        : `spin ${spins.length + 1} — peak ${Math.round(rec.maxRpm)} rpm — coasting, hands off`;
+    paintChart();
   }
 
   function tailLabel(tail){
@@ -467,7 +498,7 @@ function mountCalibration(host, a){
       setMsg('err', 'Location, temperature and humidity are required for a calibration.'); return;
     }
     if(!bleState.connected && !cap.simActive()){ setMsg('err', 'Connect the wheel first, or enable the simulator.'); return; }
-    spins = []; curves = [];
+    spins = []; curves = []; calCurves = [];
     cap.start({ wheelId });
     recordingActive = true;
     setMsg('', '');
@@ -897,18 +928,18 @@ function mountExperiments(host, a){
       if(!st) return;
       const recording = stage === 'live';
       st.innerHTML = `
-        ${recording ? '<span class="rs-rec"></span><b style="color:#c2415b">REC</b>' : '<b>PRE-FLIGHT</b>'}
+        ${recording ? '<span class="rs-rec"></span><b style="color:#c2415b">REC</b>' : '<b>ROOM CHECK</b>'}
         <span id="rseClock" style="font-variant-numeric:tabular-nums">0:00</span>
         <span class="rs-pill">${esc(wheel ? wheel.serial : '?')}</span>
         <span class="rs-pill" title="Every torque number leans on this calibration">${cal ? 'cal: ' + esc((cal.location || 'room') + ' · ' + new Date(cal.created_at).toLocaleDateString('en-GB')) : 'cal: factory'}</span>
         ${sel.subject ? `<span class="rs-pill">${avatarHtml(sel.subject.avatarUrl, sel.subject.displayName)} ${esc(sel.subject.displayName)}</span>` : ''}
         <span id="rseBleDot">${bleState.connected ? '🔵' : cap.simActive() ? '<span class="rs-kbadge sim">SIM</span>' : '⚪'}</span>
         <span id="rseFreeze"></span>
-        <span class="rs-presets" id="rsePresets">
+        ${recording ? `<span class="rs-presets" id="rsePresets">
           <button type="button" class="rs-preset on" data-preset="60">60 s</button>
           <button type="button" class="rs-preset" data-preset="300">5 min</button>
           <button type="button" class="rs-preset" data-preset="full">Full</button>
-        </span>`;
+        </span>` : ''}`;
       st.querySelectorAll('[data-preset]').forEach(b => b.addEventListener('click', () => {
         st.querySelectorAll('[data-preset]').forEach(x => x.classList.toggle('on', x === b));
         if(stack) stack.setPreset(b.dataset.preset);
@@ -923,13 +954,17 @@ function mountExperiments(host, a){
     pre.style.display = '';
     const coef = calCoef();
     pre.innerHTML = `
-      <h2>Environment pre-flight (~60 s)</h2>
-      <p class="rs-note">One hard spin, hands off: we time the coast through the same gates as the calibration and
-      check that <b>this room, right now</b> still matches it. Skipping is allowed — the skip is recorded in the run.</p>
+      <h2>Room check — about 1 minute, runs by itself</h2>
+      <p class="rs-note"><b>Why:</b> every number in your experiment is compared against your calibration.
+      This quick check makes sure the room today still behaves like it did when you calibrated —
+      so a draft or a bad seating can't show up later as a false result.</p>
+      <p class="rs-note"><b>What to do:</b> give the wheel <b>one strong spin</b> and let go.
+      Don't touch it — the check finishes on its own.</p>
       <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
-        <span style="font-variant-numeric:tabular-nums;font-size:15px"><b id="rsePreRpm">0</b> rpm</span>
-        <span id="rsePreState" class="rs-note" style="margin:0">Spin the wheel hard (aim above 140 rpm), then hands off…</span>
-        <span id="rsePreVerdict"></span>
+        <span style="font-variant-numeric:tabular-nums;font-size:20px;font-weight:700;color:#011624"><span id="rsePreRpm">0</span> <span style="font-size:12px;color:#67737c;font-weight:600">rpm</span></span>
+        <span class="rs-progress"><i id="rsePreBar" style="width:0%"></i></span>
+        <span id="rsePreState" class="rs-note" style="margin:0;flex-basis:100%">Waiting for your spin…</span>
+        <span id="rsePreVerdict" style="flex-basis:100%"></span>
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
         <button type="button" class="rs-btn" id="rsePreGo" disabled>Start the experiment →</button>
@@ -946,19 +981,36 @@ function mountExperiments(host, a){
       host.querySelector('#rsePreRpm').textContent = fmtRpm(trueRpm);
       const clock = host.querySelector('#rseClock');
       if(clock) clock.textContent = fmtClock(cap.now() / 1000);
+      // guided state line + progress bar: the check narrates itself
+      const bar = host.querySelector('#rsePreBar');
+      const state = host.querySelector('#rsePreState');
+      if(preflight.status === 'none' && state){
+        if(rec.maxRpm <= 140){
+          state.textContent = trueRpm > 5
+            ? 'A bit more speed needed — stop the wheel and give it one really strong spin.'
+            : 'Waiting for your spin… (one strong flick, then let go)';
+          if(bar) bar.style.width = '0%';
+        } else if(trueRpm >= 5){
+          state.textContent = 'Good spin! Now hands off — measuring how the wheel slows down…';
+          // progress: how far the coast has come down from the peak toward 5 rpm (log scale)
+          const p = Math.max(0, Math.min(1, (Math.log(rec.maxRpm) - Math.log(Math.max(5, trueRpm))) / (Math.log(rec.maxRpm) - Math.log(5))));
+          if(bar) bar.style.width = Math.round(p * 100) + '%';
+        }
+      }
       // verdict as soon as the coast is measurable: peaked > 140 and now < 5 rpm
       if(preflight.status === 'none' && rec.maxRpm > 140 && trueRpm < 5 && rec.rpmPts.length > 6){
         const curve = buildCurve(rec.rpmPts, 0, cap.now());
         if(curve && curve.T245 != null && coef.T24_5){
           const ratio = curve.T245 / coef.T24_5;
           preflight = { status: Math.abs(ratio - 1) <= 0.08 ? 'green' : Math.abs(ratio - 1) <= 0.16 ? 'amber' : 'red', ratio: Math.round(ratio * 100) / 100 };
+          if(bar) bar.style.width = '100%';
           const v = host.querySelector('#rsePreVerdict');
           v.innerHTML = preflight.status === 'green'
-            ? '<span class="rs-verdict rs-vg">environment matches the calibration</span>'
+            ? '<span class="rs-verdict rs-vg">✓ The room matches your calibration — good to go.</span>'
             : preflight.status === 'amber'
-              ? `<span class="rs-verdict rs-vy">room differs by ${Math.round(Math.abs(preflight.ratio - 1) * 100)}% — reseat the wheel and consider one respin</span>`
-              : '<span class="rs-verdict rs-vr">recalibrate before trusting today\'s numbers</span>';
-          host.querySelector('#rsePreState').textContent = 'Coast measured: T24→5 = ' + curve.T245.toFixed(1) + ' s (calibration: ' + coef.T24_5 + ' s).';
+              ? `<span class="rs-verdict rs-vy">The room behaves ${Math.round(Math.abs(preflight.ratio - 1) * 100)}% differently than at calibration. Lift the wheel off, set it back on, and spin once more — or continue (the difference is recorded).</span>`
+              : '<span class="rs-verdict rs-vr">The room is very different from your calibration. Best to recalibrate before trusting today\'s numbers.</span>';
+          state.textContent = 'Done. The wheel took ' + curve.T245.toFixed(1) + ' s to slow from 24 to 5 rpm — your calibration says ' + coef.T24_5 + ' s.';
           host.querySelector('#rsePreGo').disabled = false;
         }
       }
