@@ -1,13 +1,13 @@
-// admin-wheel-bench.js — "Wheel bench": factory spin-down recorder, mounted as a
-// tab inside the admin console (admin-only by inheritance from view-admin).
+// admin-wheel-bench.js — "Wheel test": factory wheel tester, mounted as a tab
+// inside the admin console (admin-only by inheritance from view-admin).
 //
-// Purpose: build the wheel-quality reference batch. Per wheel (identified by its
-// factory serial number) the admin hand-spins the wheel 3-5 times; the tool
-// records EVERY parsed BLE line (including repeated counters — the repetition
-// pattern itself is data we still need to decode) with monotonic arrival
-// timestamps, auto-segments the spins for bookkeeping, then saves one row into
-// public.wheel_bench AND always downloads a local JSON backup — a missing table
-// or a dead office connection never loses a bench session.
+// v2 (2026-08-14 evening): the benchmark phase is done — this is now the ongoing
+// QC instrument. Big anchored comparison chart (log rpm, t=0 at the 24-rpm
+// crossing) with the IDEAL curve computed from the fitted physics model and a
+// tolerance band; per-spin score + grade; braking-vs-speed (derivative) chart;
+// removable chart entries so a long test session stays readable.
+// The capture engine (raw logging, segmentation, DB+JSON save) is unchanged —
+// DB table stays `wheel_bench`, no SQL migration needed.
 //
 // The spike filter in ble.js holds the de-spiked `led` LOW through a fast jump
 // into the top rail (a hand-spin looks exactly like the PIC glitch), so this
@@ -15,7 +15,6 @@
 import { supabase } from './db.js';
 import * as ble from './ble.js';
 import * as wakeLock from './wake-lock.js';
-import { drawVitalitySeries } from './chart.js';
 
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
 
@@ -24,8 +23,6 @@ const SPIN_START_LED   = 6;      // rawLed at/above this...
 const SPIN_START_HITS  = 2;      // ...on this many consecutive NEW reports = spin started
 const SPIN_END_ZERO_MS = 4000;   // rawLed 0 sustained this long = spin over
 const SPIN_MIN_MS      = 6000;   // shorter segments = handling bumps, not spins
-const CHART_WINDOW_MS  = 75000;  // rolling live-chart window (fits one full spin-down)
-const CHART_GAP_MS     = 2500;   // frame gap beyond this = BLE outage → pen-up in the chart
 
 // The recorded tuple layout — single owner for ingest, payload format string,
 // and any future decoder. Bump the format version on ANY change here.
@@ -35,16 +32,55 @@ const FORMAT = 'wheel-bench v1; frames=[' + FRAME_COLS.join(',') + ']; led=rpm (
 // Decoded 2026-08-14 from the first real bench capture, validated against the
 // device's own LED on every frame: the 16-bit counter is the revolution period
 // in ~10 ms units, so TRUE rpm ~= 6000/counter — and the device keeps measuring
-// far above the 24-rpm display rail (375 rpm observed on a hand spin).
+// far above the 24-rpm display rail (500 rpm observed on a hand spin).
 // counter 0 = standstill. Absolute scale to be confirmed by video (~3%).
 const rpmOf = c => c > 0 ? 6000 / c : 0;
 const RPM_MIN_COUNTER = 8;   // counter below this (>750 rpm) = glitch/artifact, ignore for stats
 
-// Saved wheels survive tab switches (mount closures die, the day's bench work
-// must not): the store and a repaint hook for the currently mounted instance
-// live at module level, so an async DB save finishing after a remount still
-// updates the visible list and Retry stays reachable for the whole page life.
+// ---- Ideal wheel model (fitted 2026-08-14 from the batch-1 best-seating spins;
+// 8 wheels, 50+ recordings; grid-fit with physical constraints A,B,K >= 0):
+//   deceleration [rpm/s] = A + B*w + K*w^1.5   (w in rpm)
+// Reproduces the best clean spins' band times within 5% (t400-24 ~12s,
+// t24-10 ~7.6s, t10-5 ~6.8s, t5-3 ~4.6s; T24-5 ideal = 14.5s).
+const IDEAL_A = 0.24, IDEAL_B = 0.0, IDEAL_K = 0.025;
+const SCORE_REF_T245 = 15.0;             // score-100 anchor: excellent seating
+const BAND_FAST = 0.88, BAND_SLOW = 1.12; // tolerance band = ideal curve time-scaled
+// Chart geometry
+const X_MIN = -12, X_MAX = 40;           // seconds relative to the 24-rpm crossing
+const Y_MIN = 1.6, Y_MAX = 620;          // rpm, log scale
+const Y_TICKS = [2, 5, 10, 24, 50, 100, 200, 400];
+const PALETTE = ['#0a7a5c', '#b8860b', '#0033ff', '#c2415b', '#7c3aed', '#0e7490', '#b45309', '#be185d', '#4d7c0f', '#6b7280'];
+
+// Integrate the ideal model downward from 450 rpm and anchor t=0 at 24 rpm.
+function buildIdealPts(){
+  const pts = [];
+  let w = 450, t = 0;
+  while(w > Y_MIN && t < 120){
+    pts.push({ t, w });
+    w -= (IDEAL_A + IDEAL_B * w + IDEAL_K * Math.pow(w, 1.5)) * 0.02;
+    t += 0.02;
+  }
+  let t24 = null;
+  for(let i = 1; i < pts.length; i++){
+    if(pts[i].w <= 24){
+      const a = pts[i - 1], b = pts[i];
+      t24 = a.t + (Math.log(a.w) - Math.log(24)) / (Math.log(a.w) - Math.log(b.w)) * (b.t - a.t);
+      break;
+    }
+  }
+  const out = [];
+  for(let i = 0; i < pts.length; i += 10)   // thin to ~5/s for drawing
+    out.push({ x: pts[i].t - t24, y: pts[i].w });
+  return out;
+}
+const IDEAL_PTS = buildIdealPts();
+
+// Saved wheels + chart curves survive tab switches (mount closures die, the
+// day's test work must not): module-level stores + a repaint hook for the
+// currently mounted instance.
 const savedStore = [];
+const chartCurves = [];   // {serial, spinN, color, pts:[{x,y}], T245, score}
+let curveColorIdx = 0;
 let notifySaved = null;
 
 function styles(){
@@ -62,8 +98,8 @@ function styles(){
   .awb-ble .dot{width:9px;height:9px;border-radius:50%;background:#c9ced2;flex-shrink:0}
   .awb-ble.on .dot{background:#3ddc84}
   .awb-ble.on b{color:#0f8a52}
-  .awb-live{border:1px solid #dfe3e6;border-radius:14px;background:#f7f8f8;padding:14px 16px;margin:14px 0}
-  .awb-stats{display:flex;flex-wrap:wrap;gap:8px 26px;align-items:baseline;margin-bottom:10px}
+  .awb-live{border:1px solid #dfe3e6;border-radius:14px;background:#f7f8f8;padding:12px 16px;margin:14px 0}
+  .awb-stats{display:flex;flex-wrap:wrap;gap:8px 26px;align-items:baseline}
   .awb-rpm{font-family:'Montserrat',sans-serif;font-weight:600;font-size:44px;line-height:1;color:#011624;
     font-variant-numeric:tabular-nums}
   .awb-rpm small{font-size:14px;font-weight:700;color:#67737c;margin-left:4px}
@@ -72,14 +108,11 @@ function styles(){
   .awb-spinbadge{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-radius:999px;
     padding:3px 10px;background:#f2f3f4;color:#99a2a7}
   .awb-spinbadge.on{background:rgba(82,48,218,.12);color:#401d91}
-  .awb-canvas{width:100%;height:190px;display:block}
+  .awb-chart{width:100%;height:340px;display:block}
+  .awb-deriv{width:100%;height:190px;display:block;margin-top:6px}
   .awb-rec{display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff5c5c;margin-right:7px;
     animation:awbPulse 1.2s ease-in-out infinite}
   @keyframes awbPulse{0%,100%{opacity:1}50%{opacity:.35}}
-  .awb-spins{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}
-  .awb-spins th{font-family:'Montserrat',sans-serif;font-size:10.5px;font-weight:700;letter-spacing:.08em;
-    text-transform:uppercase;color:#67737c;text-align:left;padding:7px 8px;border-bottom:1px solid #dfe3e6}
-  .awb-spins td{padding:7px 8px;border-bottom:1px solid #eef1f3;color:#27384e;font-variant-numeric:tabular-nums}
   .awb-btnrow{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
   .awb-stop{background:#c2415b}
   .awb-stop:hover{background:#a13049}
@@ -98,6 +131,24 @@ function styles(){
   .awb-mini:hover{border-color:#5230da}
   .awb-steps{margin:0;padding-left:18px;color:#67737c;font-size:13.5px;line-height:1.6}
   .awb-steps b{color:#011624}
+  /* curve list */
+  .awb-curves{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+  .awb-curves li{display:flex;align-items:center;gap:10px;background:#f7f8f8;border:1px solid #dfe3e6;
+    border-radius:10px;padding:7px 12px;font-size:13.5px;color:#27384e;font-variant-numeric:tabular-nums}
+  .awb-cdot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+  .awb-cserial{font-weight:700;color:#011624;min-width:96px}
+  .awb-cx{margin-left:auto;font-size:15px;font-weight:700;color:#99a2a7;background:none;border:none;cursor:pointer;
+    padding:2px 8px;border-radius:8px}
+  .awb-cx:hover{color:#c2415b;background:#fff}
+  .awb-score{display:inline-block;font-size:11.5px;font-weight:800;border-radius:999px;padding:2px 10px;color:#fff;min-width:52px;text-align:center}
+  .awb-sA{background:#0f8a52}.awb-sB{background:#7ca80c}.awb-sC{background:#d97706}.awb-sD{background:#c2415b}
+  .awb-sN{background:#99a2a7}
+  /* guide */
+  .awb-guide{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:6px}
+  .awb-gitem{border:1px solid #dfe3e6;border-radius:12px;padding:10px 12px;font-size:12.5px;line-height:1.5;color:#27384e;background:#fff}
+  .awb-gitem b{display:inline-block;margin-bottom:3px}
+  .awb-gnote{color:#67737c;font-size:12.5px;line-height:1.55;margin:10px 0 0}
+  .awb-gnote b{color:#011624}
   `;
   document.head.appendChild(el);
 }
@@ -113,6 +164,188 @@ function downloadJson(payload){
   a.href = url; a.download = name;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+// ---- scoring ----------------------------------------------------------------
+function scoreOf(T245){
+  if(T245 == null) return { score: null, grade: 'n/a', cls: 'awb-sN' };
+  const score = Math.min(110, Math.round(T245 / SCORE_REF_T245 * 100));
+  const grade = score >= 93 ? 'A' : score >= 85 ? 'B' : score >= 72 ? 'C' : 'D';
+  return { score, grade, cls: 'awb-s' + grade };
+}
+
+// Interpolated time where an anchored curve crosses `rpm` downward (after peak).
+function crossTime(pts, rpm){
+  let pk = 0;
+  for(let i = 1; i < pts.length; i++) if(pts[i].y > pts[pk].y) pk = i;
+  for(let i = pk + 1; i < pts.length; i++){
+    if(pts[i].y <= rpm && pts[i - 1].y > rpm){
+      const a = pts[i - 1], b = pts[i];
+      return a.x + (Math.log(a.y) - Math.log(rpm)) / (Math.log(a.y) - Math.log(b.y)) * (b.x - a.x);
+    }
+  }
+  return null;
+}
+
+// Build an anchored chart curve from raw rpm points of one spin window.
+// Anchor: t=0 where the post-peak decay crosses 24 rpm. Returns null if the
+// spin never reached 24 (weak flick — not chartable/scorable).
+function buildCurve(rpmPts, fromMs, toMs){
+  const pts = rpmPts.filter(p => p.t >= fromMs - 12000 && p.t <= toMs && p.rpm >= Y_MIN)
+    .map(p => ({ x: p.t / 1000, y: Math.min(Y_MAX - 1, p.rpm) }));
+  if(pts.length < 6) return null;
+  const t24 = crossTime(pts, 24);
+  if(t24 == null) return null;
+  const anchored = pts.map(p => ({ x: p.x - t24, y: p.y })).filter(p => p.x >= X_MIN && p.x <= X_MAX);
+  const t5 = crossTime(anchored, 5);
+  const T245 = t5 != null ? t5 : null;   // t24 crossing is x=0 by construction
+  return { pts: anchored, T245 };
+}
+
+// ---- chart renderers --------------------------------------------------------
+function setupCanvas(canvas){
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if(!w || !h) return null;
+  const dpr = window.devicePixelRatio || 1;
+  if(canvas.width !== Math.round(w * dpr)){ canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  return { ctx, w, h };
+}
+
+function drawTestChart(canvas, curves, liveCurve){
+  const s = setupCanvas(canvas);
+  if(!s) return;
+  const { ctx, w, h } = s;
+  const padL = 44, padR = 12, padT = 14, padB = 26;
+  const plotW = w - padL - padR, plotH = h - padT - padB;
+  const xOf = x => padL + (x - X_MIN) / (X_MAX - X_MIN) * plotW;
+  const lyMin = Math.log(Y_MIN), lyMax = Math.log(Y_MAX);
+  const yOf = rpm => padT + plotH - (Math.log(Math.max(Y_MIN, rpm)) - lyMin) / (lyMax - lyMin) * plotH;
+
+  // grid
+  ctx.font = '10px Inter, sans-serif'; ctx.textBaseline = 'middle';
+  for(const v of Y_TICKS){
+    const y = yOf(v);
+    ctx.strokeStyle = v === 24 ? 'rgba(1,22,36,0.25)' : 'rgba(1,22,36,0.07)';
+    ctx.setLineDash(v === 24 ? [5, 4] : []);
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = v === 24 ? '#011624' : '#67737c'; ctx.textAlign = 'right';
+    ctx.fillText(String(v), padL - 6, y);
+  }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for(let x = -10; x <= X_MAX; x += 5){
+    const px = xOf(x);
+    ctx.strokeStyle = x === 0 ? 'rgba(1,22,36,0.2)' : 'rgba(1,22,36,0.05)';
+    ctx.beginPath(); ctx.moveTo(px, padT); ctx.lineTo(px, padT + plotH); ctx.stroke();
+    ctx.fillStyle = '#99a2a7'; ctx.fillText(x + 's', px, padT + plotH + 5);
+  }
+
+  const poly = (pts, scaleX) => {
+    ctx.beginPath();
+    let pen = false;
+    for(const p of pts){
+      const x = p.x * scaleX;
+      if(x < X_MIN || x > X_MAX){ pen = false; continue; }
+      const px = xOf(x), py = yOf(p.y);
+      if(pen) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+      pen = true;
+    }
+  };
+
+  // tolerance band: ideal curve time-scaled between BAND_FAST..BAND_SLOW
+  ctx.beginPath();
+  let started = false;
+  for(const p of IDEAL_PTS){
+    const x = Math.max(X_MIN, Math.min(X_MAX, p.x * BAND_FAST));
+    if(!started){ ctx.moveTo(xOf(x), yOf(p.y)); started = true; }
+    else ctx.lineTo(xOf(x), yOf(p.y));
+  }
+  for(let i = IDEAL_PTS.length - 1; i >= 0; i--){
+    const p = IDEAL_PTS[i];
+    const x = Math.max(X_MIN, Math.min(X_MAX, p.x * BAND_SLOW));
+    ctx.lineTo(xOf(x), yOf(p.y));
+  }
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(82,48,218,0.07)'; ctx.fill();
+
+  // ideal center line
+  ctx.setLineDash([6, 4]); ctx.lineWidth = 1.6; ctx.strokeStyle = '#011624';
+  poly(IDEAL_PTS, 1); ctx.stroke(); ctx.setLineDash([]);
+
+  // recorded curves
+  for(const c of curves){
+    ctx.lineWidth = 1.8; ctx.strokeStyle = c.color; ctx.globalAlpha = 0.9;
+    poly(c.pts, 1); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  // in-progress spin on top, accent + thick
+  if(liveCurve){
+    ctx.lineWidth = 3; ctx.strokeStyle = '#5230da';
+    poly(liveCurve.pts, 1); ctx.stroke();
+  }
+
+  // labels
+  ctx.fillStyle = '#67737c'; ctx.font = '11px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText('rpm (log) — dashed: ideal wheel · shaded: good band · t=0 at 24 rpm', padL + 4, 2);
+}
+
+function drawDerivChart(canvas, curves, liveCurve){
+  const s = setupCanvas(canvas);
+  if(!s) return;
+  const { ctx, w, h } = s;
+  const padL = 44, padR = 12, padT = 16, padB = 26;
+  const plotW = w - padL - padR, plotH = h - padT - padB;
+  const RPM_MAX = 30;
+  // derivative samples of one curve: central differences on anchored pts
+  const derivPts = c => {
+    const out = [];
+    const p = c.pts;
+    for(let i = 1; i < p.length - 1; i++){
+      if(p[i].y > RPM_MAX || p[i].y < 2) continue;
+      const dt = p[i + 1].x - p[i - 1].x;
+      if(dt <= 0 || dt > 4) continue;
+      const d = (p[i - 1].y - p[i + 1].y) / dt;
+      if(d > -0.5 && d < 6) out.push({ rpm: p[i].y, d: Math.max(0, d) });
+    }
+    return out;
+  };
+  const all = [];
+  for(const c of curves) all.push({ color: c.color, pts: derivPts(c) });
+  if(liveCurve) all.push({ color: '#5230da', pts: derivPts(liveCurve) });
+  const D_MAX = 4;
+  const xOf = rpm => padL + rpm / RPM_MAX * plotW;
+  const yOf = d => padT + plotH - Math.min(d, D_MAX) / D_MAX * plotH;
+
+  ctx.font = '10px Inter, sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'right';
+  for(let d = 0; d <= D_MAX; d++){
+    const y = yOf(d);
+    ctx.strokeStyle = 'rgba(1,22,36,0.07)';
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke();
+    ctx.fillStyle = '#67737c'; ctx.fillText(String(d), padL - 6, y);
+  }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for(let r = 0; r <= RPM_MAX; r += 5){
+    ctx.fillStyle = '#99a2a7'; ctx.fillText(String(r), xOf(r), padT + plotH + 5);
+  }
+  // ideal braking line
+  ctx.setLineDash([6, 4]); ctx.lineWidth = 1.6; ctx.strokeStyle = '#011624';
+  ctx.beginPath();
+  for(let r = 1; r <= RPM_MAX; r += 0.5){
+    const d = IDEAL_A + IDEAL_B * r + IDEAL_K * Math.pow(r, 1.5);
+    if(r === 1) ctx.moveTo(xOf(r), yOf(d)); else ctx.lineTo(xOf(r), yOf(d));
+  }
+  ctx.stroke(); ctx.setLineDash([]);
+  // measured dots
+  for(const c of all){
+    ctx.fillStyle = c.color; ctx.globalAlpha = 0.75;
+    for(const p of c.pts){ ctx.beginPath(); ctx.arc(xOf(p.rpm), yOf(p.d), 2, 0, Math.PI * 2); ctx.fill(); }
+  }
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#67737c'; ctx.font = '11px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText('braking [rpm/s] vs speed [rpm] — dots above the dashed ideal = extra drag/friction', padL + 4, 2);
 }
 
 export function mountWheelBench(host){
@@ -132,6 +365,7 @@ export function mountWheelBench(host){
     frames: [],            // FRAME_COLS tuples, one per parsed line
     events: [],            // {t_ms, type, value?}
     spins: [],             // completed segments
+    rpmPts: [],            // fresh-counter true-rpm samples {t, rpm} for charts
     fw: '', hw: '', lastBattery: null,
     // spin segmentation (rawLed-based — see header comment)
     lastCounter: null, startHits: 0, firstHitMs: 0, spinning: false,
@@ -141,13 +375,13 @@ export function mountWheelBench(host){
 
   const now = () => rec ? Math.round(performance.now() - rec.t0) : 0;
 
-  function ingest(frame, fromSim){
+  function ingest(frame, fromSim, tMs){
     if(!rec) return;
     // Real frames only flow while connected; the status handler also kills the
     // sim on connect — this guard is the belt to that suspender, so synthetic
     // and real data can never interleave in one recording.
     if(!fromSim && sim) simStop();
-    const t = now();
+    const t = tMs != null ? tMs : now();   // tMs: dev feed only (deterministic tests)
     if(fromSim) rec.simUsed = true;
     rec.frames.push([t, frame.counter, frame.rawLed, frame.led]);
     if(!rec.fw && frame.fw){ rec.fw = frame.fw; rec.hw = frame.hw; }
@@ -158,14 +392,15 @@ export function mountWheelBench(host){
 
     // --- spin segmentation (bookkeeping only; raw data is saved regardless) ---
     // Glitch guard: the PIC sometimes reports a spurious 24 for a moment (the
-    // rail glitch ble.js de-spikes). Within an active spin the wheel only
-    // decelerates, so a single-step jump >=10 INTO the >=22 rail is the glitch,
-    // not motion — ignore it for max/zero bookkeeping (the raw log keeps it).
-    // Start detection is protected by the two-consecutive-reports rule instead:
-    // a real hand-spin stays high across reports, the glitch does not.
-    const glitch = rec.prevRaw != null && frame.rawLed >= 22 && (frame.rawLed - rec.prevRaw) >= 10;
+    // rail glitch ble.js de-spikes). ONLY within an active spin can we call a
+    // jump >=10 into the >=22 rail a glitch — there the wheel only decelerates,
+    // so such a jump is physically impossible. Outside a spin the same pattern
+    // IS the real hand-flick (0 -> 24 in one report), so it must pass through —
+    // gating on rec.spinning is what keeps the rail phase in the chart curve.
+    const glitch = rec.spinning && rec.prevRaw != null && frame.rawLed >= 22 && (frame.rawLed - rec.prevRaw) >= 10;
     const fresh = frame.counter !== rec.lastCounter;
     const rpm = frame.counter >= RPM_MIN_COUNTER ? rpmOf(frame.counter) : 0;
+    if(fresh && !glitch && frame.counter >= RPM_MIN_COUNTER) rec.rpmPts.push({ t, rpm });
     rec.lastCounter = frame.counter;
     if(!rec.spinning){
       if(fresh){
@@ -208,19 +443,29 @@ export function mountWheelBench(host){
       };
       if(interrupted) spin.interrupted = true;   // wheel had not settled at zero
       r.spins.push(spin);
+      // chart entry (module store — survives wheels and tab switches)
+      const curve = buildCurve(r.rpmPts, r.spinStartMs, endMs);
+      if(curve){
+        const sc = scoreOf(curve.T245);
+        spin.T24_5 = curve.T245 != null ? Math.round(curve.T245 * 10) / 10 : null;
+        spin.score = sc.score;
+        chartCurves.push({
+          serial: r.serial, spinN: spin.n, color: PALETTE[curveColorIdx++ % PALETTE.length],
+          pts: curve.pts, T245: curve.T245, ...sc,
+        });
+      }
     }
     r.spinning = false; r.zeroSinceMs = null; r.maxLed = 0; r.maxRpm = 0;
   }
   function endSpin(){
     closeSpin(rec, rec.zeroSinceMs, false);
-    paintSpins();
+    paintCurves();
   }
 
   // ---- simulator (only offered while idle with no wheel connected) ----------
   // Mimics the real stream: ~14 lines/s, a NEW counter only every ~700 ms,
-  // physics-shaped decay (Coulomb + viscous + disk ~w^1.5), integer 0-24 LED
-  // railed at 24. Recordings made with it are tagged SIM everywhere, and the
-  // sim is auto-stopped the moment a real wheel connects.
+  // physics-shaped decay, integer 0-24 LED railed at 24. Recordings made with
+  // it are tagged SIM everywhere, and it auto-stops when a real wheel connects.
   function simStart(){
     if(sim) return;
     sim = { omega: 0, counter: 1000, lastReport: 0, lineTimer: null, physTimer: null };
@@ -242,7 +487,7 @@ export function mountWheelBench(host){
     }, 71);
     paintLive();
   }
-  function simSpin(){ if(sim) sim.omega = (150 + Math.random() * 220) * 2 * Math.PI / 60; }   // real hand spins hit 150-375 rpm
+  function simSpin(){ if(sim) sim.omega = (150 + Math.random() * 220) * 2 * Math.PI / 60; }   // real hand spins hit 150-500 rpm
   function simStop(){
     if(!sim) return;
     clearInterval(sim.lineTimer); clearInterval(sim.physTimer); sim = null;
@@ -268,7 +513,6 @@ export function mountWheelBench(host){
     wakeLock.acquire();
     window.addEventListener('beforeunload', warnUnload);
     setMsg('', '');
-    paintSpins();               // clear the previous wheel's rows immediately
     paintBle();                 // hides the sim offer for the recording's duration
     paintLive();
     if(!uiTimer) uiTimer = setInterval(paintLive, 250);
@@ -284,6 +528,7 @@ export function mountWheelBench(host){
       const lastT = r.frames.length ? r.frames[r.frames.length - 1][0] : r.spinStartMs;
       if(r.zeroSinceMs != null) closeSpin(r, r.zeroSinceMs, false);
       else closeSpin(r, lastT, true);
+      paintCurves();
     }
 
     const env = readEnv();
@@ -354,12 +599,25 @@ export function mountWheelBench(host){
     const simBtn = (!rec && !bleState.connected)
       ? ` <button type="button" class="awb-mini" id="awbSimBtn">${sim ? 'Simulator ON' : 'Enable simulator (test only)'}</button>` : '';
     b.innerHTML = bleState.connected
-      ? `<span class="dot"></span><span>Wheel <b>connected</b>${bleState.deviceName ? ' · ' + esc(bleState.deviceName) : ''} — ready to record.</span>`
+      ? `<span class="dot"></span><span>Wheel <b>connected</b>${bleState.deviceName ? ' · ' + esc(bleState.deviceName) : ''} — ready to test.</span>`
       : `<span class="dot"></span><span>No wheel connected — use the header <b>Connect</b> button.${simBtn}</span>`;
     const sb = host.querySelector('#awbSimBtn');
     if(sb) sb.addEventListener('click', () => { simStart(); paintBle(); });
     const startBtn = host.querySelector('#awbStart');
     if(startBtn) startBtn.disabled = !!rec || (!bleState.connected && !sim);
+  }
+
+  // in-progress spin as an anchored chart curve (null until it crosses 24 rpm)
+  function liveCurve(){
+    if(!rec || !rec.spinning) return null;
+    return buildCurve(rec.rpmPts, rec.spinStartMs, now());
+  }
+
+  function paintCharts(){
+    const c1 = host.querySelector('#awbChart');
+    if(c1) drawTestChart(c1, chartCurves, liveCurve());
+    const c2 = host.querySelector('#awbDeriv');
+    if(c2) drawDerivChart(c2, chartCurves, liveCurve());
   }
 
   function paintLive(){
@@ -373,13 +631,13 @@ export function mountWheelBench(host){
     btnStop.style.display = rec ? '' : 'none';
     btnDiscard.style.display = rec ? '' : 'none';
     btnSimSpin.style.display = (rec && sim) ? '' : 'none';
-    if(!rec){ live.style.display = 'none'; return; }
+    if(!rec){ live.style.display = 'none'; paintCharts(); return; }
     live.style.display = '';
 
     const t = now();
     const last = rec.frames.length ? rec.frames[rec.frames.length - 1] : null;
     // Big readout = TRUE rpm from the counter (the display LED rails at 24; the
-    // counter keeps measuring — 375 rpm was seen on a real hand spin).
+    // counter keeps measuring — 500 rpm was seen on a real hand spin).
     const trueRpm = last && last[1] >= RPM_MIN_COUNTER ? Math.min(999, rpmOf(last[1])) : 0;
     const rpmText = trueRpm >= 10 ? String(Math.round(trueRpm)) : (Math.round(trueRpm * 10) / 10).toFixed(1);
     host.querySelector('#awbRpm').innerHTML = `${rpmText}<small>rpm</small>`;
@@ -391,33 +649,26 @@ export function mountWheelBench(host){
     badge.textContent = rec.spinning
       ? `Spin ${rec.spins.length + 1} — max ${Math.round(rec.maxRpm)} rpm — ${((t - rec.spinStartMs) / 1000).toFixed(0)}s`
       : `${rec.spins.length} spin${rec.spins.length === 1 ? '' : 's'} recorded — waiting for a spin`;
-
-    // rolling raw-RPM chart over the last CHART_WINDOW_MS (anchored at 0 while
-    // the session is younger than the window, so labels never go negative);
-    // a frame gap beyond CHART_GAP_MS = BLE outage → null point = pen up, so an
-    // outage never draws as a fake continuous spin-down slope
-    const from = Math.max(0, t - CHART_WINDOW_MS);
-    const pts = [];
-    let prevT = null;
-    for(const f of rec.frames){
-      if(f[0] < from) continue;
-      if(prevT != null && f[0] - prevT > CHART_GAP_MS)
-        pts.push({ x: (prevT + 1 - from) / CHART_WINDOW_MS, led: null });
-      pts.push({ x: (f[0] - from) / CHART_WINDOW_MS, led: f[2] });
-      prevT = f[0];
-    }
-    drawVitalitySeries(host.querySelector('#awbCanvas'), pts, {
-      marker: true,
-      xLabels: [0, 1, 2, 3].map(i => ({ frac: i / 3, text: Math.round((from + (i / 3) * CHART_WINDOW_MS) / 1000) + 's' })),
-    });
+    paintCharts();
   }
 
-  function paintSpins(){
-    const tb = host.querySelector('#awbSpinRows');
-    if(!tb || !rec) return;
-    tb.innerHTML = rec.spins.map(s =>
-      `<tr><td>#${s.n}${s.interrupted ? ' ⚠' : ''}</td><td>${s.max_rpm != null ? s.max_rpm : s.max_led} rpm</td><td>${s.duration_s.toFixed(1)} s</td>
-       <td>${(s.t_start_ms / 1000).toFixed(1)}s → ${(s.t_end_ms / 1000).toFixed(1)}s</td></tr>`).join('');
+  function paintCurves(){
+    const ul = host.querySelector('#awbCurveList');
+    if(!ul) return;
+    if(!chartCurves.length){
+      ul.innerHTML = '<li style="background:none;border:none;color:#99a2a7">No spins on the chart yet — record a wheel and spin it above 24 rpm.</li>';
+    } else {
+      ul.innerHTML = chartCurves.map((c, i) => `
+        <li>
+          <span class="awb-cdot" style="background:${c.color}"></span>
+          <span class="awb-cserial">${esc(c.serial)}</span>
+          <span>spin ${c.spinN}</span>
+          <span>${c.T245 != null ? 'T24→5: <b>' + c.T245.toFixed(1) + 's</b>' : '—'}</span>
+          <span class="awb-score ${c.cls}">${c.score != null ? c.score + ' · ' + c.grade : 'n/a'}</span>
+          <button type="button" class="awb-cx" data-rm="${i}" title="Remove from chart">×</button>
+        </li>`).join('');
+    }
+    paintCharts();
   }
 
   function paintSaved(){
@@ -444,9 +695,8 @@ export function mountWheelBench(host){
       </li>`;
     }).join('');
   }
-  // Repaint the saved list on whichever bench instance is currently mounted —
-  // an async save finishing after a tab switch must update the live DOM, not
-  // this closure's detached one.
+  // Repaint the saved list on whichever instance is currently mounted — an
+  // async save finishing after a tab switch must update the live DOM.
   function repaintSaved(){
     paintSaved();
     if(notifySaved && notifySaved !== paintSaved) notifySaved();
@@ -456,22 +706,22 @@ export function mountWheelBench(host){
   host.innerHTML = `
   <div>
     <div class="adm-head">
-      <h1>Wheel bench</h1>
-      <p>Spin-down recorder for grading physical wheels. Everything the wheel sends is recorded raw;
-         the quality math runs later, so old recordings stay scorable.</p>
+      <h1>Wheel test</h1>
+      <p>Spin-down tester for grading physical wheels against the ideal-wheel model.
+         Everything the wheel sends is recorded raw; scores use the calibrated 2026-08-14 benchmark.</p>
     </div>
 
     <div class="adm-card">
       <h2>How it works</h2>
       <ol class="awb-steps">
         <li>Connect a wheel (header <b>Connect</b>), type its <b>serial number</b>, press <b>Start</b>.</li>
-        <li><b>Spin the wheel by hand</b> as fast as comfortable, let go, let it coast to a <b>full stop</b>. No drafts, no touching the table.</li>
-        <li>Repeat <b>3–5 spins</b>, then <b>Stop &amp; save</b>. The next wheel starts at step 1.</li>
+        <li><b>Spin the wheel hard</b> (aim above 100 rpm), let go, let it coast to a <b>full stop</b>. No drafts, no touching the table.</li>
+        <li>Each finished spin lands on the chart with a score. <b>Stop &amp; save</b> stores the wheel; the next serial can follow immediately.</li>
       </ol>
     </div>
 
     <div class="adm-card">
-      <h2>Environment (once per bench session)</h2>
+      <h2>Environment (once per session)</h2>
       <div class="awb-grid">
         <label>Temp °C<input id="awbTemp" type="number" inputmode="decimal" placeholder="23"></label>
         <label>Humidity %<input id="awbRh" type="number" inputmode="numeric" placeholder="45"></label>
@@ -483,24 +733,19 @@ export function mountWheelBench(host){
       <h2>Record a wheel</h2>
       <div id="awbBle" class="awb-ble"></div>
       <div class="awb-grid" style="grid-template-columns:1fr 1fr">
-        <label>Serial number<input id="awbSerial" type="text" placeholder="e.g. EW-2026-0173" autocomplete="off"></label>
+        <label>Serial number<input id="awbSerial" type="text" placeholder="e.g. 2B1262004" autocomplete="off"></label>
         <label>Note (optional)<input id="awbNote" type="text" placeholder="batch, condition…" autocomplete="off"></label>
       </div>
 
       <div id="awbLive" class="awb-live" style="display:none">
         <div class="awb-stats">
-          <span class="awb-rpm" id="awbRpm">0<small>rpm (raw)</small></span>
+          <span class="awb-rpm" id="awbRpm">0<small>rpm</small></span>
           <span class="awb-kv"><span class="awb-rec"></span>REC</span>
           <span class="awb-kv" id="awbElapsed"></span>
           <span class="awb-kv" id="awbFrames"></span>
           <span class="awb-kv" id="awbCounter"></span>
           <span class="awb-spinbadge" id="awbSpinBadge"></span>
         </div>
-        <canvas id="awbCanvas" class="awb-canvas"></canvas>
-        <table class="awb-spins">
-          <thead><tr><th>Spin</th><th>Max</th><th>Length</th><th>Window</th></tr></thead>
-          <tbody id="awbSpinRows"></tbody>
-        </table>
       </div>
 
       <div class="awb-btnrow">
@@ -510,6 +755,31 @@ export function mountWheelBench(host){
         <button type="button" class="awb-ghost" id="awbDiscard" style="display:none">Discard</button>
       </div>
       <span class="adm-msg" id="awbMsg"></span>
+    </div>
+
+    <div class="adm-card">
+      <h2>Test chart <button type="button" class="awb-mini" id="awbClear" style="float:right">Clear chart</button></h2>
+      <canvas id="awbChart" class="awb-chart"></canvas>
+      <canvas id="awbDeriv" class="awb-deriv"></canvas>
+      <ul class="awb-curves" id="awbCurveList"></ul>
+    </div>
+
+    <div class="adm-card">
+      <h2>How to read the score</h2>
+      <div class="awb-guide">
+        <div class="awb-gitem"><span class="awb-score awb-sA">93+ · A</span><br><b>Excellent</b> — reference-grade wheel and seating. This is the “kurvajó” tier.</div>
+        <div class="awb-gitem"><span class="awb-score awb-sB">85–92 · B</span><br><b>Good</b> — inside the factory band. Ship it.</div>
+        <div class="awb-gitem"><span class="awb-score awb-sC">72–84 · C</span><br><b>Below band</b> — almost always SEATING, not the wheel: lift it off, reseat, measure again.</div>
+        <div class="awb-gitem"><span class="awb-score awb-sD">&lt;72 · D</span><br><b>Poor</b> — reseat first; if it stays low, clean the bearing cup and inspect the needle tip.</div>
+      </div>
+      <p class="awb-gnote">
+        <b>Chart:</b> every curve is aligned so 0&nbsp;s = the moment it slows through 24 rpm; the dashed line is the
+        ideal wheel computed from the physics model, the shaded band is the “good” zone — a curve inside the band is fine.
+        Sloping <b>below/left</b> of the band = extra brake (seating → dust → damage, in that order of likelihood).
+        <b>Score</b> = T(24→5&nbsp;s) versus the 15.0&nbsp;s reference. The lower <b>braking chart</b> shows the same physics
+        as force: dots riding above the dashed line at LOW rpm = friction (bearing); above it at HIGH rpm = air drag (geometry).
+        One weak spin proves nothing — judge a wheel on its <b>best</b> spin of 3 (bad seating can only subtract, never add).
+      </p>
     </div>
 
     <div class="adm-card awb-saved">
@@ -522,6 +792,14 @@ export function mountWheelBench(host){
   host.querySelector('#awbStop').addEventListener('click', () => stopAndSave().catch(() => {}));
   host.querySelector('#awbDiscard').addEventListener('click', discard);
   host.querySelector('#awbSimSpin').addEventListener('click', simSpin);
+  host.querySelector('#awbClear').addEventListener('click', () => {
+    if(chartCurves.length && !confirm('Clear all curves from the chart? (Saved data is not affected.)')) return;
+    chartCurves.length = 0; paintCurves();
+  });
+  host.querySelector('#awbCurveList').addEventListener('click', e => {
+    const rm = e.target.closest('[data-rm]');
+    if(rm){ chartCurves.splice(+rm.dataset.rm, 1); paintCurves(); }
+  });
   host.querySelector('#awbSaved').addEventListener('click', e => {
     const dl = e.target.closest('[data-dl]');
     if(dl){ downloadJson(savedStore[+dl.dataset.dl].payload); return; }
@@ -541,11 +819,20 @@ export function mountWheelBench(host){
     paintBle();
   });
   notifySaved = paintSaved;
-  paintBle(); paintSaved();
+  paintBle(); paintSaved(); paintCurves();
+  // Dev-only feed for deterministic testing (throttle-proof): frames carry an
+  // explicit timestamp and are always SIM-tagged. Harmless in production —
+  // admin-gated page, data lands with env.sim=true.
+  host.__awbFeed = (frame, tMs) => { simStop(); ingest(frame, true, tMs); };   // feed replaces the sim entirely
+  host.__awbState = () => ({
+    rec: rec ? { rpmPts: rec.rpmPts.length, spins: rec.spins.length, spinning: rec.spinning,
+                 firstPts: rec.rpmPts.slice(0, 4), lastPts: rec.rpmPts.slice(-2) } : null,
+    curves: chartCurves.length,
+  });
 
   return () => {
     // Leaving the tab mid-recording: salvage whatever was captured as a local
-    // download + DB attempt — bench data is field data, never silently drop
+    // download + DB attempt — test data is field data, never silently drop
     // any of it. releaseCapture runs inside stopAndSave (sync, before awaits).
     if(rec && rec.frames.length) stopAndSave().catch(() => {});
     else releaseCapture();

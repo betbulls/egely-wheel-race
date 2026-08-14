@@ -154,12 +154,12 @@ export function mount(el){
   let tab = 'makers';
   function buildShell(){
     el.innerHTML = `
-      <div class="adm-wrap" style="max-width:${tab === 'partners' || tab === 'usage' ? '1080px' : '640px'}">
+      <div class="adm-wrap" style="max-width:${tab === 'partners' || tab === 'usage' ? '1080px' : tab === 'bench' ? '860px' : '640px'}">
         <div class="adm-tabs">
           <button type="button" class="adm-tab ${tab === 'makers' ? 'on' : ''}" data-tab="makers">Makers &amp; access</button>
           <button type="button" class="adm-tab ${tab === 'usage' ? 'on' : ''}" data-tab="usage">Usage</button>
           <button type="button" class="adm-tab ${tab === 'partners' ? 'on' : ''}" data-tab="partners">Influencer onboarding</button>
-          <button type="button" class="adm-tab ${tab === 'bench' ? 'on' : ''}" data-tab="bench">Wheel bench</button>
+          <button type="button" class="adm-tab ${tab === 'bench' ? 'on' : ''}" data-tab="bench">Wheel test</button>
         </div>
         <div id="admTabHost"></div>
       </div>`;
