@@ -39,6 +39,18 @@ export const RPM_MIN_COUNTER = 8;   // counter below this (>750 rpm) = glitch/ar
 export const CURVE_X_MIN = -12, CURVE_X_MAX = 48;
 export const CURVE_Y_MIN = 1.6, CURVE_Y_MAX = 620;
 
+// Factory wheel score, shared by the admin Wheel test and the Research
+// calibration (the owner wants the SAME number in both): score 100 = the
+// reference wheel's 15.0 s coast from 24 to 5 rpm; grades follow the
+// 2026-08-14 benchmark bands.
+export const SCORE_REF_T245 = 15.0;
+export function scoreOf(T245){
+  if(T245 == null) return { score: null, grade: null };
+  const score = Math.min(110, Math.round(T245 / SCORE_REF_T245 * 100));
+  const grade = score >= 93 ? 'A' : score >= 85 ? 'B' : score >= 72 ? 'C' : 'D';
+  return { score, grade };
+}
+
 // Wheel constants + the braking model family. decel [rpm/s] = A + B*w + K*w^1.5.
 // Factory reference fitted on the 2026-08-14 batch-1 benchmark; a per-room
 // research calibration refits A/K for THAT wheel in THAT room.

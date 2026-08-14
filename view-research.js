@@ -14,7 +14,7 @@ import * as auth from './auth.js';
 import * as ble from './ble.js';
 import {
   createCapture, buildCurve, downloadJson, liveRpmOf, fmtRpm,
-  FACTORY_COEF, RPM_MIN_COUNTER,
+  FACTORY_COEF, RPM_MIN_COUNTER, scoreOf,
 } from './wheel-capture.js';
 import * as store from './research-store.js';
 import { createPanelStack } from './research-panels.js';
@@ -154,6 +154,8 @@ function styles(){
   .rs-guide-text{color:#27384e;font-size:13.5px;line-height:1.5;margin-top:10px}
   .rs-phase{font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;
     background:#401d91;color:#fff;border-radius:999px;padding:6px 14px;white-space:nowrap}
+  .rs-score{display:inline-block;font-size:11.5px;font-weight:800;border-radius:999px;padding:2px 10px;color:#fff;min-width:52px;text-align:center}
+  .rs-sA{background:#0f8a52}.rs-sB{background:#7ca80c}.rs-sC{background:#d97706}.rs-sD{background:#c2415b}.rs-sN{background:#99a2a7}
   .rs-caltable{width:100%;border-collapse:collapse;font-size:13px}
   .rs-caltable td{padding:7px 8px;border-bottom:1px solid #eef1f3;color:#27384e;vertical-align:middle}
   .rs-caltable b{color:#011624}
@@ -175,6 +177,7 @@ function calChipText(cal){
   const age = store.calAgeDays(cal);
   const c = cal.coef || {};
   return `${cal.location || 'room'} · ${new Date(cal.created_at).toLocaleDateString('en-GB')} (${age}d)`
+    + (c.score != null ? ` · score ${c.score} (${c.grade})` : '')
     + (c.T24_5 != null ? ` · T24→5 ${c.T24_5}s` : '');
 }
 
@@ -553,6 +556,13 @@ function mountCalibration(host, a){
     if(tail.stopped) return 'tail: STILL';
     return `tail: Ø${tail.avg_rpm.toFixed(1)} rpm · ${tail.pickups} pickup${tail.pickups === 1 ? '' : 's'}`;
   }
+  const scorePill = t245 => {
+    const sc = scoreOf(t245);
+    return sc.score == null
+      ? '<span class="rs-score rs-sN">n/a</span>'
+      : `<span class="rs-score rs-s${sc.grade}">${sc.score} · ${sc.grade}</span>`;
+  };
+
   function paintSpins(){
     const box = $('rscSpins');
     if(!box) return;
@@ -561,17 +571,20 @@ function mountCalibration(host, a){
         <b>spin ${s.n}</b>
         <span>peak ${s.max_rpm} rpm</span>
         <span>${s.T24_5 != null ? 'T24→5 <b>' + s.T24_5.toFixed(1) + ' s</b>' : 'did not cross 24 rpm'}</span>
+        ${scorePill(s.T24_5)}
         <span>${tailLabel(s.tail)}</span>
       </div>`).join('');
     const fit = spins.length ? store.fitCalibration(spins, curves) : null;
     $('rscFit').innerHTML = fit ? `
-      <div class="rs-meta" style="margin-top:8px">
+      <div class="rs-meta" style="margin-top:8px;align-items:center">
+        <span>wheel score: ${scorePill(fit.T24_5)}</span>
         <span>baseline: <b>T24→5 ${fit.T24_5 != null ? fit.T24_5 + ' s' : '—'}</b></span>
         <span>model: <b>A=${fit.A} · K=${fit.K}</b> (${fit.fit})</span>
-        <span>consistency: <b>${fit.quality_pct != null ? fit.quality_pct + '%' : 'need ≥2 clean spins'}</b></span>
         <span>ambient tail: <b>${fit.tail_avg != null ? 'Ø' + fit.tail_avg + ' rpm' : '—'}</b></span>
       </div>
-      ${fit.quality_pct != null && fit.quality_pct < 70 ? '<div class="rs-warn">Spins disagree by a lot — that is almost always SEATING. Lift the wheel off, reseat it and spin again; the best spin defines the wheel.</div>' : ''}` : '';
+      <p class="rs-note" style="margin:8px 0 0">Score 100 = the reference wheel (15.0 s from 24→5 rpm) — the same score as the
+      Wheel test: <b>93+ (A)</b> excellent · <b>85–92 (B)</b> factory-good · <b>72–84 (C)</b> reseat the wheel and recalibrate ·
+      <b>below 72 (D)</b> reseat; if it stays low, clean the bearing.</p>` : '';
   }
 
   function start(){
@@ -623,7 +636,7 @@ function mountCalibration(host, a){
     });
     if(error) setMsg('err', 'Saved locally (JSON downloaded), but the database refused it: ' + error.message);
     else if(!coef) setMsg('err', (reason ? reason + ' ' : '') + 'Saved, but no clean spin crossed 24 rpm — this recording has NO usable baseline. Spin above 140 rpm, hands off, and calibrate again.');
-    else setMsg('ok', `Calibration saved — T24→5 ${coef.T24_5 ?? '—'} s, consistency ${coef.quality_pct != null ? coef.quality_pct + '%' : '—'}.${reason ? ' (' + reason + ')' : ''}`);
+    else setMsg('ok', `Calibration saved ✓ — wheel score ${coef.score ?? '—'}${coef.grade ? ' (' + coef.grade + ')' : ''} · T24→5 ${coef.T24_5 ?? '—'} s.${reason ? ' (' + reason + ')' : ''}`);
     paintCalList();
   }
 
@@ -650,9 +663,10 @@ function mountCalibration(host, a){
       return `<li class="rs-row">
         <div style="flex:1;min-width:0">
           <b>${esc(w ? w.serial : '?')}</b> · ${esc(cal.location || 'room')}
+          ${cf.score != null ? `<span class="rs-score rs-s${cf.grade}">${cf.score} · ${cf.grade}</span>` : ''}
           ${age > store.CAL_STALE_DAYS ? '<span class="rs-kbadge warn">stale</span>' : ''}
           <div class="sub">${esc(new Date(cal.created_at).toLocaleString('en-GB'))} · ${cal.temp_c ?? '—'}°C · ${cal.rh_pct ?? '—'}%
-            · T24→5 <b>${cf.T24_5 ?? '—'} s</b> · consistency ${cf.quality_pct != null ? cf.quality_pct + '%' : '—'}</div>
+            · T24→5 <b>${cf.T24_5 ?? '—'} s</b></div>
         </div>
         <button type="button" class="rs-mini" data-arch="${cal.id}">Archive</button>
       </li>`;
@@ -1372,7 +1386,7 @@ function mountRunDetail(el, runId){
       </div>
       <div class="rs-card">
         <div class="rs-meta">
-          <span>wheel <b>${esc(wheel ? wheel.serial : '?')}</b></span>
+          <span>wheel <b>${esc(wheel ? wheel.serial : '?')}</b>${cal && cal.coef && cal.coef.score != null ? ` <span class="rs-score rs-s${cal.coef.grade}">${cal.coef.score} · ${cal.coef.grade}</span>` : ''}</span>
           <span>calibration: <b>${cal ? esc((cal.location || 'room') + ' · ' + new Date(cal.created_at).toLocaleDateString('en-GB')) : 'factory model'}</b></span>
           <span>${row.temp_c != null ? row.temp_c + '°C' : '—'} · ${row.rh_pct != null ? row.rh_pct + '%' : '—'}</span>
           ${subject ? `<span>subject: ${avatarHtml(subject.avatar_url, subject.display_name)} <b>${esc(subject.display_name)}</b></span>` : ''}

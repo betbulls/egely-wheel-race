@@ -9,7 +9,7 @@
 // be able to lose it.
 import { supabase } from './db.js';
 import {
-  rpmOf, RPM_MIN_COUNTER, FACTORY_COEF, decelOf, FORMAT, INERTIA, downloadBlob,
+  rpmOf, RPM_MIN_COUNTER, FACTORY_COEF, decelOf, FORMAT, INERTIA, downloadBlob, scoreOf,
 } from './wheel-capture.js';
 
 export const RUN_MAX_MS = 10 * 60 * 1000;        // owner decision: 10-minute experiments
@@ -92,9 +92,12 @@ export function fitCalibration(spins, curves){
   // untouched-tail stats — the ambient noise floor of THIS room
   const tails = clean.map(x => x.s.tail).filter(Boolean);
   const tailAvgs = tails.map(t => t.avg_rpm).sort((a, b) => a - b);
+  // the SAME factory score the admin Wheel test shows (owner requirement)
+  const sc = scoreOf(best);
   const coefFull = {
     ...coef,
     T24_5: best != null ? Math.round(best * 10) / 10 : null,
+    score: sc.score, grade: sc.grade,
     sigma_rel, quality_pct, fit,
     spin_count: clean.length,
     tail_avg: tailAvgs.length ? tailAvgs[Math.floor(tailAvgs.length / 2)] : null,
@@ -230,6 +233,8 @@ export function buildMetaCsv(rec, meta){
     ['calibration_B', meta.coef ? (meta.coef.B || 0) : ''],
     ['calibration_K', meta.coef ? meta.coef.K : ''],
     ['calibration_T24_5_s', meta.coef ? (meta.coef.T24_5 == null ? '' : meta.coef.T24_5) : ''],
+    ['calibration_wheel_score', meta.coef && meta.coef.score != null ? meta.coef.score : ''],
+    ['calibration_wheel_grade', meta.coef && meta.coef.grade ? meta.coef.grade : ''],
     ['calibration_sigma_rel', meta.coef ? (meta.coef.sigma_rel == null ? '' : meta.coef.sigma_rel) : ''],
     ['moment_of_inertia_kgm2', '1.7e-7 (+-10%)'],
     ['counter_semantics', 'counter = revolution period in ~10 ms units; rpm_true = 6000/counter; 0 = standstill; led 0-24 device-railed at 24'],

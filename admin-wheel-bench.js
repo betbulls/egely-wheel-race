@@ -18,6 +18,7 @@ import {
   createCapture, buildCurve, crossTime, integrateModel, downloadJson, setupCanvas,
   rpmOf, RPM_MIN_COUNTER, FORMAT, TAIL_OBS_MS,
   CURVE_X_MIN, CURVE_X_MAX, CURVE_Y_MIN, CURVE_Y_MAX,
+  scoreOf as engineScoreOf,
 } from './wheel-capture.js';
 
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
@@ -37,7 +38,6 @@ export const PALETTE = ['#0a7a5c', '#b8860b', '#0033ff', '#c2415b', '#7c3aed', '
 // Reproduces the best clean spins' band times within 5% (t400-24 ~12s,
 // t24-10 ~7.6s, t10-5 ~6.8s, t5-3 ~4.6s; T24-5 ideal = 14.5s).
 const IDEAL_A = 0.24, IDEAL_B = 0.0, IDEAL_K = 0.025;
-const SCORE_REF_T245 = 15.0;             // score-100 anchor: excellent seating
 const BAND_FAST = 0.88, BAND_SLOW = 1.12; // tolerance band = ideal curve time-scaled
 
 // Integrate the ideal model downward from 450 rpm and anchor t=0 at 24 rpm
@@ -146,11 +146,11 @@ function tailVerdict(tail){
   return { label: 'LIVELY', color: '#b8860b' };
 }
 
+// Scoring formula lives in the shared engine (Research shows the same number);
+// this wrapper only adds the bench's CSS class + 'n/a' display convention.
 function scoreOf(T245){
-  if(T245 == null) return { score: null, grade: 'n/a', cls: 'awb-sN' };
-  const score = Math.min(110, Math.round(T245 / SCORE_REF_T245 * 100));
-  const grade = score >= 93 ? 'A' : score >= 85 ? 'B' : score >= 72 ? 'C' : 'D';
-  return { score, grade, cls: 'awb-s' + grade };
+  const s = engineScoreOf(T245);
+  return s.score == null ? { score: null, grade: 'n/a', cls: 'awb-sN' } : { ...s, cls: 'awb-s' + s.grade };
 }
 
 // Ideal rpm at anchored time x (log-interp over IDEAL_PTS); null outside range.
