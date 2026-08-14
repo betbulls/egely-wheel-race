@@ -86,6 +86,13 @@ const IDEAL_MODEL = buildIdealModel();
 const IDEAL_PTS = IDEAL_MODEL.pts;
 const IDEAL_STOP_X = IDEAL_MODEL.stopX;   // ~29.4 s: dead-calm full-stop mark
 
+// NOTE on a pure-physics reference curve: attempted 2026-08-14 (disk-flow
+// formulas over the housing's R122 dome, Hertz pivot friction) and REMOVED at
+// the owner's correct objection — the wheel is ~50% open (6 large cutouts), so
+// air flows THROUGH it and the impermeable-disk flow models the formulas
+// assume do not apply beyond crude area scaling. The background analysis lives
+// in the project notes; the on-chart reference is measurement-calibrated only.
+
 // Saved wheels + chart curves survive tab switches (mount closures die, the
 // day's test work must not): module-level stores + a repaint hook for the
 // currently mounted instance.
@@ -309,7 +316,6 @@ function drawTestChart(canvas, curves, liveCurve){
       pen = true;
     }
   };
-
   // tolerance band: ideal curve time-scaled between BAND_FAST..BAND_SLOW —
   // filled AND edge-stroked so the good zone reads clearly
   const edge = scale => {
@@ -1037,7 +1043,9 @@ export function mountWheelBench(host){
       </div>
       <p class="awb-gnote">
         <b>Chart:</b> every curve is aligned so 0&nbsp;s = the moment it slows through 24 rpm; the dashed line is the
-        ideal wheel computed from the physics model, the shaded band is the “good” zone — a curve inside the band is fine.
+        reference wheel — calibrated on the best measured wheels of the 2026-08-14 benchmark — and the shaded band is the
+        “good” zone around it. A curve inside the band is fine.
+        Sloping <b>below/left</b> of the band = extra brake (seating → dust → damage, in that order of likelihood).
         Sloping <b>below/left</b> of the band = extra brake (seating → dust → damage, in that order of likelihood).
         The <b>deviation strip</b> under it is the magnifier: 0% = exactly the ideal wheel; a steady drift
         <b>below</b> zero = a few percent extra brake (a slightly weaker wheel shows here long before the score moves),
