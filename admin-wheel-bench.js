@@ -84,7 +84,8 @@ function buildIdealModel(){
 }
 const IDEAL_MODEL = buildIdealModel();
 const IDEAL_PTS = IDEAL_MODEL.pts;
-const IDEAL_STOP_X = IDEAL_MODEL.stopX;   // ~29.4 s: dead-calm full-stop mark
+// IDEAL_MODEL.stopX (~29.4 s) = dead-calm full stop; kept for reference/guide,
+// deliberately NOT drawn on the chart (owner's call: no extra markers).
 
 // NOTE on a pure-physics reference curve: attempted 2026-08-14 (disk-flow
 // formulas over the housing's R122 dome, Hertz pivot friction) and REMOVED at
@@ -328,12 +329,6 @@ function drawTestChart(canvas, curves, liveCurve){
       pen = true;
     }
   };
-  // the band (and later the ideal line) dives to the chart floor at its
-  // calm-air stop point — log axes cannot show 0, so the final 1.6->0 rpm leg
-  // is drawn as a terminating dive: where the line meets the floor, the ideal
-  // wheel stands still. The band therefore ends in a "stop window" on the axis.
-  const floorY = padT + plotH;
-  const lastIdeal = IDEAL_PTS[IDEAL_PTS.length - 1];
   ctx.beginPath();
   let started = false;
   for(const p of IDEAL_PTS){
@@ -341,8 +336,6 @@ function drawTestChart(canvas, curves, liveCurve){
     if(!started){ ctx.moveTo(xOf(x), yOf(p.y)); started = true; }
     else ctx.lineTo(xOf(x), yOf(p.y));
   }
-  ctx.lineTo(xOf(Math.min(X_MAX, IDEAL_STOP_X * BAND_FAST)), floorY);
-  ctx.lineTo(xOf(Math.min(X_MAX, IDEAL_STOP_X * BAND_SLOW)), floorY);
   for(let i = IDEAL_PTS.length - 1; i >= 0; i--){
     const p = IDEAL_PTS[i];
     const x = Math.max(X_MIN, Math.min(X_MAX, p.x * BAND_SLOW));
@@ -352,20 +345,11 @@ function drawTestChart(canvas, curves, liveCurve){
   ctx.fillStyle = 'rgba(32,178,107,0.10)'; ctx.fill();
   ctx.strokeStyle = 'rgba(15,138,82,0.45)'; ctx.lineWidth = 1;
   edge(BAND_FAST); ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(xOf(lastIdeal.x * BAND_FAST), yOf(lastIdeal.y));
-  ctx.lineTo(xOf(Math.min(X_MAX, IDEAL_STOP_X * BAND_FAST)), floorY); ctx.stroke();
   edge(BAND_SLOW); ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(xOf(lastIdeal.x * BAND_SLOW), yOf(lastIdeal.y));
-  ctx.lineTo(xOf(Math.min(X_MAX, IDEAL_STOP_X * BAND_SLOW)), floorY); ctx.stroke();
 
-  // ideal center line, diving to the floor at its calm-air full stop
+  // ideal center line — ends where it reaches the chart's bottom (~1.6 rpm)
   ctx.setLineDash([6, 4]); ctx.lineWidth = 1.6; ctx.strokeStyle = '#011624';
   poly(IDEAL_PTS, 1); ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(xOf(lastIdeal.x), yOf(lastIdeal.y));
-  ctx.lineTo(xOf(IDEAL_STOP_X), floorY); ctx.stroke();
   ctx.setLineDash([]);
 
   // recorded curves
@@ -1055,7 +1039,7 @@ export function mountWheelBench(host){
         <span style="color:#2c4bbd;font-weight:700">blue</span> = a draft is pushing the wheel (environment, not the wheel).
         One weak spin proves nothing — judge a wheel on its <b>best</b> spin of 3 (bad seating can only subtract, never add).
         The <b>tail reading</b> (30&nbsp;s untouched after the coast-down) is the SENSITIVITY axis: in dead-calm air the ideal
-        wheel is <b>fully stopped ~29&nbsp;s</b> after the 24-rpm crossing (where the dashed line meets the floor) — anything still
+        wheel is <b>fully stopped ~29&nbsp;s</b> after the 24-rpm crossing — anything still
         moving past that mark is the room's air acting on the wheel. Verdicts:
         <span style="color:#99a2a7;font-weight:700">STILL</span> = came to rest (calm air, or low pickup) ·
         <span style="color:#67737c;font-weight:700">QUIET</span> = barely moving (Ø&lt;0.8 rpm) ·
