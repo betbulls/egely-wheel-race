@@ -267,7 +267,10 @@ export function createCapture(opts = {}){
       // a gust lifting it above resets the watch (the wheel is active again)
       if(frame.rawLed <= TAIL_LOW_RPM){
         if(rec.lowSinceMs == null) rec.lowSinceMs = t;
-        else if(t - rec.lowSinceMs >= tailMs) endSpin();
+        else if(t - rec.lowSinceMs >= tailMs){
+          endSpin();
+          if(!rec) return;   // a consumer may stop() the capture from onSpinClosed
+        }
       } else rec.lowSinceMs = null;
     }
     if(!glitch) rec.prevRaw = frame.rawLed;
@@ -322,9 +325,13 @@ export function createCapture(opts = {}){
       r.spins.push(spin);
       curve = buildCurve(r.rpmPts, r.spinStartMs, endMs);
       if(curve) spin.T24_5 = curve.T245 != null ? Math.round(curve.T245 * 10) / 10 : null;
-      if(opts.onSpinClosed) opts.onSpinClosed(spin, curve, r);
     }
+    // Segment state resets BEFORE the callback: a consumer may stop() the
+    // capture from inside onSpinClosed (the research auto-save does), and a
+    // record still flagged "spinning" would make stop() close the SAME
+    // segment a second time — one physical spin counted twice.
     r.spinning = false; r.lowSinceMs = null; r.maxLed = 0; r.maxRpm = 0;
+    if(spin && opts.onSpinClosed) opts.onSpinClosed(spin, curve, r);
   }
   function endSpin(){ closeSpin(rec, rec.lowSinceMs + tailMs, false); }
 

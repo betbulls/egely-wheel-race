@@ -378,7 +378,9 @@ function mountCalibration(host, a){
       if(disp) calCurves.push({ color: PALETTE[(calCurves.length) % PALETTE.length], pts: disp.pts });
       paintSpins(); paintCharts();
       // The protocol completes on its own — no Stop button to remember.
-      if(spins.length >= CAL_SPINS) stopAndSave();
+      // Deferred out of the engine's callback (belt to the engine's own
+      // reset-before-callback suspender against double-closing the segment).
+      if(spins.length >= CAL_SPINS) setTimeout(() => stopAndSave(), 0);
     },
     onAutoStop(){ stopAndSave('Auto-stopped after 15 minutes.'); },
   });
@@ -1162,17 +1164,56 @@ function mountExperiments(host, a){
 
   async function stopExperiment(reason){
     if(stage !== 'live') return;
-    const rec = cap.stop();
-    recordingActive = false;
-    if(!rec) return;
+    // Single-fire + IMMEDIATE feedback: the stage flips and the button reacts
+    // before any work runs — a click that visibly does nothing was a real bug
+    // report, caused by a later step throwing before the first paint.
     stage = 'summary';
+    const stopBtn = host.querySelector('#rseStop');
+    if(stopBtn){ stopBtn.disabled = true; stopBtn.textContent = 'Stopping…'; }
     if(uiTimer){ clearInterval(uiTimer); uiTimer = null; }
-    rec.markers = runMarkers;
-    if(stack) stack.setReview();
-    const m = draftMeta();
-    m.startedAt = rec.startedAt;
     const box = host.querySelector('#rseSummary');
-    box.innerHTML = `<div class="rs-card"><h2>Saving…</h2><p class="rs-note">Local JSON backup downloads first, then the database.</p></div>`;
+    if(box) box.innerHTML = `<div class="rs-card"><h2>Saving…</h2><p class="rs-note">Local JSON backup downloads first, then the database.</p></div>`;
+    let rec = null;
+    try {
+      rec = cap.stop();
+      recordingActive = false;
+      if(!rec){ stage = 'live'; return; }
+      rec.markers = runMarkers;
+      const m = draftMeta();
+      m.startedAt = rec.startedAt;
+      await finishSave(rec, m, reason, box);
+      // cosmetic pass LAST — a chart error must never block the save
+      try { if(stack) stack.setReview(); } catch(e){ console.error('research: setReview failed', e); }
+    } catch(e){
+      console.error('research: stop/save failed', e);
+      // salvage: the recording must never be lost — raw JSON straight to disk
+      try {
+        if(rec) downloadJson({
+          kind: 'experiment-salvage', serial: 'salvage',
+          started_at: rec.startedAt || new Date().toISOString(), env: {},
+          frame_count: rec.frames.length, frames: rec.frames,
+          markers: rec.markers || [], spins: rec.spins || [], events: rec.events || [],
+          format: store.RUN_FORMAT,
+        }, 'ewr-research_salvage');
+      } catch {}
+      if(box) box.innerHTML = `<div class="rs-card"><h2>Stop hit an error</h2>
+        <p class="rs-note">${esc((e && e.message) || 'unknown error')} — a raw JSON backup was just downloaded,
+        and the interrupted-run recovery will also offer this recording on your next visit.</p>
+        <button type="button" class="rs-ghostbtn" id="rseNewErr">Back to setup</button></div>`;
+      const nb = box && box.querySelector('#rseNewErr');
+      if(nb) nb.addEventListener('click', () => {
+        if(stack){ stack.destroy(); stack = null; }
+        stage = 'setup';
+        host.querySelector('#rseRun').style.display = 'none';
+        host.querySelector('#rseSetup').style.display = '';
+        host.querySelector('#rseRunsCard').style.display = '';
+        buildSetup(); paintRuns();
+      });
+    }
+    paintRuns();
+  }
+
+  async function finishSave(rec, m, reason, box){
     const built = await buildRunRow(rec, m, 'complete');
     const res = await store.saveRun(built.row, rec.frames);
     await store.draftDelete(draftId);
@@ -1215,7 +1256,6 @@ function mountExperiments(host, a){
       buildSetup(); paintRuns();
     });
     renderSummaryLabels(res.id, m);
-    paintRuns();
   }
 
   // Post-run label editing on the summary card — things often become clear
