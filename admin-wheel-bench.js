@@ -109,7 +109,7 @@ function styles(){
     padding:3px 10px;background:#f2f3f4;color:#99a2a7}
   .awb-spinbadge.on{background:rgba(82,48,218,.12);color:#401d91}
   .awb-chart{width:100%;height:340px;display:block}
-  .awb-deriv{width:100%;height:190px;display:block;margin-top:6px}
+  .awb-deriv{width:100%;height:240px;display:block;margin-top:6px}
   .awb-rec{display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff5c5c;margin-right:7px;
     animation:awbPulse 1.2s ease-in-out infinite}
   @keyframes awbPulse{0%,100%{opacity:1}50%{opacity:.35}}
@@ -296,29 +296,58 @@ function drawDerivChart(canvas, curves, liveCurve){
   const s = setupCanvas(canvas);
   if(!s) return;
   const { ctx, w, h } = s;
-  const padL = 44, padR = 12, padT = 16, padB = 26;
+  const padL = 44, padR = 12, padT = 18, padB = 26;
   const plotW = w - padL - padR, plotH = h - padT - padB;
   const RPM_MAX = 30;
-  // derivative samples of one curve: central differences on anchored pts
-  const derivPts = c => {
-    const out = [];
-    const p = c.pts;
-    for(let i = 1; i < p.length - 1; i++){
-      if(p[i].y > RPM_MAX || p[i].y < 2) continue;
-      const dt = p[i + 1].x - p[i - 1].x;
-      if(dt <= 0 || dt > 4) continue;
-      const d = (p[i - 1].y - p[i + 1].y) / dt;
-      if(d > -0.5 && d < 6) out.push({ rpm: p[i].y, d: Math.max(0, d) });
-    }
-    return out;
-  };
-  const all = [];
-  for(const c of curves) all.push({ color: c.color, pts: derivPts(c) });
-  if(liveCurve) all.push({ color: '#5230da', pts: derivPts(liveCurve) });
   const D_MAX = 4;
+  const FRICTION_SPLIT = 12;   // below this rpm, excess braking = friction; above = air drag
+  const ideal = r => IDEAL_A + IDEAL_B * r + IDEAL_K * Math.pow(r, 1.5);
+  // tolerance band around the ideal braking line (relative + small absolute margin)
+  const bandLo = r => Math.max(0, ideal(r) * 0.7 - 0.12);
+  const bandHi = r => ideal(r) * 1.35 + 0.15;
   const xOf = rpm => padL + rpm / RPM_MAX * plotW;
   const yOf = d => padT + plotH - Math.min(d, D_MAX) / D_MAX * plotH;
 
+  // ---- diagnostic zones (fills first, everything else on top) ----
+  const bandPath = (loFn, hiFn, rFrom, rTo) => {
+    ctx.beginPath();
+    for(let r = rFrom; r <= rTo; r += 0.5){ const x = xOf(r), y = yOf(hiFn(r)); r === rFrom ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }
+    for(let r = rTo; r >= rFrom; r -= 0.5){ ctx.lineTo(xOf(r), yOf(loFn(r))); }
+    ctx.closePath();
+  };
+  // FRICTION zone: above the band at low rpm (red tint)
+  ctx.fillStyle = 'rgba(240,68,56,0.09)';
+  bandPath(bandHi, () => D_MAX, 0.5, FRICTION_SPLIT); ctx.fill();
+  // AIR-DRAG zone: above the band at high rpm (amber tint)
+  ctx.fillStyle = 'rgba(245,183,0,0.12)';
+  bandPath(bandHi, () => D_MAX, FRICTION_SPLIT, RPM_MAX); ctx.fill();
+  // OK band: around the ideal line (green tint)
+  ctx.fillStyle = 'rgba(32,178,107,0.13)';
+  bandPath(bandLo, bandHi, 0.5, RPM_MAX); ctx.fill();
+  // DRAFT zone: below the band (blue tint) — braking weaker than physics allows
+  ctx.fillStyle = 'rgba(0,51,255,0.06)';
+  bandPath(() => 0, bandLo, 0.5, RPM_MAX); ctx.fill();
+  // divider between friction and air-drag halves
+  ctx.strokeStyle = 'rgba(1,22,36,0.12)'; ctx.setLineDash([3, 4]);
+  ctx.beginPath(); ctx.moveTo(xOf(FRICTION_SPLIT), padT); ctx.lineTo(xOf(FRICTION_SPLIT), yOf(bandHi(FRICTION_SPLIT))); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // zone labels
+  ctx.font = '700 10.5px Inter, sans-serif'; ctx.textBaseline = 'top';
+  ctx.fillStyle = '#c2415b'; ctx.textAlign = 'left';
+  ctx.fillText('FRICTION — bearing/seating → reseat, then clean', xOf(0.6), padT + 4);
+  ctx.fillStyle = '#8a6a08'; ctx.textAlign = 'right';
+  ctx.fillText('AIR DRAG — wheel shape', xOf(RPM_MAX - 0.5), padT + 4);
+  ctx.fillStyle = '#2c4bbd';
+  ctx.fillText('DRAFT — breeze is pushing the wheel', xOf(RPM_MAX - 0.5), yOf(0) - 14);
+  ctx.save();
+  ctx.fillStyle = '#0f8a52'; ctx.textAlign = 'center';
+  const midR = 21, ang = Math.atan2(yOf(ideal(24)) - yOf(ideal(18)), xOf(24) - xOf(18));
+  ctx.translate(xOf(midR), yOf(ideal(midR)) - 9); ctx.rotate(ang);
+  ctx.fillText('GOOD — matches the ideal wheel', 0, 0);
+  ctx.restore();
+
+  // grid + axes
   ctx.font = '10px Inter, sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'right';
   for(let d = 0; d <= D_MAX; d++){
     const y = yOf(d);
@@ -334,18 +363,34 @@ function drawDerivChart(canvas, curves, liveCurve){
   ctx.setLineDash([6, 4]); ctx.lineWidth = 1.6; ctx.strokeStyle = '#011624';
   ctx.beginPath();
   for(let r = 1; r <= RPM_MAX; r += 0.5){
-    const d = IDEAL_A + IDEAL_B * r + IDEAL_K * Math.pow(r, 1.5);
+    const d = ideal(r);
     if(r === 1) ctx.moveTo(xOf(r), yOf(d)); else ctx.lineTo(xOf(r), yOf(d));
   }
   ctx.stroke(); ctx.setLineDash([]);
-  // measured dots
+
+  // measured dots: central differences on anchored pts
+  const derivPts = c => {
+    const out = [];
+    const p = c.pts;
+    for(let i = 1; i < p.length - 1; i++){
+      if(p[i].y > RPM_MAX || p[i].y < 2) continue;
+      const dt = p[i + 1].x - p[i - 1].x;
+      if(dt <= 0 || dt > 4) continue;
+      const d = (p[i - 1].y - p[i + 1].y) / dt;
+      if(d > -0.5 && d < 6) out.push({ rpm: p[i].y, d: Math.max(0, d) });
+    }
+    return out;
+  };
+  const all = [];
+  for(const c of curves) all.push({ color: c.color, pts: derivPts(c) });
+  if(liveCurve) all.push({ color: '#5230da', pts: derivPts(liveCurve) });
   for(const c of all){
-    ctx.fillStyle = c.color; ctx.globalAlpha = 0.75;
-    for(const p of c.pts){ ctx.beginPath(); ctx.arc(xOf(p.rpm), yOf(p.d), 2, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = c.color; ctx.globalAlpha = 0.8;
+    for(const p of c.pts){ ctx.beginPath(); ctx.arc(xOf(p.rpm), yOf(p.d), 2.2, 0, Math.PI * 2); ctx.fill(); }
   }
   ctx.globalAlpha = 1;
   ctx.fillStyle = '#67737c'; ctx.font = '11px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  ctx.fillText('braking [rpm/s] vs speed [rpm] — dots above the dashed ideal = extra drag/friction', padL + 4, 2);
+  ctx.fillText('braking force [rpm/s] vs speed [rpm] — the zone a dot lands in names the culprit', padL + 4, 2);
 }
 
 export function mountWheelBench(host){
@@ -776,8 +821,11 @@ export function mountWheelBench(host){
         <b>Chart:</b> every curve is aligned so 0&nbsp;s = the moment it slows through 24 rpm; the dashed line is the
         ideal wheel computed from the physics model, the shaded band is the “good” zone — a curve inside the band is fine.
         Sloping <b>below/left</b> of the band = extra brake (seating → dust → damage, in that order of likelihood).
-        <b>Score</b> = T(24→5&nbsp;s) versus the 15.0&nbsp;s reference. The lower <b>braking chart</b> shows the same physics
-        as force: dots riding above the dashed line at LOW rpm = friction (bearing); above it at HIGH rpm = air drag (geometry).
+        <b>Score</b> = T(24→5&nbsp;s) versus the 15.0&nbsp;s reference. The lower <b>braking chart</b> is color-coded —
+        the zone a dot lands in names the culprit directly: <span style="color:#0f8a52;font-weight:700">green band</span> = healthy,
+        <span style="color:#c2415b;font-weight:700">red</span> = friction (reseat → clean),
+        <span style="color:#8a6a08;font-weight:700">amber</span> = extra air drag (wheel shape),
+        <span style="color:#2c4bbd;font-weight:700">blue</span> = a draft is pushing the wheel (environment, not the wheel).
         One weak spin proves nothing — judge a wheel on its <b>best</b> spin of 3 (bad seating can only subtract, never add).
       </p>
     </div>
