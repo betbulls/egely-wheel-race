@@ -537,7 +537,8 @@ function onData(event){
     buffer = buffer.slice(idx + 1);
     const frame = parseLine(line);
     if(frame){
-      frame.rawLed = frame.led;        // keep the raw value (debugging)
+      frame.rawLed = frame.led;        // pre-despike value — CONTRACTUAL: admin-wheel-bench
+                                       // (and future research capture) display/segment on it
       frame.led = despike(frame.led);  // everything downstream uses the de-spiked value
       lastFrame = frame;
       frameListeners.forEach(cb => cb(frame));

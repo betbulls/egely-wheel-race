@@ -8,6 +8,7 @@
 import * as auth from './auth.js';
 import { supabase } from './db.js';
 import { mountPartners } from './admin-partners.js';
+import { mountWheelBench } from './admin-wheel-bench.js';
 
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
 
@@ -123,12 +124,13 @@ function styles(){
 
 export function mount(el){
   styles();
-  let built = false, partnersCleanup = null;
-  const teardownPartners = () => { if(partnersCleanup){ partnersCleanup(); partnersCleanup = null; } };
+  // One tab is mounted at a time; whichever mounts registers its cleanup here.
+  let built = false, tabCleanup = null;
+  const teardownTab = () => { if(tabCleanup){ tabCleanup(); tabCleanup = null; } };
 
   function render(a){
     if(!a.user){
-      built = false; teardownPartners();
+      built = false; teardownTab();
       el.innerHTML = `<div class="adm-wrap"><div class="adm-card"><p class="adm-empty">Please <a href="#/login">log in</a>.</p></div></div>`;
       return;
     }
@@ -137,7 +139,7 @@ export function mount(el){
       return;
     }
     if(!a.isAdmin){
-      built = false; teardownPartners();
+      built = false; teardownTab();
       el.innerHTML = `<div class="adm-wrap"><div class="adm-card">
         <h1 style="font-family:'Montserrat',sans-serif;font-weight:600;color:#011624;margin:0 0 6px">Not found</h1>
         <p class="adm-empty">This page isn't available. <a href="#/home">Back to home</a></p></div></div>`;
@@ -157,17 +159,19 @@ export function mount(el){
           <button type="button" class="adm-tab ${tab === 'makers' ? 'on' : ''}" data-tab="makers">Makers &amp; access</button>
           <button type="button" class="adm-tab ${tab === 'usage' ? 'on' : ''}" data-tab="usage">Usage</button>
           <button type="button" class="adm-tab ${tab === 'partners' ? 'on' : ''}" data-tab="partners">Influencer onboarding</button>
+          <button type="button" class="adm-tab ${tab === 'bench' ? 'on' : ''}" data-tab="bench">Wheel bench</button>
         </div>
         <div id="admTabHost"></div>
       </div>`;
     el.querySelectorAll('.adm-tab').forEach(b => b.addEventListener('click', () => {
       if(b.dataset.tab === tab) return;
       tab = b.dataset.tab;
-      teardownPartners();
+      teardownTab();
       buildShell();
     }));
     const host = el.querySelector('#admTabHost');
-    if(tab === 'partners') partnersCleanup = mountPartners(host);
+    if(tab === 'partners') tabCleanup = mountPartners(host);
+    else if(tab === 'bench') tabCleanup = mountWheelBench(host);
     else if(tab === 'usage') buildUsage(host);
     else buildAdmin(host);
   }
@@ -594,5 +598,5 @@ export function mount(el){
   }
 
   const unsub = auth.subscribeAuth(render);
-  return () => { teardownPartners(); if(unsub) unsub(); };
+  return () => { teardownTab(); if(unsub) unsub(); };
 }
