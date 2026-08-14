@@ -188,18 +188,35 @@ function crossTime(pts, rpm){
 }
 
 // Build an anchored chart curve from raw rpm points of one spin window.
-// Anchor: t=0 where the post-peak decay crosses 24 rpm. Returns null if the
-// spin never reached 24 (weak flick — not chartable/scorable).
+// Anchor: t=0 at a downward 24-rpm crossing. A struggling spin-up (several
+// flick attempts, finger touches) can cross 24 downward more than once, and a
+// hand-grab at the end shows as a fake spike — so EVERY downward crossing is a
+// candidate, and the winner is the one followed by the LONGEST uninterrupted
+// decay. That is always the real, successful spin-down; the mess before it
+// still draws left of t=0. Returns null if the wheel never came down through
+// 24 while recording (weak flick, or Start pressed too late).
 function buildCurve(rpmPts, fromMs, toMs){
   const pts = rpmPts.filter(p => p.t >= fromMs - 12000 && p.t <= toMs && p.rpm >= Y_MIN)
     .map(p => ({ x: p.t / 1000, y: Math.min(Y_MAX - 1, p.rpm) }));
   if(pts.length < 6) return null;
-  const t24 = crossTime(pts, 24);
-  if(t24 == null) return null;
-  const anchored = pts.map(p => ({ x: p.x - t24, y: p.y })).filter(p => p.x >= X_MIN && p.x <= X_MAX);
-  const t5 = crossTime(anchored, 5);
-  const T245 = t5 != null ? t5 : null;   // t24 crossing is x=0 by construction
-  return { pts: anchored, T245 };
+  let best = null;
+  for(let i = 1; i < pts.length; i++){
+    if(!(pts[i - 1].y > 24 && pts[i].y <= 24)) continue;
+    const a = pts[i - 1], b = pts[i];
+    const t24 = a.x + (Math.log(a.y) - Math.log(24)) / (Math.log(a.y) - Math.log(b.y)) * (b.x - a.x);
+    let end = pts.length - 1;
+    for(let j = i + 1; j < pts.length; j++){
+      if(pts[j].y > pts[j - 1].y * 1.2 && pts[j].y > 3){ end = j - 1; break; }   // re-flick / grab / kick
+    }
+    const dur = pts[end].x - t24;
+    if(!best || dur > best.dur) best = { t24, dur };
+  }
+  if(!best) return null;
+  const anchored = pts.map(p => ({ x: p.x - best.t24, y: p.y })).filter(p => p.x >= X_MIN && p.x <= X_MAX);
+  // score only from the clean decay window that won the anchor
+  const clean = anchored.filter(p => p.x >= 0 && p.x <= best.dur);
+  const t5 = crossTime(clean, 5);
+  return { pts: anchored, T245: t5 != null ? t5 : null };
 }
 
 // ---- chart renderers --------------------------------------------------------
@@ -414,7 +431,8 @@ export function mountWheelBench(host){
     fw: '', hw: '', lastBattery: null,
     // spin segmentation (rawLed-based — see header comment)
     lastCounter: null, startHits: 0, firstHitMs: 0, spinning: false,
-    spinStartMs: 0, zeroSinceMs: null, maxLed: 0, maxRpm: 0, pendMaxRpm: 0, prevRaw: null,
+    spinStartMs: 0, zeroSinceMs: null, maxLed: 0, maxRpm: 0, pendMaxRpm: 0,
+    prevRaw: null, railRun: 0,
     simUsed: false,
   });
 
@@ -437,12 +455,16 @@ export function mountWheelBench(host){
 
     // --- spin segmentation (bookkeeping only; raw data is saved regardless) ---
     // Glitch guard: the PIC sometimes reports a spurious 24 for a moment (the
-    // rail glitch ble.js de-spikes). ONLY within an active spin can we call a
-    // jump >=10 into the >=22 rail a glitch — there the wheel only decelerates,
-    // so such a jump is physically impossible. Outside a spin the same pattern
-    // IS the real hand-flick (0 -> 24 in one report), so it must pass through —
-    // gating on rec.spinning is what keeps the rail phase in the chart curve.
-    const glitch = rec.spinning && rec.prevRaw != null && frame.rawLed >= 22 && (frame.rawLed - rec.prevRaw) >= 10;
+    // rail glitch ble.js de-spikes). ONLY within an active spin can a jump
+    // >=10 into the >=22 rail be suspect (a coasting wheel never re-accelerates
+    // by itself), and even there it is a glitch only while BRIEF: the PIC
+    // artifact lasts 1-2 report lines, while a genuine RE-FLICK (the admin
+    // spins again mid-segment after a failed attempt) stays railed for many
+    // lines — so after 2 suspect lines the rail is accepted as real motion.
+    // Outside a spin the same pattern IS the normal hand-flick and passes.
+    const railJump = rec.prevRaw != null && frame.rawLed >= 22 && (frame.rawLed - rec.prevRaw) >= 10;
+    rec.railRun = railJump ? rec.railRun + 1 : 0;
+    const glitch = rec.spinning && railJump && rec.railRun <= 2;
     const fresh = frame.counter !== rec.lastCounter;
     const rpm = frame.counter >= RPM_MIN_COUNTER ? rpmOf(frame.counter) : 0;
     if(fresh && !glitch && frame.counter >= RPM_MIN_COUNTER) rec.rpmPts.push({ t, rpm });
