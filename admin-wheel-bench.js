@@ -267,7 +267,9 @@ export function drawTestChart(canvas, curves, liveCurve){
 // chart but reads as a clear drift here — this is where "slightly weaker"
 // wheels show themselves first. Above 0 = coasting longer than ideal (less
 // brake or a helping draft); below 0 = extra brake.
-function drawDevChart(canvas, curves, liveCurve){
+// Exported (with drawTestChart/drawDerivChart): the Research calibration tab
+// shows the full Wheel test chart trio.
+export function drawDevChart(canvas, curves, liveCurve){
   const s = setupCanvas(canvas);
   if(!s) return;
   const { ctx, w, h } = s;
@@ -335,7 +337,7 @@ function drawDevChart(canvas, curves, liveCurve){
   ctx.fillText('deviation from ideal [%] — the magnifier: small differences show up here first', padL + 4, 2);
 }
 
-function drawDerivChart(canvas, curves, liveCurve){
+export function drawDerivChart(canvas, curves, liveCurve){
   const s = setupCanvas(canvas);
   if(!s) return;
   const { ctx, w, h } = s;

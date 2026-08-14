@@ -18,9 +18,9 @@ import {
 } from './wheel-capture.js';
 import * as store from './research-store.js';
 import { createPanelStack } from './research-panels.js';
-// The calibration tab shows the exact same anchored comparison chart as the
-// admin Wheel test (owner request) — the renderer is shared from there.
-import { drawTestChart, PALETTE } from './admin-wheel-bench.js';
+// The calibration tab shows the exact same chart TRIO as the admin Wheel test
+// (owner request) — the renderers are shared from there.
+import { drawTestChart, drawDevChart, drawDerivChart, PALETTE } from './admin-wheel-bench.js';
 
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
 const fmtClock = s => Math.floor(s / 60) + ':' + String(Math.floor(s) % 60).padStart(2, '0');
@@ -141,8 +141,17 @@ function styles(){
     line-height:1.55;padding:10px 14px;margin-top:14px}
   .rs-dl{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
   .rs-calchart{width:100%;height:340px;display:block;margin-top:12px}
+  .rs-caldev{width:100%;height:150px;display:block;margin-top:6px}
+  .rs-calderiv{width:100%;height:240px;display:block;margin-top:6px}
   .rs-progress{height:10px;border-radius:999px;background:#eef1f3;overflow:hidden;flex:1;min-width:140px}
   .rs-progress i{display:block;height:100%;background:linear-gradient(90deg,#37dbff,#5230da);border-radius:999px;transition:width .25s}
+  .rs-guide{border:1px solid #dfe3e6;border-radius:14px;background:#f7f8f8;padding:14px 16px;margin-top:14px}
+  .rs-guide-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .rs-guide-rpm{font-variant-numeric:tabular-nums;font-size:15px;color:#67737c}
+  .rs-guide-rpm b{font-size:22px;color:#011624}
+  .rs-guide-big{font-family:'Montserrat',sans-serif;font-weight:600;font-size:40px;line-height:1;color:#401d91;
+    font-variant-numeric:tabular-nums;min-width:110px;text-align:center}
+  .rs-guide-text{color:#27384e;font-size:13.5px;line-height:1.5;margin-top:10px}
   .rs-caltable{width:100%;border-collapse:collapse;font-size:13px}
   .rs-caltable td{padding:7px 8px;border-bottom:1px solid #eef1f3;color:#27384e;vertical-align:middle}
   .rs-caltable b{color:#011624}
@@ -350,12 +359,15 @@ function mountCalibration(host, a){
   let unsubStatus = null, uiTimer = null;
   let spins = [], curves = [], calCurves = [];
 
+  const CAL_SPINS = 3;   // guided protocol: 3 spins, then it saves ITSELF
   const cap = createCapture({
     maxMs: 15 * 60 * 1000,
     onSpinClosed(spin, curve){
       spins.push(spin); curves.push(curve);
       if(curve) calCurves.push({ color: PALETTE[(calCurves.length) % PALETTE.length], pts: curve.pts, T245: curve.T245 });
-      paintSpins(); paintChart();
+      paintSpins(); paintCharts();
+      // The protocol completes on its own — no Stop button to remember.
+      if(spins.length >= CAL_SPINS) stopAndSave();
     },
     onAutoStop(){ stopAndSave('Auto-stopped after 15 minutes.'); },
   });
@@ -364,13 +376,11 @@ function mountCalibration(host, a){
     <div class="rs-card">
       <h2>Calibrate a wheel in this room</h2>
       <p class="rs-note">This records how <b>your</b> wheel coasts <b>in this room</b> with nobody influencing it.
-      Every experiment here is measured against this baseline — the ghost curve, the torque zero and the noise band
-      all come from it. <b>Re-calibrate when you move to a different room.</b></p>
+      Every experiment is measured against this baseline. <b>Re-calibrate when you move to a different room.</b></p>
       <ol class="rs-steps">
-        <li>Pick the wheel, fill in the environment, press <b>Start calibration</b>.</li>
-        <li><b>Spin the wheel hard</b> (aim above 140 rpm), let go, and keep hands off until the spin closes
-            (after the coast-down a 30&nbsp;s untouched watch records the room's ambient nudges).</li>
-        <li>Repeat for <b>3 spins</b> — if one is much shorter, lift the wheel off, reseat it, spin again. Then <b>Stop &amp; save</b>.</li>
+        <li>Pick the wheel, fill in the environment, press <b>Start calibration</b>. From then on the settings lock and the process runs itself.</li>
+        <li><b>Spin the wheel hard</b> (above 140 rpm), let go, and <b>hands off to the very end</b> — after each coast-down a 30&nbsp;s countdown watches the untouched wheel, then the spin closes on its own.</li>
+        <li>Do this <b>3 times</b>. After the third spin the calibration <b>saves itself</b>. If one spin is much shorter than the others, lift the wheel off and reseat it before the next.</li>
       </ol>
     </div>
     <div class="rs-card">
@@ -383,17 +393,31 @@ function mountCalibration(host, a){
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;align-items:center">
         <button type="button" class="rs-btn" id="rscStart">Start calibration</button>
-        <button type="button" class="rs-btn stop" id="rscStop" style="display:none">Stop &amp; save calibration</button>
-        <button type="button" class="rs-ghostbtn" id="rscDiscard" style="display:none">Discard</button>
+        <button type="button" class="rs-ghostbtn" id="rscDiscard" style="display:none">Cancel calibration</button>
         <button type="button" class="rs-mini" id="rscSimSpin" style="display:none">SIM: spin the wheel</button>
-        <span id="rscLive" style="display:none;font-variant-numeric:tabular-nums;color:#27384e;font-size:13px">
-          <span class="rs-rec"></span> <b id="rscRpm">0</b> rpm · <span id="rscBadge"></span></span>
+      </div>
+      <div id="rscGuide" class="rs-guide" style="display:none">
+        <div class="rs-guide-row">
+          <span class="rs-guide-rpm"><b id="rscRpm">0</b> rpm</span>
+          <span class="rs-guide-big" id="rscCount"></span>
+          <span class="rs-progress"><i id="rscBar" style="width:0%"></i></span>
+        </div>
+        <div class="rs-guide-text" id="rscBadge"></div>
       </div>
       <span class="rs-msg" id="rscMsg"></span>
       <canvas id="rscChart" class="rs-calchart"></canvas>
-      <p class="rs-note" style="margin:6px 0 0">Every spin lands on the chart, lined up at the moment it slows through 24 rpm.
-      The dashed line is the reference wheel and the green band is the healthy zone — a curve inside the band is a good spin.
-      Longer to the right = less braking (better seating / calmer air).</p>
+      <canvas id="rscDev" class="rs-caldev"></canvas>
+      <canvas id="rscDeriv" class="rs-calderiv"></canvas>
+      <p class="rs-note" style="margin:8px 0 0">
+      <b>Top chart:</b> every spin, lined up at the moment it slows through 24 rpm — the dashed line is the reference wheel,
+      the green band is the healthy zone. A curve inside the band is a good spin; longer to the right = less braking.
+      <b>Middle strip:</b> the magnifier — the same spins as percent difference from the reference; a steady drift below 0%
+      means a few percent extra brake even when the top chart looks fine.
+      <b>Bottom map:</b> where the braking comes from — each dot is one moment;
+      <span style="color:#0f8a52;font-weight:700">green band</span> = healthy,
+      <span style="color:#c2415b;font-weight:700">red</span> = bearing friction (reseat, then clean),
+      <span style="color:#8a6a08;font-weight:700">amber</span> = extra air drag,
+      <span style="color:#2c4bbd;font-weight:700">blue</span> = a draft is pushing the wheel.</p>
       <div id="rscSpins" style="margin-top:12px"></div>
       <div id="rscFit"></div>
     </div>
@@ -436,33 +460,48 @@ function mountCalibration(host, a){
     if(!rec || !rec.spinning) return null;
     return buildCurve(rec.rpmPts, rec.spinStartMs, cap.now());
   }
-  function paintChart(){
-    const cv = $('rscChart');
-    if(cv) drawTestChart(cv, calCurves, liveCalCurve());
+  // The full Wheel test chart trio — same renderers, same look.
+  function paintCharts(){
+    const lc = liveCalCurve();
+    const c1 = $('rscChart');
+    if(c1) drawTestChart(c1, calCurves, lc);
+    const cd = $('rscDev');
+    if(cd) drawDevChart(cd, calCurves, lc);
+    const c2 = $('rscDeriv');
+    if(c2) drawDerivChart(c2, calCurves, lc);
   }
 
   function paintLive(){
     const rec = cap.rec();
-    $('rscStop').style.display = rec ? '' : 'none';
     $('rscDiscard').style.display = rec ? '' : 'none';
     $('rscSimSpin').style.display = (rec && cap.simActive()) ? '' : 'none';
-    $('rscLive').style.display = rec ? '' : 'none';
+    $('rscGuide').style.display = rec ? '' : 'none';
     $('rscStart').disabled = !!rec || (!bleState.connected && !cap.simActive());
     // A running calibration LOCKS its setup — changing the wheel or the
     // environment mid-recording would corrupt the baseline it is measuring.
     for(const id of ['rscWheel', 'rscLoc', 'rscTemp', 'rscRh']){
       const n = $(id); if(n) n.disabled = !!rec;
     }
-    if(!rec){ paintChart(); return; }
+    if(!rec){ paintCharts(); return; }
     const { rpm: trueRpm } = liveRpmOf(rec);
     $('rscRpm').textContent = fmtRpm(trueRpm);
     const t = cap.now();
-    $('rscBadge').textContent = !rec.spinning
-      ? `${spins.length} spin${spins.length === 1 ? '' : 's'} done of 3 — spin the wheel hard, then hands off`
-      : rec.lowSinceMs != null
-        ? `hands off — closing this spin in ${Math.max(0, Math.ceil((TAIL_OBS_MS - (t - rec.lowSinceMs)) / 1000))} s…`
-        : `spin ${spins.length + 1} — peak ${Math.round(rec.maxRpm)} rpm — coasting, hands off`;
-    paintChart();
+    const count = $('rscCount'), bar = $('rscBar'), badge = $('rscBadge');
+    if(!rec.spinning){
+      count.textContent = `spin ${Math.min(CAL_SPINS, spins.length + 1)} / ${CAL_SPINS}`;
+      bar.style.width = Math.round(spins.length / CAL_SPINS * 100) + '%';
+      badge.textContent = 'Spin the wheel HARD (above 140 rpm), then let go and don\'t touch it.';
+    } else if(rec.lowSinceMs != null){
+      const left = Math.max(0, Math.ceil((TAIL_OBS_MS - (t - rec.lowSinceMs)) / 1000));
+      count.textContent = left + ' s';
+      bar.style.width = Math.round((1 - left / (TAIL_OBS_MS / 1000)) * 100) + '%';
+      badge.textContent = 'Hands off! The wheel is nearly still — this countdown records how the untouched wheel reacts to the room\'s air, then the spin closes by itself.';
+    } else {
+      count.textContent = `spin ${spins.length + 1} / ${CAL_SPINS}`;
+      bar.style.width = '0%';
+      badge.textContent = `Coasting — hands off. Peak ${Math.round(rec.maxRpm)} rpm; the chart below draws as it slows.`;
+    }
+    paintCharts();
   }
 
   function tailLabel(tail){
@@ -546,11 +585,11 @@ function mountCalibration(host, a){
 
   function discard(){
     if(!cap.isRecording()) return;
-    if(!confirm('Discard this calibration recording?')) return;
+    if(!confirm('Cancel this calibration? The recorded spins will be thrown away.')) return;
     cap.discard();
     recordingActive = false;
     if(uiTimer){ clearInterval(uiTimer); uiTimer = null; }
-    spins = []; curves = [];
+    spins = []; curves = []; calCurves = [];
     paintBle(); paintLive(); paintSpins();
   }
 
@@ -584,7 +623,6 @@ function mountCalibration(host, a){
   });
 
   $('rscStart').addEventListener('click', start);
-  $('rscStop').addEventListener('click', () => stopAndSave());
   $('rscDiscard').addEventListener('click', discard);
   $('rscSimSpin').addEventListener('click', () => cap.simSpin());
   cap.attach();
@@ -606,14 +644,14 @@ function mountCalibration(host, a){
 }
 
 // ============================================================================
-// EXPERIMENTS TAB — setup → preflight → live → summary + runs list
+// EXPERIMENTS TAB — setup → live → summary + runs list
 // ============================================================================
 function mountExperiments(host, a){
   const uid = a.user.id;
   const c = cacheFor(uid);
   let bleState = ble.getState();
   let unsubStatus = null, uiTimer = null;
-  let stage = 'setup';            // setup | preflight | live | summary
+  let stage = 'setup';            // setup | live | summary
   let stack = null;
   let cals = [], wheels = [], labels = [], members = [];
   let sel = { wheelId: null, calId: null, labels: new Set(), subject: null };
@@ -622,8 +660,6 @@ function mountExperiments(host, a){
   let coasts = [];
   let samples = [];               // {t (s), rpm} — feeds the panel stack
   let lastFlushed = 0, draftId = null;
-  let preflight = { status: 'none', ratio: null };  // none|skip|green|amber|red
-  let preTimer = null;            // pre-flight 250 ms poller — cleared on EVERY exit path
   let revsAcc = 0, lastSample = null;
 
   const cap = createCapture({
@@ -646,11 +682,11 @@ function mountExperiments(host, a){
       }
     },
     onAutoStop(){
-      // The engine fires this exactly ONCE per recording — every stage must
-      // end its capture here, or a forgotten screen records unbounded with the
-      // wake lock held (the pre-flight stage was exactly that hole).
+      // The engine fires this exactly ONCE per recording — the capture must
+      // end here, or a forgotten screen records unbounded with the wake lock
+      // held. Outside the live stage nothing should be recording; discard.
       if(stage === 'live') stopExperiment('Auto-stopped at the 10-minute limit.');
-      else cancelPreflight('The pre-flight check timed out after 10 minutes and was closed.');
+      else cap.discard();
     },
   });
 
@@ -660,7 +696,7 @@ function mountExperiments(host, a){
     labels: [...sel.labels], tempC: val('#rseTemp'), rhPct: val('#rseRh'),
     notes: host.querySelector('#rseNotes') ? host.querySelector('#rseNotes').value : '',
     startedAt: cap.rec() ? cap.rec().startedAt : null,
-    markers: runMarkers, preflight: preflight.status,
+    markers: runMarkers,
   });
   const val = q => { const n = host.querySelector(q); const v = n ? parseFloat(n.value) : NaN; return isNaN(v) ? null : v; };
 
@@ -788,7 +824,7 @@ function mountExperiments(host, a){
       </div>`;
       paintBleRow(); paintCalSelect(); paintLabelChips(); paintSubjectPicker();
       host.querySelector('#rseWheel').addEventListener('change', paintCalSelect);
-      host.querySelector('#rseStart').addEventListener('click', startPreflight);
+      host.querySelector('#rseStart').addEventListener('click', startExperiment);
     });
   }
 
@@ -876,16 +912,17 @@ function mountExperiments(host, a){
     }));
   }
 
-  // ---------------- pre-flight ----------------
-  function startPreflight(){
+  // ---------------- start ----------------
+  // Straight into the live recording — the wheel was already calibrated on its
+  // own tab; the experiment just ATTACHES that calibration (owner decision:
+  // no extra check stage at experiment start).
+  function startExperiment(){
     const msg = host.querySelector('#rseMsg');
     const say = (k, t) => { msg.className = 'rs-msg ' + k; msg.textContent = t; };
     if(!sel.wheelId){ say('err', 'Pick a wheel.'); return; }
     if(!sel.calId){ say('err', 'This wheel needs a calibration first (Calibration tab).'); return; }
     if(!bleState.connected && !cap.simActive()){ say('err', 'Connect the wheel first, or enable the simulator.'); return; }
-    stage = 'preflight';
-    preflight = { status: 'none', ratio: null };
-    buildRunUi();
+    startLive();
   }
 
   function calCoef(){
@@ -903,7 +940,6 @@ function mountExperiments(host, a){
     const cal = cals.find(x => x.id === sel.calId);
     run.innerHTML = `
       <div class="rs-status" id="rseStatus"></div>
-      <div id="rsePre" class="rs-card" style="display:none"></div>
       <div class="rs-hero" id="rseHero" style="display:none">
         <div class="rs-tile"><span class="rs-pip" id="rsePip"></span>
           <div class="v" id="rseTileRpm">—</div><div class="l">True RPM</div><div class="f">ω = 6000 / counter</div></div>
@@ -921,128 +957,25 @@ function mountExperiments(host, a){
       </div>
       <div id="rseSummary"></div>`;
 
-    paintStatus();
     // status strip content
-    function paintStatus(){
-      const st = host.querySelector('#rseStatus');
-      if(!st) return;
-      const recording = stage === 'live';
-      st.innerHTML = `
-        ${recording ? '<span class="rs-rec"></span><b style="color:#c2415b">REC</b>' : '<b>ROOM CHECK</b>'}
-        <span id="rseClock" style="font-variant-numeric:tabular-nums">0:00</span>
-        <span class="rs-pill">${esc(wheel ? wheel.serial : '?')}</span>
-        <span class="rs-pill" title="Every torque number leans on this calibration">${cal ? 'cal: ' + esc((cal.location || 'room') + ' · ' + new Date(cal.created_at).toLocaleDateString('en-GB')) : 'cal: factory'}</span>
-        ${sel.subject ? `<span class="rs-pill">${avatarHtml(sel.subject.avatarUrl, sel.subject.displayName)} ${esc(sel.subject.displayName)}</span>` : ''}
-        <span id="rseBleDot">${bleState.connected ? '🔵' : cap.simActive() ? '<span class="rs-kbadge sim">SIM</span>' : '⚪'}</span>
-        <span id="rseFreeze"></span>
-        ${recording ? `<span class="rs-presets" id="rsePresets">
-          <button type="button" class="rs-preset on" data-preset="60">60 s</button>
-          <button type="button" class="rs-preset" data-preset="300">5 min</button>
-          <button type="button" class="rs-preset" data-preset="full">Full</button>
-        </span>` : ''}`;
-      st.querySelectorAll('[data-preset]').forEach(b => b.addEventListener('click', () => {
-        st.querySelectorAll('[data-preset]').forEach(x => x.classList.toggle('on', x === b));
-        if(stack) stack.setPreset(b.dataset.preset);
-      }));
-    }
-
-    if(stage === 'preflight') buildPreflight();
-  }
-
-  function buildPreflight(){
-    const pre = host.querySelector('#rsePre');
-    pre.style.display = '';
-    const coef = calCoef();
-    pre.innerHTML = `
-      <h2>Room check — about 1 minute, runs by itself</h2>
-      <p class="rs-note"><b>Why:</b> every number in your experiment is compared against your calibration.
-      This quick check makes sure the room today still behaves like it did when you calibrated —
-      so a draft or a bad seating can't show up later as a false result.</p>
-      <p class="rs-note"><b>What to do:</b> give the wheel <b>one strong spin</b> and let go.
-      Don't touch it — the check finishes on its own.</p>
-      <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
-        <span style="font-variant-numeric:tabular-nums;font-size:20px;font-weight:700;color:#011624"><span id="rsePreRpm">0</span> <span style="font-size:12px;color:#67737c;font-weight:600">rpm</span></span>
-        <span class="rs-progress"><i id="rsePreBar" style="width:0%"></i></span>
-        <span id="rsePreState" class="rs-note" style="margin:0;flex-basis:100%">Waiting for your spin…</span>
-        <span id="rsePreVerdict" style="flex-basis:100%"></span>
-      </div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
-        <button type="button" class="rs-btn" id="rsePreGo" disabled>Start the experiment →</button>
-        <button type="button" class="rs-ghostbtn" id="rsePreSkip">Skip check</button>
-        <button type="button" class="rs-ghostbtn" id="rsePreCancel">Cancel</button>
-        <button type="button" class="rs-mini" id="rsePreSimSpin" ${cap.simActive() ? '' : 'style="display:none"'}>SIM: spin</button>
-      </div>`;
-    cap.start({ kind: 'preflight' });
-    recordingActive = true;
-    preTimer = setInterval(() => {
-      const rec = cap.rec();
-      if(!rec) return;
-      const { rpm: trueRpm } = liveRpmOf(rec);
-      host.querySelector('#rsePreRpm').textContent = fmtRpm(trueRpm);
-      const clock = host.querySelector('#rseClock');
-      if(clock) clock.textContent = fmtClock(cap.now() / 1000);
-      // guided state line + progress bar: the check narrates itself
-      const bar = host.querySelector('#rsePreBar');
-      const state = host.querySelector('#rsePreState');
-      if(preflight.status === 'none' && state){
-        if(rec.maxRpm <= 140){
-          state.textContent = trueRpm > 5
-            ? 'A bit more speed needed — stop the wheel and give it one really strong spin.'
-            : 'Waiting for your spin… (one strong flick, then let go)';
-          if(bar) bar.style.width = '0%';
-        } else if(trueRpm >= 5){
-          state.textContent = 'Good spin! Now hands off — measuring how the wheel slows down…';
-          // progress: how far the coast has come down from the peak toward 5 rpm (log scale)
-          const p = Math.max(0, Math.min(1, (Math.log(rec.maxRpm) - Math.log(Math.max(5, trueRpm))) / (Math.log(rec.maxRpm) - Math.log(5))));
-          if(bar) bar.style.width = Math.round(p * 100) + '%';
-        }
-      }
-      // verdict as soon as the coast is measurable: peaked > 140 and now < 5 rpm
-      if(preflight.status === 'none' && rec.maxRpm > 140 && trueRpm < 5 && rec.rpmPts.length > 6){
-        const curve = buildCurve(rec.rpmPts, 0, cap.now());
-        if(curve && curve.T245 != null && coef.T24_5){
-          const ratio = curve.T245 / coef.T24_5;
-          preflight = { status: Math.abs(ratio - 1) <= 0.08 ? 'green' : Math.abs(ratio - 1) <= 0.16 ? 'amber' : 'red', ratio: Math.round(ratio * 100) / 100 };
-          if(bar) bar.style.width = '100%';
-          const v = host.querySelector('#rsePreVerdict');
-          v.innerHTML = preflight.status === 'green'
-            ? '<span class="rs-verdict rs-vg">✓ The room matches your calibration — good to go.</span>'
-            : preflight.status === 'amber'
-              ? `<span class="rs-verdict rs-vy">The room behaves ${Math.round(Math.abs(preflight.ratio - 1) * 100)}% differently than at calibration. Lift the wheel off, set it back on, and spin once more — or continue (the difference is recorded).</span>`
-              : '<span class="rs-verdict rs-vr">The room is very different from your calibration. Best to recalibrate before trusting today\'s numbers.</span>';
-          state.textContent = 'Done. The wheel took ' + curve.T245.toFixed(1) + ' s to slow from 24 to 5 rpm — your calibration says ' + coef.T24_5 + ' s.';
-          host.querySelector('#rsePreGo').disabled = false;
-        }
-      }
-    }, 250);
-    const cleanupPre = () => { if(preTimer){ clearInterval(preTimer); preTimer = null; } };
-    host.querySelector('#rsePreGo').addEventListener('click', () => { cleanupPre(); cap.discard(); startLive(); });
-    host.querySelector('#rsePreSkip').addEventListener('click', () => {
-      cleanupPre(); cap.discard();
-      preflight = { status: 'skip', ratio: null };
-      startLive();
-    });
-    host.querySelector('#rsePreCancel').addEventListener('click', () => cancelPreflight());
-    host.querySelector('#rsePreSimSpin').addEventListener('click', () => cap.simSpin());
-  }
-
-  // Every pre-flight exit that does NOT continue into the live stage lands
-  // here: timer cleared, capture discarded, back to setup.
-  function cancelPreflight(message){
-    if(preTimer){ clearInterval(preTimer); preTimer = null; }
-    cap.discard();
-    recordingActive = false;
-    stage = 'setup';
-    const run = host.querySelector('#rseRun');
-    if(run) run.style.display = 'none';
-    const setup = host.querySelector('#rseSetup');
-    if(setup) setup.style.display = '';
-    const runs = host.querySelector('#rseRunsCard');
-    if(runs) runs.style.display = '';
-    if(message){
-      const msg = host.querySelector('#rseMsg');
-      if(msg){ msg.className = 'rs-msg err'; msg.textContent = message; }
-    }
+    const st = host.querySelector('#rseStatus');
+    st.innerHTML = `
+      <span class="rs-rec"></span><b style="color:#c2415b">REC</b>
+      <span id="rseClock" style="font-variant-numeric:tabular-nums">0:00</span>
+      <span class="rs-pill">${esc(wheel ? wheel.serial : '?')}</span>
+      <span class="rs-pill" title="Every torque number leans on this calibration">${cal ? 'cal: ' + esc((cal.location || 'room') + ' · ' + new Date(cal.created_at).toLocaleDateString('en-GB')) : 'cal: factory'}</span>
+      ${sel.subject ? `<span class="rs-pill">${avatarHtml(sel.subject.avatarUrl, sel.subject.displayName)} ${esc(sel.subject.displayName)}</span>` : ''}
+      <span id="rseBleDot">${bleState.connected ? '🔵' : cap.simActive() ? '<span class="rs-kbadge sim">SIM</span>' : '⚪'}</span>
+      <span id="rseFreeze"></span>
+      <span class="rs-presets" id="rsePresets">
+        <button type="button" class="rs-preset on" data-preset="60">60 s</button>
+        <button type="button" class="rs-preset" data-preset="300">5 min</button>
+        <button type="button" class="rs-preset" data-preset="full">Full</button>
+      </span>`;
+    st.querySelectorAll('[data-preset]').forEach(b => b.addEventListener('click', () => {
+      st.querySelectorAll('[data-preset]').forEach(x => x.classList.toggle('on', x === b));
+      if(stack) stack.setPreset(b.dataset.preset);
+    }));
   }
 
   // ---------------- live ----------------
@@ -1054,7 +987,6 @@ function mountExperiments(host, a){
     cap.start({ kind: 'experiment' });
     recordingActive = true;
     buildRunUi();
-    host.querySelector('#rsePre').style.display = 'none';
     host.querySelector('#rseHero').style.display = '';
     host.querySelector('#rseStack').style.display = '';
     host.querySelector('#rseTools').style.display = '';
@@ -1130,12 +1062,11 @@ function mountExperiments(host, a){
     const samplesCsv = store.buildSamplesCsv(rec);
     const sha = await store.sha256Hex(samplesCsv);
     const summary = store.summarizeRun(rec, {
-      preflight: m.preflight || 'none',
       coasts: rec.spins.map(s => ({ n: s.n, t_start_ms: s.t_start_ms, t_end_ms: s.t_end_ms, T24_5: s.T24_5 ?? null, max_rpm: s.max_rpm, interrupted: !!s.interrupted, tail: s.tail || null })),
     });
     const title = store.makeTitle(m.labels || [], rec.startedAt);
     const wheel = wheels.find(w => w.id === m.wheelId) || (c.wheels || []).find(w => w.id === m.wheelId);
-    const env = { ua: navigator.userAgent, preflight: m.preflight || 'none' };
+    const env = { ua: navigator.userAgent };
     if(rec.simUsed) env.sim = true;
     const cal = cals.find(x => x.id === m.calId);
     if(cal) env.calibration_age_days = store.calAgeDays(cal);
@@ -1198,9 +1129,9 @@ function mountExperiments(host, a){
           <span>${esc(wheel ? wheel.serial : '?')}</span>
           ${m.subject ? `<span>subject: ${avatarHtml(m.subject.avatarUrl || (sel.subject && sel.subject.avatarUrl), m.subject.name)} <b>${esc(m.subject.name)}</b></span>` : ''}
           <span>${built.summary.duration_s}s · peak <b>${built.summary.peak_rpm} rpm</b> · ${built.summary.revolutions} rev</span>
-          <span>${(m.labels || []).map(l => '#' + esc(l)).join(' ')}</span>
           <span>${res.id ? '<b style="color:#0f8a52">DB ✓</b>' : '<b style="color:#c2415b">DB failed</b>'}</span>
         </div>
+        <div id="rseSumLabels"></div>
         ${err ? `<div class="rs-warn">${err}</div>` : ''}
         <div class="rs-hash">SHA-256 (samples.csv): ${built.sha}<br><span style="color:#99a2a7">File hash — proof the exported data is unaltered.</span></div>
         <div class="rs-dl" id="rseDl">
@@ -1225,7 +1156,51 @@ function mountExperiments(host, a){
       host.querySelector('#rseRunsCard').style.display = '';
       buildSetup(); paintRuns();
     });
+    renderSummaryLabels(res.id, m);
     paintRuns();
+  }
+
+  // Post-run label editing on the summary card — things often become clear
+  // only AFTER a measurement; every tap saves straight to the run row.
+  function renderSummaryLabels(runId, m){
+    const boxEl = host.querySelector('#rseSumLabels');
+    if(!boxEl) return;
+    const current = new Set(m.labels || []);
+    const save = async () => {
+      m.labels = [...current];
+      if(runId) await store.updateRun(runId, { labels: m.labels });
+      paintRuns();
+    };
+    const paint = () => {
+      boxEl.innerHTML = `
+        <div style="font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#67737c;margin:10px 0 8px">
+          Labels — tap to add or remove${runId ? ' (saves instantly)' : ''}</div>
+        <div class="rs-chips">${labels.map(l =>
+          `<span class="rs-chip ${current.has(l.label) ? 'on' : ''}" data-sl="${esc(l.label)}">#${esc(l.label)}</span>`).join('')}
+          <span class="rs-newlabel"><input id="rseSumNew" type="text" placeholder="#new" autocomplete="off">
+          <button type="button" class="rs-mini" id="rseSumAdd">+</button></span></div>`;
+      boxEl.querySelectorAll('[data-sl]').forEach(chip => chip.addEventListener('click', async () => {
+        const l = chip.dataset.sl;
+        current.has(l) ? current.delete(l) : current.add(l);
+        chip.classList.toggle('on');
+        save();
+      }));
+      const add = async () => {
+        const inp = boxEl.querySelector('#rseSumNew');
+        const v = inp.value.trim();
+        if(!v) return;
+        const { row, error } = await store.addLabel(uid, v);
+        if(error || !row) return;
+        if(!labels.find(x => x.label === row.label)) labels.push(row);
+        c.labels = labels;
+        current.add(row.label);
+        paint();
+        save();
+      };
+      boxEl.querySelector('#rseSumAdd').addEventListener('click', add);
+      boxEl.querySelector('#rseSumNew').addEventListener('keydown', e => { if(e.key === 'Enter') add(); });
+    };
+    paint();
   }
 
   // built is REQUIRED: the samples CSV bytes must be the exact ones the saved
@@ -1239,7 +1214,7 @@ function mountExperiments(host, a){
       researcherName: a.displayName || '', subjectName: m.subject ? m.subject.name : '', subjectUserId: m.subject ? m.subject.id : '',
       wheelSerial: wheel.serial || '', wheelNickname: wheel.nickname || '',
       tempC: m.tempC, rhPct: m.rhPct, labels: m.labels, notes: m.notes,
-      preflight: m.preflight, calibrationId: m.calId || '', coef: cal ? cal.coef : null,
+      calibrationId: m.calId || '', coef: cal ? cal.coef : null,
       sha256: built.sha,
     };
     // the merged marker stream (user markers + engine events) for the CSV
@@ -1292,7 +1267,6 @@ function mountExperiments(host, a){
     else cap.discard();
     recordingActive = false;
     if(uiTimer){ clearInterval(uiTimer); uiTimer = null; }
-    if(preTimer){ clearInterval(preTimer); preTimer = null; }
     if(stack){ stack.destroy(); stack = null; }
     cap.detach();
     if(unsubStatus) unsubStatus();
@@ -1358,10 +1332,10 @@ function mountRunDetail(el, runId){
           <span>calibration: <b>${cal ? esc((cal.location || 'room') + ' · ' + new Date(cal.created_at).toLocaleDateString('en-GB')) : 'factory model'}</b></span>
           <span>${row.temp_c != null ? row.temp_c + '°C' : '—'} · ${row.rh_pct != null ? row.rh_pct + '%' : '—'}</span>
           ${subject ? `<span>subject: ${avatarHtml(subject.avatar_url, subject.display_name)} <b>${esc(subject.display_name)}</b></span>` : ''}
-          <span>pre-flight: <b>${esc((row.env && row.env.preflight) || 'none')}</b></span>
           <span>${s.duration_s || 0}s · peak <b>${s.peak_rpm ?? '—'} rpm</b> · mean ${s.mean_rpm ?? '—'} rpm · ${s.revolutions ?? '—'} rev · ${s.coast_count || 0} coast${(s.coast_count || 0) === 1 ? '' : 's'}</span>
-          <span>${(row.labels || []).map(l => '#' + esc(l)).join(' ')}</span>
+          ${isOwner ? '' : `<span>${(row.labels || []).map(l => '#' + esc(l)).join(' ')}</span>`}
         </div>
+        ${isOwner ? '<div id="rsdLabels"></div>' : ''}
         ${row.notes ? `<p class="rs-note">${esc(row.notes)}</p>` : ''}
         <div id="rsdStackHost"></div>
         <div class="rs-hash">SHA-256 (samples.csv): ${esc(row.sha256 || '—')}</div>
@@ -1412,7 +1386,7 @@ function mountRunDetail(el, runId){
         subjectName: subject ? subject.display_name : '', subjectUserId: row.subject_user_id || '',
         wheelSerial: wheel ? wheel.serial : '', wheelNickname: wheel ? wheel.nickname : '',
         tempC: row.temp_c, rhPct: row.rh_pct, labels: row.labels, notes: row.notes,
-        preflight: (row.env && row.env.preflight) || '', calibrationId: row.calibration_id || '',
+        calibrationId: row.calibration_id || '',
         coef: cal ? cal.coef : null, sha256: row.sha256 || '',
       };
       if(b.dataset.dl === 'samples') store.downloadText(base + '_samples.csv', store.buildSamplesCsv(rec));
@@ -1426,6 +1400,42 @@ function mountRunDetail(el, runId){
       await store.deleteRun(runId);
       location.hash = '#/research';
     });
+
+    // Owner can edit labels here too — insight often comes after the fact.
+    const labBox = el.querySelector('#rsdLabels');
+    if(labBox && isOwner){
+      const vocab = await store.listLabels(a.user.id);
+      const current = new Set(row.labels || []);
+      const paintLab = () => {
+        labBox.innerHTML = `
+          <div style="font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#67737c;margin:4px 0 8px">
+            Labels — tap to add or remove (saves instantly)</div>
+          <div class="rs-chips">${vocab.map(l =>
+            `<span class="rs-chip ${current.has(l.label) ? 'on' : ''}" data-dl-label="${esc(l.label)}">#${esc(l.label)}</span>`).join('')}
+            <span class="rs-newlabel"><input id="rsdNewLabel" type="text" placeholder="#new" autocomplete="off">
+            <button type="button" class="rs-mini" id="rsdAddLabel">+</button></span></div>`;
+        labBox.querySelectorAll('[data-dl-label]').forEach(chip => chip.addEventListener('click', async () => {
+          const l = chip.dataset.dlLabel;
+          current.has(l) ? current.delete(l) : current.add(l);
+          chip.classList.toggle('on');
+          await store.updateRun(runId, { labels: [...current] });
+        }));
+        const add = async () => {
+          const inp = labBox.querySelector('#rsdNewLabel');
+          const v = inp.value.trim();
+          if(!v) return;
+          const { row: lr, error } = await store.addLabel(a.user.id, v);
+          if(error || !lr) return;
+          if(!vocab.find(x => x.label === lr.label)) vocab.push(lr);
+          current.add(lr.label);
+          paintLab();
+          await store.updateRun(runId, { labels: [...current] });
+        };
+        labBox.querySelector('#rsdAddLabel').addEventListener('click', add);
+        labBox.querySelector('#rsdNewLabel').addEventListener('keydown', e => { if(e.key === 'Enter') add(); });
+      };
+      paintLab();
+    }
   }
 
   unsub = auth.subscribeAuth(load);

@@ -69,7 +69,11 @@ function buildPipeline(samples, coef, floorTau){
     const s = samples[i];
     if(i > 0){
       const dt = s.t - samples[i - 1].t;
-      const expected = Math.max(0.7, 60 / Math.max(0.5, s.rpm));
+      // Measured on the batch-1 raw data (2026-08-14): a FRESH counter arrives
+      // every ~0.7 s at ANY speed (the 72 teeth keep the sensor fed even at
+      // 2 rpm — NOT one update per revolution). Below ~2 rpm consecutive
+      // readings often repeat the same counter, so allow extra slack there.
+      const expected = s.rpm >= 2 ? 0.7 : 1.5;
       if(dt > 2.5 * expected + 2) gap[i] = true;
       // jump rule (re-flick / touch): blank the estimator through the jump
     }
@@ -736,8 +740,8 @@ export function createPanelStack(host, opts){
 
     quality: {
       title: 'Data quality / sample cadence', h: 180,
-      formula: 'Δt = t_i − t_{i−1}    ·    expected ≈ max(0.7 s, 60/ω)',
-      explain: 'WHAT: a health check of the measurement itself — how often a genuinely new reading arrived. LOOK AT: the red stripes: those are radio dropouts, and they explain any missing pieces in the charts above. MEANS: sparse dots at low speed are NORMAL (the wheel reports once per turn, so a slow wheel reports rarely) — only the red stripes are actual data loss.',
+      formula: 'Δt = t_i − t_{i−1}    ·    expected ≈ 0.7 s (the device refreshes ~1.4× per second at any speed)',
+      explain: 'WHAT: a health check of the measurement itself — how often a genuinely new reading arrived. LOOK AT: the dots should sit close to the dashed 0.7 s line; red stripes are radio dropouts and they explain any missing pieces in the charts above. MEANS: dots drifting above the line with no red stripe just mean the reading repeated itself (the wheel was nearly still) — only the red stripes are actual data loss.',
       draw(ctx, W, H){
         const p = ensurePipe();
         const { xOf } = timeAxis(W);
@@ -748,14 +752,13 @@ export function createPanelStack(host, opts){
         };
         ctx.font = '10px Inter, sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
         for(const v of [0.7, 2, 5, 15]){ ctx.fillStyle = GREY; ctx.fillText(v + 's', PAD_L - 6, yOf(v)); ctx.strokeStyle = 'rgba(1,22,36,0.05)'; ctx.beginPath(); ctx.moveTo(PAD_L, yOf(v)); ctx.lineTo(W - PAD_R, yOf(v)); ctx.stroke(); }
-        // expected-cadence dashed curve
+        // expected cadence: flat ~0.7 s (measured on the batch-1 raw data —
+        // the device refreshes at ~1.4 Hz regardless of wheel speed)
         ctx.setLineDash([4, 4]); ctx.strokeStyle = FAINT; ctx.lineWidth = 1.2;
-        ctx.beginPath(); let pen = false;
-        for(const s of visSamples()){
-          const e = Math.max(0.7, 60 / Math.max(0.5, s.rpm));
-          pen ? ctx.lineTo(xOf(s.t), yOf(e)) : ctx.moveTo(xOf(s.t), yOf(e)); pen = true;
-        }
-        ctx.stroke(); ctx.setLineDash([]);
+        ctx.beginPath(); ctx.moveTo(PAD_L, yOf(0.7)); ctx.lineTo(W - PAD_R, yOf(0.7)); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = FAINT; ctx.font = '9.5px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+        ctx.fillText('expected ~0.7 s', PAD_L + 4, yOf(0.7) - 2);
         ctx.fillStyle = INK;
         for(let i = 1; i < samples.length; i++){
           const t = samples[i].t;

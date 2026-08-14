@@ -224,7 +224,6 @@ export function buildMetaCsv(rec, meta){
     ['env_rh_pct', meta.rhPct == null ? '' : meta.rhPct],
     ['labels', (meta.labels || []).join('|')],
     ['notes', meta.notes || ''],
-    ['preflight', meta.preflight || ''],
     ['calibration_id', meta.calibrationId || ''],
     ['calibration_model', 'decel[rpm/s] = A + B*w + K*w^1.5 (w in rpm)'],
     ['calibration_A', meta.coef ? meta.coef.A : ''],
