@@ -6,42 +6,30 @@
 // crossing) with the IDEAL curve computed from the fitted physics model and a
 // tolerance band; per-spin score + grade; braking-vs-speed (derivative) chart;
 // removable chart entries so a long test session stays readable.
-// The capture engine (raw logging, segmentation, DB+JSON save) is unchanged —
-// DB table stays `wheel_bench`, no SQL migration needed.
 //
-// The spike filter in ble.js holds the de-spiked `led` LOW through a fast jump
-// into the top rail (a hand-spin looks exactly like the PIC glitch), so this
-// tool displays and segments on frame.rawLed; both values are recorded.
+// v3: the capture engine (raw logging, rawLed segmentation, glitch guards, tail
+// watch, simulator, dev feed) moved VERBATIM to the shared wheel-capture.js so
+// the Research workbench records with the same pipeline. This file keeps what
+// is factory-QC specific: scoring, the ideal-model charts, and the wheel_bench
+// save. Behavior and the wheel_bench payload format are unchanged.
 import { supabase } from './db.js';
 import * as ble from './ble.js';
-import * as wakeLock from './wake-lock.js';
+import {
+  createCapture, buildCurve, crossTime, integrateModel, downloadJson, setupCanvas,
+  rpmOf, RPM_MIN_COUNTER, FORMAT, TAIL_OBS_MS,
+  CURVE_X_MIN, CURVE_X_MAX, CURVE_Y_MIN, CURVE_Y_MAX,
+} from './wheel-capture.js';
 
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
 
 const MAX_CAPTURE_MS   = 15 * 60 * 1000; // safety stop for a forgotten recorder
-const SPIN_START_LED   = 6;      // rawLed at/above this...
-const SPIN_START_HITS  = 2;      // ...on this many consecutive NEW reports = spin started
-const SPIN_MIN_MS      = 6000;   // shorter segments = handling bumps, not spins
-// Untouched-tail observation: once the wheel is down at/below TAIL_LOW_RPM the
-// spin stays open for a fixed watch window — hands off! — and what the wheel
-// does in it (stays dead, or keeps being nudged by ambient air) is recorded as
-// the tail metrics: the SENSITIVITY axis the coast-down alone cannot see.
-// Fixed-length window on purpose: comparable between wheels of one session.
-const TAIL_LOW_RPM     = 5;      // rawLed at/below this = tail phase
-const TAIL_OBS_MS      = 30000;  // watch this long, then the spin closes
 
-// The recorded tuple layout — single owner for ingest, payload format string,
-// and any future decoder. Bump the format version on ANY change here.
-const FRAME_COLS = ['t_ms', 'counter', 'raw_led', 'led'];
-const FORMAT = 'wheel-bench v1; frames=[' + FRAME_COLS.join(',') + ']; led=rpm (0-24, device-railed at 24); true rpm=6000/counter';
-
-// Decoded 2026-08-14 from the first real bench capture, validated against the
-// device's own LED on every frame: the 16-bit counter is the revolution period
-// in ~10 ms units, so TRUE rpm ~= 6000/counter — and the device keeps measuring
-// far above the 24-rpm display rail (500 rpm observed on a hand spin).
-// counter 0 = standstill. Absolute scale to be confirmed by video (~3%).
-const rpmOf = c => c > 0 ? 6000 / c : 0;
-const RPM_MIN_COUNTER = 8;   // counter below this (>750 rpm) = glitch/artifact, ignore for stats
+// Chart geometry — the anchored-curve bounds come from the shared engine so the
+// curves and the renderers can never drift apart.
+const X_MIN = CURVE_X_MIN, X_MAX = CURVE_X_MAX;
+const Y_MIN = CURVE_Y_MIN, Y_MAX = CURVE_Y_MAX;
+const Y_TICKS = [2, 5, 10, 24, 50, 100, 200, 400];
+const PALETTE = ['#0a7a5c', '#b8860b', '#0033ff', '#c2415b', '#7c3aed', '#0e7490', '#b45309', '#be185d', '#4d7c0f', '#6b7280'];
 
 // ---- Ideal wheel model (fitted 2026-08-14 from the batch-1 best-seating spins;
 // 8 wheels, 50+ recordings; grid-fit with physical constraints A,B,K >= 0):
@@ -51,38 +39,10 @@ const RPM_MIN_COUNTER = 8;   // counter below this (>750 rpm) = glitch/artifact,
 const IDEAL_A = 0.24, IDEAL_B = 0.0, IDEAL_K = 0.025;
 const SCORE_REF_T245 = 15.0;             // score-100 anchor: excellent seating
 const BAND_FAST = 0.88, BAND_SLOW = 1.12; // tolerance band = ideal curve time-scaled
-// Chart geometry
-const X_MIN = -12, X_MAX = 48;           // seconds relative to the 24-rpm crossing (fits decay + tail watch)
-const Y_MIN = 1.6, Y_MAX = 620;          // rpm, log scale
-const Y_TICKS = [2, 5, 10, 24, 50, 100, 200, 400];
-const PALETTE = ['#0a7a5c', '#b8860b', '#0033ff', '#c2415b', '#7c3aed', '#0e7490', '#b45309', '#be185d', '#4d7c0f', '#6b7280'];
 
-// Integrate the ideal model downward from 450 rpm and anchor t=0 at 24 rpm.
-// Also computes where the ideal wheel comes to a FULL STOP in dead-calm air
-// (the Coulomb term guarantees a finite stop): ~29 s after the 24-rpm crossing.
-function buildIdealModel(){
-  const pts = [];
-  let w = 450, t = 0;
-  while(w > 0.05 && t < 300){
-    if(w >= Y_MIN) pts.push({ t, w });
-    w -= (IDEAL_A + IDEAL_B * w + IDEAL_K * Math.pow(w, 1.5)) * 0.02;
-    t += 0.02;
-  }
-  const tStop = t;
-  let t24 = null;
-  for(let i = 1; i < pts.length; i++){
-    if(pts[i].w <= 24){
-      const a = pts[i - 1], b = pts[i];
-      t24 = a.t + (Math.log(a.w) - Math.log(24)) / (Math.log(a.w) - Math.log(b.w)) * (b.t - a.t);
-      break;
-    }
-  }
-  const out = [];
-  for(let i = 0; i < pts.length; i += 10)   // thin to ~5/s for drawing
-    out.push({ x: pts[i].t - t24, y: pts[i].w });
-  return { pts: out, stopX: tStop - t24 };
-}
-const IDEAL_MODEL = buildIdealModel();
+// Integrate the ideal model downward from 450 rpm and anchor t=0 at 24 rpm
+// (shared integrator). IDEAL_MODEL.stopX (~29.4 s) = dead-calm full stop.
+const IDEAL_MODEL = integrateModel({ A: IDEAL_A, B: IDEAL_B, K: IDEAL_K });
 const IDEAL_PTS = IDEAL_MODEL.pts;
 // IDEAL_MODEL.stopX (~29.4 s) = dead-calm full stop; kept for reference/guide,
 // deliberately NOT drawn on the chart (owner's call: no extra markers).
@@ -174,19 +134,6 @@ function styles(){
   document.head.appendChild(el);
 }
 
-// One recorded-wheel payload -> local JSON download (always works, even with no
-// table / no network). Bench sessions are irreplaceable field data.
-function downloadJson(payload){
-  const name = 'wheel-bench_' + (payload.serial || 'unknown').replace(/[^a-z0-9_-]+/gi, '-')
-    + '_' + payload.started_at.replace(/[:.]/g, '-') + (payload.env && payload.env.sim ? '_SIM' : '') + '.json';
-  const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = name;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 4000);
-}
-
 // ---- scoring ----------------------------------------------------------------
 // Tail verdict: human-readable read of the untouched-tail metrics. Depends on
 // the room's air as much as the wheel, so the label is descriptive and the
@@ -220,63 +167,7 @@ function idealAt(x){
   return null;
 }
 
-// Interpolated time where an anchored curve crosses `rpm` downward (after peak).
-function crossTime(pts, rpm){
-  let pk = 0;
-  for(let i = 1; i < pts.length; i++) if(pts[i].y > pts[pk].y) pk = i;
-  for(let i = pk + 1; i < pts.length; i++){
-    if(pts[i].y <= rpm && pts[i - 1].y > rpm){
-      const a = pts[i - 1], b = pts[i];
-      return a.x + (Math.log(a.y) - Math.log(rpm)) / (Math.log(a.y) - Math.log(b.y)) * (b.x - a.x);
-    }
-  }
-  return null;
-}
-
-// Build an anchored chart curve from raw rpm points of one spin window.
-// Anchor: t=0 at a downward 24-rpm crossing. A struggling spin-up (several
-// flick attempts, finger touches) can cross 24 downward more than once, and a
-// hand-grab at the end shows as a fake spike — so EVERY downward crossing is a
-// candidate, and the winner is the one followed by the LONGEST uninterrupted
-// decay. That is always the real, successful spin-down; the mess before it
-// still draws left of t=0. Returns null if the wheel never came down through
-// 24 while recording (weak flick, or Start pressed too late).
-function buildCurve(rpmPts, fromMs, toMs){
-  const pts = rpmPts.filter(p => p.t >= fromMs - 12000 && p.t <= toMs && p.rpm >= Y_MIN)
-    .map(p => ({ x: p.t / 1000, y: Math.min(Y_MAX - 1, p.rpm) }));
-  if(pts.length < 6) return null;
-  let best = null;
-  for(let i = 1; i < pts.length; i++){
-    if(!(pts[i - 1].y > 24 && pts[i].y <= 24)) continue;
-    const a = pts[i - 1], b = pts[i];
-    const t24 = a.x + (Math.log(a.y) - Math.log(24)) / (Math.log(a.y) - Math.log(b.y)) * (b.x - a.x);
-    let end = pts.length - 1;
-    for(let j = i + 1; j < pts.length; j++){
-      if(pts[j].y > pts[j - 1].y * 1.2 && pts[j].y > 3){ end = j - 1; break; }   // re-flick / grab / kick
-    }
-    const dur = pts[end].x - t24;
-    if(!best || dur > best.dur) best = { t24, dur };
-  }
-  if(!best) return null;
-  const anchored = pts.map(p => ({ x: p.x - best.t24, y: p.y })).filter(p => p.x >= X_MIN && p.x <= X_MAX);
-  // score only from the clean decay window that won the anchor
-  const clean = anchored.filter(p => p.x >= 0 && p.x <= best.dur);
-  const t5 = crossTime(clean, 5);
-  return { pts: anchored, T245: t5 != null ? t5 : null };
-}
-
-// ---- chart renderers --------------------------------------------------------
-function setupCanvas(canvas){
-  const w = canvas.clientWidth, h = canvas.clientHeight;
-  if(!w || !h) return null;
-  const dpr = window.devicePixelRatio || 1;
-  if(canvas.width !== Math.round(w * dpr)){ canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
-  const ctx = canvas.getContext('2d');
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, w, h);
-  return { ctx, w, h };
-}
-
+// ---- chart renderers (setupCanvas comes from the shared engine) -------------
 function drawTestChart(canvas, curves, liveCurve){
   const s = setupCanvas(canvas);
   if(!s) return;
@@ -546,198 +437,36 @@ function drawDerivChart(canvas, curves, liveCurve){
 export function mountWheelBench(host){
   styles();
 
-  // ---- capture state --------------------------------------------------------
-  let rec = null;          // active recording (null = idle)
+  // ---- capture wiring (shared engine — wheel-capture.js) --------------------
   let uiTimer = null;
-  let unsubFrames = null, unsubStatus = null;
+  let unsubStatus = null;
   let bleState = ble.getState();
-  let sim = null;          // simulator state (dev/dry-run without a wheel)
 
-  const newRec = (serial, note) => ({
-    serial, note,
-    t0: performance.now(),
-    startedAt: new Date().toISOString(),
-    frames: [],            // FRAME_COLS tuples, one per parsed line
-    events: [],            // {t_ms, type, value?}
-    spins: [],             // completed segments
-    rpmPts: [],            // fresh-counter true-rpm samples {t, rpm} for charts
-    fw: '', hw: '', lastBattery: null,
-    // spin segmentation (rawLed-based — see header comment)
-    lastCounter: null, startHits: 0, firstHitMs: 0, spinning: false,
-    spinStartMs: 0, lowSinceMs: null, maxLed: 0, maxRpm: 0, pendMaxRpm: 0,
-    prevRaw: null, railRun: 0,
-    simUsed: false,
-  });
-
-  const now = () => rec ? Math.round(performance.now() - rec.t0) : 0;
-
-  function ingest(frame, fromSim, tMs){
-    if(!rec) return;
-    // Real frames only flow while connected; the status handler also kills the
-    // sim on connect — this guard is the belt to that suspender, so synthetic
-    // and real data can never interleave in one recording.
-    if(!fromSim && sim) simStop();
-    const t = tMs != null ? tMs : now();   // tMs: dev feed only (deterministic tests)
-    if(fromSim) rec.simUsed = true;
-    rec.frames.push([t, frame.counter, frame.rawLed, frame.led]);
-    if(!rec.fw && frame.fw){ rec.fw = frame.fw; rec.hw = frame.hw; }
-    if(frame.battery !== rec.lastBattery){
-      rec.events.push({ t_ms: t, type: 'battery', value: frame.battery });
-      rec.lastBattery = frame.battery;
-    }
-
-    // --- spin segmentation (bookkeeping only; raw data is saved regardless) ---
-    // Glitch guard: the PIC sometimes reports a spurious 24 for a moment (the
-    // rail glitch ble.js de-spikes). ONLY within an active spin can a jump
-    // >=10 into the >=22 rail be suspect (a coasting wheel never re-accelerates
-    // by itself), and even there it is a glitch only while BRIEF: the PIC
-    // artifact lasts 1-2 report lines, while a genuine RE-FLICK (the admin
-    // spins again mid-segment after a failed attempt) stays railed for many
-    // lines — so after 2 suspect lines the rail is accepted as real motion.
-    // Outside a spin the same pattern IS the normal hand-flick and passes.
-    const railJump = rec.prevRaw != null && frame.rawLed >= 22 && (frame.rawLed - rec.prevRaw) >= 10;
-    rec.railRun = railJump ? rec.railRun + 1 : 0;
-    const glitch = rec.spinning && railJump && rec.railRun <= 2;
-    const fresh = frame.counter !== rec.lastCounter;
-    const rpm = frame.counter >= RPM_MIN_COUNTER ? rpmOf(frame.counter) : 0;
-    if(fresh && !glitch && frame.counter >= RPM_MIN_COUNTER) rec.rpmPts.push({ t, rpm });
-    rec.lastCounter = frame.counter;
-    if(!rec.spinning){
-      if(fresh){
-        if(frame.rawLed >= SPIN_START_LED){
-          if(rec.startHits === 0){ rec.firstHitMs = t; rec.pendMaxRpm = 0; }  // spin window starts at the FIRST high report
-          if(rpm > rec.pendMaxRpm) rec.pendMaxRpm = rpm;   // the true peak usually IS the first report
-          rec.startHits++;
-          if(rec.startHits >= SPIN_START_HITS){
-            rec.spinning = true; rec.spinStartMs = rec.firstHitMs;
-            rec.lowSinceMs = null; rec.maxLed = frame.rawLed; rec.maxRpm = rec.pendMaxRpm;
-            rec.startHits = 0;
-          }
-        } else rec.startHits = 0;
-      }
-    } else if(!glitch){
-      if(frame.rawLed > rec.maxLed) rec.maxLed = frame.rawLed;
-      if(rpm > rec.maxRpm) rec.maxRpm = rpm;
-      // tail watch: fixed window once the wheel is down at/below TAIL_LOW_RPM;
-      // a gust lifting it above resets the watch (the wheel is active again)
-      if(frame.rawLed <= TAIL_LOW_RPM){
-        if(rec.lowSinceMs == null) rec.lowSinceMs = t;
-        else if(t - rec.lowSinceMs >= TAIL_OBS_MS) endSpin();
-      } else rec.lowSinceMs = null;
-    }
-    if(!glitch) rec.prevRaw = frame.rawLed;
-
-    if(t > MAX_CAPTURE_MS) stopAndSave('Auto-stopped after 15 minutes.').catch(() => {});
-  }
-
-  // Close the current segment. endMs: end of the tail-watch window — or, for a
-  // stop pressed mid-coast, the stop moment (marked interrupted).
-  function closeSpin(r, endMs, interrupted){
-    const dur = endMs - r.spinStartMs;
-    if(dur >= SPIN_MIN_MS){
-      const spin = {
-        n: r.spins.length + 1,
-        t_start_ms: r.spinStartMs,
-        t_end_ms: endMs,
-        duration_s: Math.round(dur / 100) / 10,
-        max_led: r.maxLed,
-        max_rpm: Math.round(r.maxRpm),   // TRUE peak from the counter (can far exceed 24)
-      };
-      if(interrupted) spin.interrupted = true;   // tail watch not completed
-      // Tail metrics over the LAST 20 s of the watch window: by then the
-      // natural 5->0 coast is long over, so only the untouched wheel's response
-      // to ambient air remains. avg rpm from EVERY line (zeros included: a
-      // dead-calm wheel scores ~0 -> "stopped"), pickups = fresh-counter upward
-      // jumps at low speed (ambient-air nudges).
-      let tail = null;
-      if(r.lowSinceMs != null && endMs > r.lowSinceMs){
-        const winFrom = Math.max(r.lowSinceMs, endMs - 20000);
-        const win = r.frames.filter(f => f[0] >= winFrom && f[0] <= endMs);
-        if(win.length >= 4){
-          const rpms = win.map(f => f[1] >= RPM_MIN_COUNTER ? 6000 / f[1] : 0);
-          const avg = rpms.reduce((a, b) => a + b, 0) / rpms.length;
-          let pickups = 0, prev = null, lastC = null;
-          for(const f of win){
-            if(f[1] === lastC) continue;
-            lastC = f[1];
-            const rr = f[1] >= RPM_MIN_COUNTER ? 6000 / f[1] : 0;
-            if(prev != null && rr > prev * 1.15 && rr >= 0.8 && rr < 8) pickups++;
-            prev = rr;
-          }
-          tail = { avg_rpm: Math.round(avg * 100) / 100, pickups, stopped: avg < 0.15 };
-          spin.tail = tail;
-        }
-      }
-      r.spins.push(spin);
-      // chart entry (module store — survives wheels and tab switches)
-      const curve = buildCurve(r.rpmPts, r.spinStartMs, endMs);
+  // A closed segment lands on the chart with its factory score. The engine
+  // already computed spin.T24_5 and the tail metrics; the QC score and the
+  // chart entry (module store — survives wheels and tab switches) are this
+  // tool's own business.
+  const cap = createCapture({
+    maxMs: MAX_CAPTURE_MS,
+    onSpinClosed(spin, curve, r){
       if(curve){
         const sc = scoreOf(curve.T245);
-        spin.T24_5 = curve.T245 != null ? Math.round(curve.T245 * 10) / 10 : null;
         spin.score = sc.score;
         chartCurves.push({
           serial: r.serial, spinN: spin.n, color: PALETTE[curveColorIdx++ % PALETTE.length],
-          pts: curve.pts, T245: curve.T245, tail, ...sc,
+          pts: curve.pts, T245: curve.T245, tail: spin.tail || null, ...sc,
         });
       }
-    }
-    r.spinning = false; r.lowSinceMs = null; r.maxLed = 0; r.maxRpm = 0;
-  }
-  function endSpin(){
-    closeSpin(rec, rec.lowSinceMs + TAIL_OBS_MS, false);
-    paintCurves();
-  }
-
-  // ---- simulator (only offered while idle with no wheel connected) ----------
-  // Mimics the real stream: ~14 lines/s, a NEW counter only every ~700 ms,
-  // physics-shaped decay, integer 0-24 LED railed at 24. Recordings made with
-  // it are tagged SIM everywhere, and it auto-stops when a real wheel connects.
-  function simStart(){
-    if(sim) return;
-    sim = { omega: 0, counter: 1000, lastReport: 0, lineTimer: null, physTimer: null };
-    sim.physTimer = setInterval(() => {           // 50 ms physics steps
-      const w = sim.omega;
-      if(w > 0.002) sim.omega = Math.max(0, w - 0.05 * (0.009 + 0.15 * w + 0.035 * Math.pow(w, 1.5)));
-    }, 50);
-    sim.lineTimer = setInterval(() => {           // ~14 lines/s, new counter ~700 ms
-      if(!sim) return;
-      const t = performance.now();
-      const rpm = sim.omega * 60 / (2 * Math.PI);
-      if(t - sim.lastReport >= 700 && rpm >= 0.3){
-        sim.lastReport = t;
-        // real device formula: counter = rev period in ~10 ms units = 6000/rpm
-        sim.counter = Math.min(65535, Math.max(1, Math.round(6000 / Math.max(rpm, 0.5))));
-      }
-      const led = Math.max(0, Math.min(24, Math.round(rpm)));
-      ingest({ counter: sim.counter, rawLed: led, led, battery: 'OK', hw: 'SIM', fw: 'SIM' }, true);
-    }, 71);
-    paintLive();
-  }
-  function simSpin(){ if(sim) sim.omega = (150 + Math.random() * 220) * 2 * Math.PI / 60; }   // real hand spins hit 150-500 rpm
-  function simStop(){
-    if(!sim) return;
-    clearInterval(sim.lineTimer); clearInterval(sim.physTimer); sim = null;
-  }
-
-  // ---- capture lifecycle ----------------------------------------------------
-  function warnUnload(e){ e.preventDefault(); e.returnValue = ''; }
-
-  // Release everything a recording holds. Sync and idempotent — called from
-  // every path that ends a capture, BEFORE any async save work, so an error
-  // later can never leave the wake lock or the leave-warning armed.
-  function releaseCapture(){
-    wakeLock.release();
-    window.removeEventListener('beforeunload', warnUnload);
-    if(uiTimer){ clearInterval(uiTimer); uiTimer = null; }
-  }
+      paintCurves();
+    },
+    onAutoStop(){ stopAndSave('Auto-stopped after 15 minutes.').catch(() => {}); },
+  });
 
   function start(){
     const serial = host.querySelector('#awbSerial').value.trim();
     if(!serial){ setMsg('err', 'Enter the wheel serial number first.'); return; }
-    if(!bleState.connected && !sim){ setMsg('err', 'Connect the wheel first (header Connect button), or enable the simulator.'); return; }
-    rec = newRec(serial, host.querySelector('#awbNote').value.trim());
-    wakeLock.acquire();
-    window.addEventListener('beforeunload', warnUnload);
+    if(!bleState.connected && !cap.simActive()){ setMsg('err', 'Connect the wheel first (header Connect button), or enable the simulator.'); return; }
+    cap.start({ serial, note: host.querySelector('#awbNote').value.trim() });
     setMsg('', '');
     paintBle();                 // hides the sim offer for the recording's duration
     paintLive();
@@ -745,24 +474,18 @@ export function mountWheelBench(host){
   }
 
   async function stopAndSave(reason){
-    if(!rec) return;
-    const r = rec; rec = null;
-    releaseCapture();
-    // Close an in-flight segment at the stop moment. Interrupted only when the
-    // wheel was still coasting above the tail threshold (decay incomplete);
-    // a Stop pressed mid-tail-watch keeps the spin with partial tail metrics.
-    if(r.spinning){
-      const lastT = r.frames.length ? r.frames[r.frames.length - 1][0] : r.spinStartMs;
-      closeSpin(r, lastT, r.lowSinceMs == null);
-      paintCurves();
-    }
+    // cap.stop() releases the wake lock + leave-warning synchronously and closes
+    // an in-flight segment (via onSpinClosed) before returning the record.
+    const r = cap.stop();
+    if(!r) return;
+    if(uiTimer){ clearInterval(uiTimer); uiTimer = null; }
 
     const env = readEnv();
     if(r.simUsed) env.sim = true;
     const payload = {
       serial: r.serial, notes: r.note || null, env,
       fw: r.fw || null, hw: r.hw || null,
-      started_at: r.startedAt, ended_at: new Date().toISOString(),
+      started_at: r.startedAt, ended_at: r.endedAt || new Date().toISOString(),
       frame_count: r.frames.length, spins: r.spins, frames: r.frames, events: r.events,
       format: FORMAT,
     };
@@ -793,10 +516,10 @@ export function mountWheelBench(host){
   }
 
   function discard(){
-    if(!rec) return;
+    if(!cap.isRecording()) return;
     if(!confirm('Discard this recording? Nothing will be saved.')) return;
-    rec = null;
-    releaseCapture();
+    cap.discard();
+    if(uiTimer){ clearInterval(uiTimer); uiTimer = null; }
     paintBle(); paintLive();
   }
 
@@ -822,21 +545,22 @@ export function mountWheelBench(host){
     // The sim offer only appears while IDLE and disconnected: enabling it
     // mid-recording (e.g. after a BLE drop) would flood a real capture with
     // synthetic frames and SIM-tag a genuine wheel's data.
-    const simBtn = (!rec && !bleState.connected)
-      ? ` <button type="button" class="awb-mini" id="awbSimBtn">${sim ? 'Simulator ON' : 'Enable simulator (test only)'}</button>` : '';
+    const simBtn = (!cap.isRecording() && !bleState.connected)
+      ? ` <button type="button" class="awb-mini" id="awbSimBtn">${cap.simActive() ? 'Simulator ON' : 'Enable simulator (test only)'}</button>` : '';
     b.innerHTML = bleState.connected
       ? `<span class="dot"></span><span>Wheel <b>connected</b>${bleState.deviceName ? ' · ' + esc(bleState.deviceName) : ''} — ready to test.</span>`
       : `<span class="dot"></span><span>No wheel connected — use the header <b>Connect</b> button.${simBtn}</span>`;
     const sb = host.querySelector('#awbSimBtn');
-    if(sb) sb.addEventListener('click', () => { simStart(); paintBle(); });
+    if(sb) sb.addEventListener('click', () => { cap.simStart(); paintLive(); paintBle(); });
     const startBtn = host.querySelector('#awbStart');
-    if(startBtn) startBtn.disabled = !!rec || (!bleState.connected && !sim);
+    if(startBtn) startBtn.disabled = cap.isRecording() || (!bleState.connected && !cap.simActive());
   }
 
   // in-progress spin as an anchored chart curve (null until it crosses 24 rpm)
   function liveCurve(){
+    const rec = cap.rec();
     if(!rec || !rec.spinning) return null;
-    return buildCurve(rec.rpmPts, rec.spinStartMs, now());
+    return buildCurve(rec.rpmPts, rec.spinStartMs, cap.now());
   }
 
   function paintCharts(){
@@ -852,18 +576,19 @@ export function mountWheelBench(host){
   function paintLive(){
     const live = host.querySelector('#awbLive');
     if(!live) return;
+    const rec = cap.rec();
     const btnStart = host.querySelector('#awbStart');
     const btnStop = host.querySelector('#awbStop');
     const btnDiscard = host.querySelector('#awbDiscard');
     const btnSimSpin = host.querySelector('#awbSimSpin');
-    btnStart.disabled = !!rec || (!bleState.connected && !sim);
+    btnStart.disabled = !!rec || (!bleState.connected && !cap.simActive());
     btnStop.style.display = rec ? '' : 'none';
     btnDiscard.style.display = rec ? '' : 'none';
-    btnSimSpin.style.display = (rec && sim) ? '' : 'none';
+    btnSimSpin.style.display = (rec && cap.simActive()) ? '' : 'none';
     if(!rec){ live.style.display = 'none'; paintCharts(); return; }
     live.style.display = '';
 
-    const t = now();
+    const t = cap.now();
     const last = rec.frames.length ? rec.frames[rec.frames.length - 1] : null;
     // Big readout = TRUE rpm from the counter (the display LED rails at 24; the
     // counter keeps measuring — 500 rpm was seen on a real hand spin).
@@ -1028,7 +753,6 @@ export function mountWheelBench(host){
         reference wheel — calibrated on the best measured wheels of the 2026-08-14 benchmark — and the shaded band is the
         “good” zone around it. A curve inside the band is fine.
         Sloping <b>below/left</b> of the band = extra brake (seating → dust → damage, in that order of likelihood).
-        Sloping <b>below/left</b> of the band = extra brake (seating → dust → damage, in that order of likelihood).
         The <b>deviation strip</b> under it is the magnifier: 0% = exactly the ideal wheel; a steady drift
         <b>below</b> zero = a few percent extra brake (a slightly weaker wheel shows here long before the score moves),
         drift <b>above</b> = coasting longer than ideal (great wheel — or a helping draft; check the blue zone below).
@@ -1059,7 +783,7 @@ export function mountWheelBench(host){
   host.querySelector('#awbStart').addEventListener('click', start);
   host.querySelector('#awbStop').addEventListener('click', () => stopAndSave().catch(() => {}));
   host.querySelector('#awbDiscard').addEventListener('click', discard);
-  host.querySelector('#awbSimSpin').addEventListener('click', simSpin);
+  host.querySelector('#awbSimSpin').addEventListener('click', () => cap.simSpin());
   host.querySelector('#awbClear').addEventListener('click', () => {
     if(chartCurves.length && !confirm('Clear all curves from the chart? (Saved data is not affected.)')) return;
     chartCurves.length = 0; paintCurves();
@@ -1075,38 +799,35 @@ export function mountWheelBench(host){
     if(rt) tryDbSave(savedStore[+rt.dataset.retry]);
   });
 
-  unsubFrames = ble.subscribeFrames(f => ingest(f, false));
-  unsubStatus = ble.subscribeStatus(s => {
-    const was = bleState.connected;
-    bleState = s;
-    // A real wheel takes over: kill the simulator so streams never mix.
-    if(s.connected && sim) simStop();
-    if(rec && was !== s.connected){
-      rec.events.push({ t_ms: now(), type: s.connected ? 'ble_reconnect' : 'ble_drop' });
-    }
-    paintBle();
-  });
+  // The engine owns the frame subscription, the ble drop/reconnect event log
+  // and the sim-kill-on-connect; this handler only paints the connection row.
+  cap.attach();
+  unsubStatus = ble.subscribeStatus(s => { bleState = s; paintBle(); });
   notifySaved = paintSaved;
   paintBle(); paintSaved(); paintCurves();
   // Dev-only feed for deterministic testing (throttle-proof): frames carry an
   // explicit timestamp and are always SIM-tagged. Harmless in production —
   // admin-gated page, data lands with env.sim=true.
-  host.__awbFeed = (frame, tMs) => { simStop(); ingest(frame, true, tMs); };   // feed replaces the sim entirely
-  host.__awbState = () => ({
-    rec: rec ? { rpmPts: rec.rpmPts.length, spins: rec.spins.length, spinning: rec.spinning,
-                 firstPts: rec.rpmPts.slice(0, 4), lastPts: rec.rpmPts.slice(-2) } : null,
-    curves: chartCurves.length,
-  });
+  host.__awbFeed = (frame, tMs) => cap.feed(frame, tMs);   // feed replaces the sim entirely
+  host.__awbState = () => {
+    const rec = cap.rec();
+    return {
+      rec: rec ? { rpmPts: rec.rpmPts.length, spins: rec.spins.length, spinning: rec.spinning,
+                   firstPts: rec.rpmPts.slice(0, 4), lastPts: rec.rpmPts.slice(-2) } : null,
+      curves: chartCurves.length,
+    };
+  };
 
   return () => {
     // Leaving the tab mid-recording: salvage whatever was captured as a local
     // download + DB attempt — test data is field data, never silently drop
-    // any of it. releaseCapture runs inside stopAndSave (sync, before awaits).
+    // any of it. cap.stop() inside stopAndSave releases sync, before awaits.
+    const rec = cap.rec();
     if(rec && rec.frames.length) stopAndSave().catch(() => {});
-    else releaseCapture();
-    if(unsubFrames) unsubFrames();
+    else cap.discard();
+    if(uiTimer){ clearInterval(uiTimer); uiTimer = null; }
+    cap.detach();
     if(unsubStatus) unsubStatus();
-    simStop();
     if(notifySaved === paintSaved) notifySaved = null;
   };
 }

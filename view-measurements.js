@@ -90,15 +90,45 @@ const FILTERS = [
   { id: 'session',    label: 'Session' },
   { id: 'race',       label: 'Race' },
   { id: 'experiment', label: 'Experiment' },
+  { id: 'research',   label: '🔬 Research' },
   { id: 'verified',   label: 'Verified' },
   { id: 'showcased',  label: '🌟 Showcased' },
 ];
 
 function matches(r, filter){
+  if(r.__research) return filter === 'all' || filter === 'research';
   if(filter === 'all') return true;
   if(filter === 'verified') return !!r.verified;
   if(filter === 'showcased') return !!r.published;
   return kindOf(r) === filter;
+}
+
+// Research workbench runs surface here display-only (view-level merge, no
+// `results` row): they never feed XP, achievements or the summary strip, and
+// their card opens the research run page. Shown to the run's OWNER and to its
+// SUBJECT (the member a researcher attached the measurement to).
+function researchCardHtml(r, myId){
+  const s = r.summary || {};
+  const when = new Date(r.started_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const mine = r.user_id === myId;
+  const dur = s.duration_s ? Math.floor(s.duration_s / 60) + ':' + String(s.duration_s % 60).padStart(2, '0') : '—';
+  return `
+      <a class="me-card" href="#/research/run/${r.id}">
+        <div class="me-main">
+          <div class="me-title-row">
+            <span class="me-kind research">Research</span>
+            <span class="me-title">${esc(r.title || 'Research run')}</span>
+            ${mine ? '' : '<span class="voice-chip mini" title="A researcher recorded this measurement with you as its subject">🔬 as subject</span>'}
+          </div>
+          <div class="me-meta">${when} · ${dur}${(r.labels || []).slice(0, 3).map(l => ' · #' + esc(l)).join('')}</div>
+        </div>
+        <div class="me-spark"><span class="me-spark-empty">true rpm</span></div>
+        <div class="me-stats">
+          <div class="rs"><div class="rs-val">${s.peak_rpm != null ? s.peak_rpm : '—'}</div><div class="rs-lbl">Peak rpm</div></div>
+          <div class="rs"><div class="rs-val">${s.mean_rpm != null ? s.mean_rpm : '—'}</div><div class="rs-lbl">Mean</div></div>
+          <div class="rs"><div class="rs-val">${s.revolutions != null ? s.revolutions : '—'}</div><div class="rs-lbl">Revs</div></div>
+        </div>
+      </a>`;
 }
 
 function renderSummary(rows){
@@ -126,7 +156,8 @@ export function mount(el){
   const userId = auth.getState().user?.id || null;
   if(!document.getElementById('meRaceKindStyle')){
     const st = document.createElement('style'); st.id = 'meRaceKindStyle';
-    st.textContent = `.me-kind.race{color:#5230da;background:rgba(82,48,218,.1)}`;
+    st.textContent = `.me-kind.race{color:#5230da;background:rgba(82,48,218,.1)}
+.me-kind.research{color:#401d91;background:rgba(64,29,145,.1)}`;
     document.head.appendChild(st);
   }
 
@@ -150,14 +181,24 @@ export function mount(el){
   }
 
   (async () => {
-    const [resR, sessR] = await Promise.all([
+    const [resR, sessR, rschR] = await Promise.all([
       supabase.from('results').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
       supabase.from('sessions').select('id, name, created_by, created_by_user_id'),
+      // Research runs (display-only merge). Explicit columns — the runs table
+      // carries heavy jsonb the list must never touch. A missing table (SQL
+      // not run yet) surfaces as rschR.error and simply merges nothing.
+      supabase.from('research_runs')
+        .select('id, user_id, subject_user_id, title, labels, started_at, summary')
+        .or(`user_id.eq.${userId},subject_user_id.eq.${userId}`)
+        .order('started_at', { ascending: false }),
     ]);
     const sessMap = new Map((sessR.data || []).map(s => [s.id, s]));
     const rows = resR.data || [];
+    // normalize to the list's row shape at the fetch boundary: created_at is
+    // what every sort/date consumer keys on
+    const research = (rschR.data || []).map(r => ({ ...r, __research: true, created_at: r.started_at }));
 
-    if(rows.length === 0){
+    if(rows.length === 0 && research.length === 0){
       list.innerHTML = '<div class="panel"><p class="placeholder">No measurements yet. Try a Solo measurement or join a session.</p></div>';
       return;
     }
@@ -200,10 +241,12 @@ export function mount(el){
 
     const rowsHost = list.querySelector('#meRows');
     let filter = 'all';
+    // one merged, newest-first stream: results + research runs (display-only)
+    const combined = [...rows, ...research].sort((x, y) => new Date(y.created_at) - new Date(x.created_at));
     const paint = () => {
-      const shown = rows.filter(r => matches(r, filter));
+      const shown = combined.filter(r => matches(r, filter));
       rowsHost.innerHTML = shown.length
-        ? shown.map(r => cardHtml(r, sessMap, hostFor, recMap, soloRecMap)).join('')
+        ? shown.map(r => r.__research ? researchCardHtml(r, userId) : cardHtml(r, sessMap, hostFor, recMap, soloRecMap)).join('')
         : '<div class="panel"><p class="placeholder">No measurements match this filter.</p></div>';
     };
 

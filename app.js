@@ -25,6 +25,7 @@ import { mount as mountRender } from './view-render.js';
 import { mount as mountShowcase } from './view-showcase.js';
 import { mount as mountPartnerOnboarding } from './view-partner-onboarding.js';
 import { mount as mountCreator } from './view-creator.js';
+import { mount as mountResearch } from './view-research.js';
 import * as presence from './presence.js';
 import * as telemetry from './telemetry.js';
 import { supabase } from './db.js';
@@ -68,6 +69,9 @@ function trackPageView(){
 function router(){
   const { path, param } = parseHash();
   trackPageView();
+  // Research workbench cost rule: zero Supabase Realtime while recording science
+  // data — presence is fully suspended on the route and resumes on leaving it.
+  presence.setSuspended(path === '/research');
   document.querySelectorAll('.nav a').forEach(a => {
     a.classList.toggle('active', a.dataset.route === path);
   });
@@ -116,6 +120,12 @@ function router(){
   else if(path === '/showcase') setView(mountShowcase);
   else if(path === '/onboarding') setView(mountPartnerOnboarding);
   else if(path === '/creator') setView(mountCreator);
+  else if(path === '/research'){
+    // Sub-routes: #/research (hub) and #/research/run/<id> (run detail) —
+    // parseHash only exposes 2 segments, so read the id directly (like /render).
+    const seg = location.hash.replace(/^#/, '').split('/').filter(Boolean);
+    setView(mountResearch, seg[1] || null, seg[2] || null);
+  }
   else if(path === '/clients') setView(mountClients, param);
   else if(path === '/leaderboard') setView(mountLeaderboard);
   else if(path === '/connect') setView(mountConnect, param);
@@ -473,6 +483,12 @@ function toggleCreatorNav(a){
   const show = !!(a.user && a.approvedMaker);
   document.querySelectorAll('.nav-creator').forEach(n => { n.hidden = !show; });
 }
+// Research nav: admin-granted flag straight off auth state (admins always see it,
+// so the owner can reach the workbench before granting himself).
+function toggleResearchNav(a){
+  const show = !!(a.user && (a.researchAccess || a.isAdmin));
+  document.querySelectorAll('.nav-research').forEach(n => { n.hidden = !show; });
+}
 async function checkPartner(a){
   const uid = a.user?.id || null;
   if(!uid){ isPartner = false; partnerCheckedFor = null; togglePartnerNav(); return; }
@@ -507,6 +523,7 @@ auth.subscribeAuth(a => {
   renderAuthArea();
   checkPartner(a);
   toggleCreatorNav(a);
+  toggleResearchNav(a);
 });
 
 // ---- "More" nav menu (mobile only — surfaces Sessions + Global Ranking) -----
@@ -592,6 +609,10 @@ if(fab && fabMenu){
 }
 
 // ---- Boot -------------------------------------------------------------------
+// Deep-loading #/research must never build the presence channel just to tear
+// it down one line later — set the suspend flag BEFORE init (buildChannel is
+// guarded on it), so a research reload starts with zero Realtime traffic.
+presence.setSuspended(parseHash().path === '/research');
 presence.init();   // app-level Live presence (joins the shared channel)
 telemetry.init();  // connection diagnostics — observer-only, never breaks the app
 window.addEventListener('hashchange', router);

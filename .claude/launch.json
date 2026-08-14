@@ -8,6 +8,18 @@
       "port": 8765
     },
     {
+      "name": "static-fresh",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8801"],
+      "port": 8801
+    },
+    {
+      "name": "static-nocache",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["C:/Users/User/AppData/Local/Temp/claude/C--Users-User-Documents-GitHub-egely-wheel-race/e3d0feb6-2c62-40cf-a59a-675e5830bb94/scratchpad/nocache-server.js"],
+      "port": 8899
+    },
+    {
       "name": "ewrexp-test",
       "runtimeExecutable": "node",
       "runtimeArgs": ["C:/Users/User/AppData/Local/Temp/claude/C--Users-User-Documents-GitHub-egely-wheel-race/01d12725-ab13-47f6-a1e7-9d865aa2a659/scratchpad/ewrexp-test/server.js"],

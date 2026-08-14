@@ -217,6 +217,23 @@ export function mount(el){
         </div>
         <ul class="adm-list" id="accList"><li class="adm-empty">Type an email above to search.</li></ul>
       </div>
+
+      <div class="adm-head" style="margin-top:34px">
+        <h1>Research access</h1>
+        <p>Who sees the Research workbench (the #/research menu). Invitation-only: grant it per member by email, revoke any time. Their recorded research data stays theirs either way.</p>
+      </div>
+      <div class="adm-card">
+        <h2>Grant research access</h2>
+        <div class="adm-add">
+          <input id="resEmail" type="email" placeholder="member@example.com" autocomplete="off">
+          <button class="adm-btn" id="resAdd" type="button">Grant access</button>
+        </div>
+        <span class="adm-msg" id="resMsg"></span>
+      </div>
+      <div class="adm-card">
+        <h2>Current researchers</h2>
+        <ul class="adm-list" id="resList"><li class="adm-empty">Loading…</li></ul>
+      </div>
     </div>`;
 
     const $ = id => el.querySelector('#' + id);
@@ -343,7 +360,63 @@ export function mount(el){
       else { btn.disabled = false; btn.textContent = orig; }
     });
 
+    // ---- Research access (profiles.research_access via admin RPCs — the exact
+    // approved_maker pattern: SECURITY DEFINER set/list, self-grant trigger) ----
+    const resEmail = $('resEmail'), resAdd = $('resAdd'), resMsg = $('resMsg'), resList = $('resList');
+
+    async function loadResearch(){
+      const { data, error } = await supabase.rpc('admin_list_research');
+      if(error){ resList.innerHTML = `<li class="adm-empty">Could not load: ${esc(error.message)}${/function/i.test(error.message) ? ' — run the research SQL first.' : ''}</li>`; return; }
+      const rows = data || [];
+      if(!rows.length){ resList.innerHTML = `<li class="adm-empty">No researchers yet — grant the first one above.</li>`; return; }
+      resList.innerHTML = rows.map(r => {
+        const nm = r.display_name || r.practitioner_handle || 'Member';
+        return `<li class="adm-row" data-email="${esc(r.email)}">
+          <span class="adm-av">${esc((nm[0] || '?').toUpperCase())}</span>
+          <div class="adm-info">
+            <div class="adm-name">${esc(nm)}</div>
+            <div class="adm-mail">${esc(r.email)}</div>
+          </div>
+          <button class="adm-remove" type="button" data-res-remove>Revoke</button>
+        </li>`;
+      }).join('');
+    }
+
+    async function setResearch(email, granted){
+      const { data, error } = await supabase.rpc('admin_set_research', { p_email: email, p_granted: granted });
+      if(error) return { ok: false, text: 'Error: ' + error.message };
+      if(data === 'no-account') return { ok: false, text: 'No account with that email yet — they need to register first.' };
+      if(data === 'no-profile') return { ok: false, text: 'That account has no profile yet.' };
+      return { ok: true, text: granted ? `Granted research access to ${data}.` : `Revoked ${data}'s research access.` };
+    }
+
+    resAdd.addEventListener('click', async () => {
+      const email = resEmail.value.trim();
+      if(!email){ resMsg.className = 'adm-msg err'; resMsg.textContent = 'Enter an email.'; return; }
+      resAdd.disabled = true; resMsg.className = 'adm-msg'; resMsg.textContent = 'Granting…';
+      const res = await setResearch(email, true);
+      resAdd.disabled = false;
+      resMsg.className = 'adm-msg ' + (res.ok ? 'ok' : 'err');
+      resMsg.textContent = res.text;
+      if(res.ok){ resEmail.value = ''; loadResearch(); }
+    });
+    resEmail.addEventListener('keydown', e => { if(e.key === 'Enter') resAdd.click(); });
+
+    resList.addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-res-remove]');
+      if(!btn) return;
+      const email = btn.closest('.adm-row')?.dataset.email;
+      if(!email) return;
+      btn.disabled = true; btn.textContent = 'Revoking…';
+      const res = await setResearch(email, false);
+      resMsg.className = 'adm-msg ' + (res.ok ? 'ok' : 'err');
+      resMsg.textContent = res.text;
+      if(res.ok) loadResearch();
+      else { btn.disabled = false; btn.textContent = 'Revoke'; }
+    });
+
     loadList();
+    loadResearch();
   }
 
   // ---- Usage tab: every registered member with activity aggregates ----------

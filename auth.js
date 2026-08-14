@@ -19,6 +19,8 @@ function state(){
     avatarUrl: profile?.avatar_url || null,
     isPractitioner: !!profile?.is_practitioner,
     approvedMaker: !!profile?.approved_maker,
+    // Research workbench access — admin-granted flag, mirror of approved_maker.
+    researchAccess: !!profile?.research_access,
     featuredUntil: profile?.live_featured_until || null,   // Live-wall spotlight expiry (makers)
     isAdmin: !!profile?.is_admin,
     bio: profile?.bio || '',

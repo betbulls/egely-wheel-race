@@ -27,6 +27,7 @@ const REFRESH_MS = 30000;       // periodically rebuild the presence channel fro
 
 let inited = false;
 let channel = null;
+let suspended = false;               // research route: presence fully off (no channel, no ticks)
 let rebuilding = false;              // true while we tear down + re-subscribe the channel
 let tracking = false;
 let lastTrackedJson = null;          // guards against redundant / racing re-tracks (excludes ts)
@@ -129,17 +130,23 @@ function onSync(){ rebuilding = false; emit(); }
 // HOLD the last render until the new sync arrives (emit is gated on `rebuilding`), so there
 // is no empty flicker. This never filters a present user; it just re-reads the true state.
 async function refreshChannel(){
-  if(rebuilding || !channel) return;
+  if(suspended || rebuilding || !channel) return;
   rebuilding = true;
   setTimeout(() => { if(rebuilding){ rebuilding = false; emit(); } }, 6000);   // failsafe unfreeze
   const old = channel;
   channel = null;
   lastTrackedJson = null; tracking = false;            // force a fresh re-track on the new channel
   try { await supabase.removeChannel(old); } catch {}
+  // A suspend/resume cycle can complete DURING the await above: resume already
+  // built a fresh channel, and building another here would leak the first one
+  // (a permanently subscribed duplicate — the exact Realtime cost bug this
+  // feature exists to avoid). If anyone re-created the channel, stand down.
+  if(suspended || channel){ rebuilding = false; emit(); return; }
   buildChannel();                                       // subscribes; its first onSync clears `rebuilding`
 }
 
 function buildChannel(){
+  if(suspended) return;   // never resurrect the channel while the research route holds presence off
   channel = supabase.channel('live-presence', {
     config: { presence: { key: myKey }, broadcast: { self: false } },
   });
@@ -240,6 +247,29 @@ function stopTicks(){
   if(tickTimer){ clearInterval(tickTimer); tickTimer = null; }
   const uid = auth.getState().user?.id;
   if(uid){ liveValues.delete(uid); liveSeries.delete(uid); }   // clear our own value immediately
+}
+
+// Research-route switch: while ON, presence is FULLY off — the channel is torn
+// down (no Realtime traffic, no ticks, no 30 s rebuilds; the cost rule for the
+// research workbench). While OFF, everything resumes via a fresh buildChannel.
+// Every resurrection path is guarded on `suspended`: refreshChannel (the 30 s
+// rebuild), buildChannel itself, startTicks' tick and beat/applyTrack already
+// no-op on channel == null.
+export function setSuspended(on){
+  on = !!on;
+  if(on === suspended) return;
+  suspended = on;
+  if(!inited) return;
+  if(on){
+    const old = channel;
+    channel = null; tracking = false; lastTrackedJson = null; rebuilding = false;
+    stopTicks();
+    if(old){ try { supabase.removeChannel(old); } catch {} }
+    emit();   // watchers (none on the research route) see an empty wall, not a frozen one
+  } else {
+    buildChannel();   // its first onSync re-emits; applyTrack runs on SUBSCRIBED
+    if(bleConnected) startTicks();
+  }
 }
 
 // Latest live wheel value for a user, or null if none / stale.
