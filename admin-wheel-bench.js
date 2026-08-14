@@ -367,8 +367,6 @@ function drawTestChart(canvas, curves, liveCurve){
   ctx.moveTo(xOf(lastIdeal.x), yOf(lastIdeal.y));
   ctx.lineTo(xOf(IDEAL_STOP_X), floorY); ctx.stroke();
   ctx.setLineDash([]);
-  ctx.fillStyle = '#67737c'; ctx.font = '10px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-  ctx.fillText('ideal stop — calm air', xOf(IDEAL_STOP_X), floorY - 33);
 
   // recorded curves
   for(const c of curves){
@@ -1057,7 +1055,7 @@ export function mountWheelBench(host){
         <span style="color:#2c4bbd;font-weight:700">blue</span> = a draft is pushing the wheel (environment, not the wheel).
         One weak spin proves nothing — judge a wheel on its <b>best</b> spin of 3 (bad seating can only subtract, never add).
         The <b>tail reading</b> (30&nbsp;s untouched after the coast-down) is the SENSITIVITY axis: in dead-calm air the ideal
-        wheel is <b>fully stopped ~29&nbsp;s</b> after the 24-rpm crossing (the “ideal stop” mark on the chart) — anything still
+        wheel is <b>fully stopped ~29&nbsp;s</b> after the 24-rpm crossing (where the dashed line meets the floor) — anything still
         moving past that mark is the room's air acting on the wheel. Verdicts:
         <span style="color:#99a2a7;font-weight:700">STILL</span> = came to rest (calm air, or low pickup) ·
         <span style="color:#67737c;font-weight:700">QUIET</span> = barely moving (Ø&lt;0.8 rpm) ·
