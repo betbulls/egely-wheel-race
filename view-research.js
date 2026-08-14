@@ -258,6 +258,7 @@ function mountWheels(host, a, switchTab){
         <input id="rslNew" type="text" placeholder="#new-label" autocomplete="off">
         <button type="button" class="rs-mini" id="rslAdd">Add label</button>
       </div>
+      <span class="rs-msg" id="rslMsg"></span>
     </div>`;
 
   const msg = host.querySelector('#rswMsg');
@@ -316,9 +317,12 @@ function mountWheels(host, a, switchTab){
   });
   const addLabel = async () => {
     const inp = host.querySelector('#rslNew');
+    const lmsg = host.querySelector('#rslMsg');
     const v = inp.value.trim();
     if(!v) return;
-    await store.addLabel(uid, v);
+    const { row, error } = await store.addLabel(uid, v);
+    if(error){ lmsg.className = 'rs-msg err'; lmsg.textContent = 'Could not add the label: ' + error.message; return; }
+    lmsg.className = 'rs-msg'; lmsg.textContent = '';
     inp.value = '';
     c.labels = null;
     paintLabels();
@@ -805,7 +809,12 @@ function mountExperiments(host, a){
       const inp = host.querySelector('#rseNewLabel');
       const v = inp.value.trim();
       if(!v) return;
-      const row = await store.addLabel(uid, v);
+      const { row, error } = await store.addLabel(uid, v);
+      if(error){
+        const msg = host.querySelector('#rseMsg');
+        if(msg){ msg.className = 'rs-msg err'; msg.textContent = 'Could not add the label: ' + error.message; }
+        return;
+      }
       if(row){ if(!labels.find(x => x.label === row.label)) labels.push(row); c.labels = labels; sel.labels.add(row.label); paintLabelChips(); }
     };
     box.querySelector('#rseAddLabel').addEventListener('click', add);

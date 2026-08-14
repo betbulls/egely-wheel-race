@@ -377,13 +377,23 @@ export async function listLabels(uid){
     .select('id, label').eq('user_id', uid).order('label');
   return data || [];
 }
+// Plain insert with a fetch-on-duplicate fallback — deliberately NOT upsert:
+// ON CONFLICT DO UPDATE needs the UPDATE table privilege too, and this
+// project grants exactly what each table needs (a silent permission-denied
+// here cost a bug report). Returns { row, error } so callers can SHOW errors.
 export async function addLabel(uid, label){
   const norm = label.trim().toLowerCase().replace(/^#/, '').replace(/\s+/g, '-').slice(0, 32);
-  if(!norm) return null;
-  const { data } = await supabase.from('research_labels')
-    .upsert({ user_id: uid, label: norm }, { onConflict: 'user_id,label' })
+  if(!norm) return { row: null, error: null };
+  const ins = await supabase.from('research_labels')
+    .insert({ user_id: uid, label: norm })
     .select('id, label').maybeSingle();
-  return data;
+  if(!ins.error) return { row: ins.data, error: null };
+  if(/duplicate|unique/i.test(ins.error.message)){
+    const { data } = await supabase.from('research_labels')
+      .select('id, label').eq('user_id', uid).eq('label', norm).maybeSingle();
+    return { row: data, error: null };
+  }
+  return { row: null, error: ins.error };
 }
 export async function deleteLabel(id){ return supabase.from('research_labels').delete().eq('id', id); }
 
