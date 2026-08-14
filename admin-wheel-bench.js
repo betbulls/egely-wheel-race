@@ -21,8 +21,14 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp
 const MAX_CAPTURE_MS   = 15 * 60 * 1000; // safety stop for a forgotten recorder
 const SPIN_START_LED   = 6;      // rawLed at/above this...
 const SPIN_START_HITS  = 2;      // ...on this many consecutive NEW reports = spin started
-const SPIN_END_ZERO_MS = 4000;   // rawLed 0 sustained this long = spin over
 const SPIN_MIN_MS      = 6000;   // shorter segments = handling bumps, not spins
+// Untouched-tail observation: once the wheel is down at/below TAIL_LOW_RPM the
+// spin stays open for a fixed watch window — hands off! — and what the wheel
+// does in it (stays dead, or keeps being nudged by ambient air) is recorded as
+// the tail metrics: the SENSITIVITY axis the coast-down alone cannot see.
+// Fixed-length window on purpose: comparable between wheels of one session.
+const TAIL_LOW_RPM     = 5;      // rawLed at/below this = tail phase
+const TAIL_OBS_MS      = 30000;  // watch this long, then the spin closes
 
 // The recorded tuple layout — single owner for ingest, payload format string,
 // and any future decoder. Bump the format version on ANY change here.
@@ -46,7 +52,7 @@ const IDEAL_A = 0.24, IDEAL_B = 0.0, IDEAL_K = 0.025;
 const SCORE_REF_T245 = 15.0;             // score-100 anchor: excellent seating
 const BAND_FAST = 0.88, BAND_SLOW = 1.12; // tolerance band = ideal curve time-scaled
 // Chart geometry
-const X_MIN = -12, X_MAX = 40;           // seconds relative to the 24-rpm crossing
+const X_MIN = -12, X_MAX = 48;           // seconds relative to the 24-rpm crossing (fits decay + tail watch)
 const Y_MIN = 1.6, Y_MAX = 620;          // rpm, log scale
 const Y_TICKS = [2, 5, 10, 24, 50, 100, 200, 400];
 const PALETTE = ['#0a7a5c', '#b8860b', '#0033ff', '#c2415b', '#7c3aed', '#0e7490', '#b45309', '#be185d', '#4d7c0f', '#6b7280'];
@@ -109,6 +115,7 @@ function styles(){
     padding:3px 10px;background:#f2f3f4;color:#99a2a7}
   .awb-spinbadge.on{background:rgba(82,48,218,.12);color:#401d91}
   .awb-chart{width:100%;height:340px;display:block}
+  .awb-dev{width:100%;height:150px;display:block;margin-top:6px}
   .awb-deriv{width:100%;height:240px;display:block;margin-top:6px}
   .awb-rec{display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff5c5c;margin-right:7px;
     animation:awbPulse 1.2s ease-in-out infinite}
@@ -137,6 +144,7 @@ function styles(){
     border-radius:10px;padding:7px 12px;font-size:13.5px;color:#27384e;font-variant-numeric:tabular-nums}
   .awb-cdot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
   .awb-cserial{font-weight:700;color:#011624;min-width:96px}
+  .awb-tail{color:#67737c;font-size:12px}
   .awb-cx{margin-left:auto;font-size:15px;font-weight:700;color:#99a2a7;background:none;border:none;cursor:pointer;
     padding:2px 8px;border-radius:8px}
   .awb-cx:hover{color:#c2415b;background:#fff}
@@ -172,6 +180,20 @@ function scoreOf(T245){
   const score = Math.min(110, Math.round(T245 / SCORE_REF_T245 * 100));
   const grade = score >= 93 ? 'A' : score >= 85 ? 'B' : score >= 72 ? 'C' : 'D';
   return { score, grade, cls: 'awb-s' + grade };
+}
+
+// Ideal rpm at anchored time x (log-interp over IDEAL_PTS); null outside range.
+function idealAt(x){
+  const P = IDEAL_PTS;
+  if(!P.length || x < P[0].x || x > P[P.length - 1].x) return null;
+  for(let i = 1; i < P.length; i++){
+    if(P[i].x >= x){
+      const a = P[i - 1], b = P[i];
+      const f = (x - a.x) / ((b.x - a.x) || 1);
+      return Math.exp(Math.log(a.y) + f * (Math.log(b.y) - Math.log(a.y)));
+    }
+  }
+  return null;
 }
 
 // Interpolated time where an anchored curve crosses `rpm` downward (after peak).
@@ -272,7 +294,18 @@ function drawTestChart(canvas, curves, liveCurve){
     }
   };
 
-  // tolerance band: ideal curve time-scaled between BAND_FAST..BAND_SLOW
+  // tolerance band: ideal curve time-scaled between BAND_FAST..BAND_SLOW —
+  // filled AND edge-stroked so the good zone reads clearly
+  const edge = scale => {
+    ctx.beginPath();
+    let pen = false;
+    for(const p of IDEAL_PTS){
+      const x = p.x * scale;
+      if(x < X_MIN || x > X_MAX){ pen = false; continue; }
+      if(pen) ctx.lineTo(xOf(x), yOf(p.y)); else ctx.moveTo(xOf(x), yOf(p.y));
+      pen = true;
+    }
+  };
   ctx.beginPath();
   let started = false;
   for(const p of IDEAL_PTS){
@@ -286,7 +319,10 @@ function drawTestChart(canvas, curves, liveCurve){
     ctx.lineTo(xOf(x), yOf(p.y));
   }
   ctx.closePath();
-  ctx.fillStyle = 'rgba(82,48,218,0.07)'; ctx.fill();
+  ctx.fillStyle = 'rgba(32,178,107,0.10)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(15,138,82,0.45)'; ctx.lineWidth = 1;
+  edge(BAND_FAST); ctx.stroke();
+  edge(BAND_SLOW); ctx.stroke();
 
   // ideal center line
   ctx.setLineDash([6, 4]); ctx.lineWidth = 1.6; ctx.strokeStyle = '#011624';
@@ -307,6 +343,79 @@ function drawTestChart(canvas, curves, liveCurve){
   // labels
   ctx.fillStyle = '#67737c'; ctx.font = '11px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
   ctx.fillText('rpm (log) — dashed: ideal wheel · shaded: good band · t=0 at 24 rpm', padL + 4, 2);
+}
+
+// Deviation magnifier: percentage difference from the ideal wheel over the
+// anchored decay (x >= 0). A 3-5% systematic offset is invisible on the log
+// chart but reads as a clear drift here — this is where "slightly weaker"
+// wheels show themselves first. Above 0 = coasting longer than ideal (less
+// brake or a helping draft); below 0 = extra brake.
+function drawDevChart(canvas, curves, liveCurve){
+  const s = setupCanvas(canvas);
+  if(!s) return;
+  const { ctx, w, h } = s;
+  const padL = 44, padR = 12, padT = 16, padB = 22;
+  const plotW = w - padL - padR, plotH = h - padT - padB;
+  const DEV = 30;                       // +/- range [%]
+  const xMax = IDEAL_PTS[IDEAL_PTS.length - 1].x;   // ideal defined this far
+  const xOf = x => padL + x / X_MAX * plotW;
+  const yOf = d => padT + plotH / 2 - Math.max(-DEV, Math.min(DEV, d)) / DEV * plotH / 2;
+
+  // good band in deviation space (the time-scaled ideal edges converted to %)
+  const bandDev = (x, scale) => {
+    const base = idealAt(x), edge = idealAt(x / scale);
+    return (base && edge) ? (edge / base - 1) * 100 : null;
+  };
+  ctx.beginPath();
+  let pen = false;
+  for(let x = 0; x <= Math.min(X_MAX, xMax * BAND_FAST); x += 0.4){
+    const d = bandDev(x, BAND_FAST);
+    if(d == null){ pen = false; continue; }
+    if(pen) ctx.lineTo(xOf(x), yOf(d)); else ctx.moveTo(xOf(x), yOf(d));
+    pen = true;
+  }
+  for(let x = Math.min(X_MAX, xMax * BAND_FAST); x >= 0; x -= 0.4){
+    const d = bandDev(x, BAND_SLOW);
+    if(d != null) ctx.lineTo(xOf(x), yOf(d));
+  }
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(32,178,107,0.12)'; ctx.fill();
+
+  // grid + zero line
+  ctx.font = '10px Inter, sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'right';
+  for(const d of [-20, 0, 20]){
+    const y = yOf(d);
+    ctx.strokeStyle = d === 0 ? 'rgba(1,22,36,0.3)' : 'rgba(1,22,36,0.07)';
+    ctx.setLineDash(d === 0 ? [6, 4] : []);
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#67737c'; ctx.fillText((d > 0 ? '+' : '') + d + '%', padL - 6, y);
+  }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for(let x = 0; x <= X_MAX; x += 5){
+    ctx.fillStyle = '#99a2a7'; ctx.fillText(x + 's', xOf(x), padT + plotH + 4);
+  }
+
+  // curve deviations
+  const devLine = (c, color, width) => {
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.globalAlpha = 0.9;
+    ctx.beginPath();
+    let on = false;
+    for(const p of c.pts){
+      if(p.x < 0 || p.x > xMax || p.y < 2){ on = false; continue; }
+      const base = idealAt(p.x);
+      if(!base){ on = false; continue; }
+      const d = (p.y / base - 1) * 100;
+      if(on) ctx.lineTo(xOf(p.x), yOf(d)); else ctx.moveTo(xOf(p.x), yOf(d));
+      on = true;
+    }
+    ctx.stroke(); ctx.globalAlpha = 1;
+  };
+  for(const c of curves) devLine(c, c.color, 1.8);
+  if(liveCurve) devLine(liveCurve, '#5230da', 3);
+
+  ctx.fillStyle = '#67737c'; ctx.font = '11px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText('deviation from ideal [%] — the magnifier: small differences show up here first', padL + 4, 2);
 }
 
 function drawDerivChart(canvas, curves, liveCurve){
@@ -431,7 +540,7 @@ export function mountWheelBench(host){
     fw: '', hw: '', lastBattery: null,
     // spin segmentation (rawLed-based — see header comment)
     lastCounter: null, startHits: 0, firstHitMs: 0, spinning: false,
-    spinStartMs: 0, zeroSinceMs: null, maxLed: 0, maxRpm: 0, pendMaxRpm: 0,
+    spinStartMs: 0, lowSinceMs: null, maxLed: 0, maxRpm: 0, pendMaxRpm: 0,
     prevRaw: null, railRun: 0,
     simUsed: false,
   });
@@ -477,7 +586,7 @@ export function mountWheelBench(host){
           rec.startHits++;
           if(rec.startHits >= SPIN_START_HITS){
             rec.spinning = true; rec.spinStartMs = rec.firstHitMs;
-            rec.zeroSinceMs = null; rec.maxLed = frame.rawLed; rec.maxRpm = rec.pendMaxRpm;
+            rec.lowSinceMs = null; rec.maxLed = frame.rawLed; rec.maxRpm = rec.pendMaxRpm;
             rec.startHits = 0;
           }
         } else rec.startHits = 0;
@@ -485,18 +594,20 @@ export function mountWheelBench(host){
     } else if(!glitch){
       if(frame.rawLed > rec.maxLed) rec.maxLed = frame.rawLed;
       if(rpm > rec.maxRpm) rec.maxRpm = rpm;
-      if(frame.rawLed <= 0){
-        if(rec.zeroSinceMs == null) rec.zeroSinceMs = t;
-        else if(t - rec.zeroSinceMs >= SPIN_END_ZERO_MS) endSpin();
-      } else rec.zeroSinceMs = null;
+      // tail watch: fixed window once the wheel is down at/below TAIL_LOW_RPM;
+      // a gust lifting it above resets the watch (the wheel is active again)
+      if(frame.rawLed <= TAIL_LOW_RPM){
+        if(rec.lowSinceMs == null) rec.lowSinceMs = t;
+        else if(t - rec.lowSinceMs >= TAIL_OBS_MS) endSpin();
+      } else rec.lowSinceMs = null;
     }
     if(!glitch) rec.prevRaw = frame.rawLed;
 
     if(t > MAX_CAPTURE_MS) stopAndSave('Auto-stopped after 15 minutes.').catch(() => {});
   }
 
-  // Close the current segment. endMs: the moment the wheel reached zero — or,
-  // for a stop pressed mid-coast, the stop moment (marked interrupted).
+  // Close the current segment. endMs: end of the tail-watch window — or, for a
+  // stop pressed mid-coast, the stop moment (marked interrupted).
   function closeSpin(r, endMs, interrupted){
     const dur = endMs - r.spinStartMs;
     if(dur >= SPIN_MIN_MS){
@@ -508,7 +619,31 @@ export function mountWheelBench(host){
         max_led: r.maxLed,
         max_rpm: Math.round(r.maxRpm),   // TRUE peak from the counter (can far exceed 24)
       };
-      if(interrupted) spin.interrupted = true;   // wheel had not settled at zero
+      if(interrupted) spin.interrupted = true;   // tail watch not completed
+      // Tail metrics over the LAST 20 s of the watch window: by then the
+      // natural 5->0 coast is long over, so only the untouched wheel's response
+      // to ambient air remains. avg rpm from EVERY line (zeros included: a
+      // dead-calm wheel scores ~0 -> "stopped"), pickups = fresh-counter upward
+      // jumps at low speed (ambient-air nudges).
+      let tail = null;
+      if(r.lowSinceMs != null && endMs > r.lowSinceMs){
+        const winFrom = Math.max(r.lowSinceMs, endMs - 20000);
+        const win = r.frames.filter(f => f[0] >= winFrom && f[0] <= endMs);
+        if(win.length >= 4){
+          const rpms = win.map(f => f[1] >= RPM_MIN_COUNTER ? 6000 / f[1] : 0);
+          const avg = rpms.reduce((a, b) => a + b, 0) / rpms.length;
+          let pickups = 0, prev = null, lastC = null;
+          for(const f of win){
+            if(f[1] === lastC) continue;
+            lastC = f[1];
+            const rr = f[1] >= RPM_MIN_COUNTER ? 6000 / f[1] : 0;
+            if(prev != null && rr > prev * 1.15 && rr >= 0.8 && rr < 8) pickups++;
+            prev = rr;
+          }
+          tail = { avg_rpm: Math.round(avg * 100) / 100, pickups, stopped: avg < 0.15 };
+          spin.tail = tail;
+        }
+      }
       r.spins.push(spin);
       // chart entry (module store — survives wheels and tab switches)
       const curve = buildCurve(r.rpmPts, r.spinStartMs, endMs);
@@ -518,14 +653,14 @@ export function mountWheelBench(host){
         spin.score = sc.score;
         chartCurves.push({
           serial: r.serial, spinN: spin.n, color: PALETTE[curveColorIdx++ % PALETTE.length],
-          pts: curve.pts, T245: curve.T245, ...sc,
+          pts: curve.pts, T245: curve.T245, tail, ...sc,
         });
       }
     }
-    r.spinning = false; r.zeroSinceMs = null; r.maxLed = 0; r.maxRpm = 0;
+    r.spinning = false; r.lowSinceMs = null; r.maxLed = 0; r.maxRpm = 0;
   }
   function endSpin(){
-    closeSpin(rec, rec.zeroSinceMs, false);
+    closeSpin(rec, rec.lowSinceMs + TAIL_OBS_MS, false);
     paintCurves();
   }
 
@@ -589,12 +724,12 @@ export function mountWheelBench(host){
     if(!rec) return;
     const r = rec; rec = null;
     releaseCapture();
-    // Close an in-flight segment: at the zero-run start if the wheel had
-    // settled, else at the stop moment (marked interrupted — still coasting).
+    // Close an in-flight segment at the stop moment. Interrupted only when the
+    // wheel was still coasting above the tail threshold (decay incomplete);
+    // a Stop pressed mid-tail-watch keeps the spin with partial tail metrics.
     if(r.spinning){
       const lastT = r.frames.length ? r.frames[r.frames.length - 1][0] : r.spinStartMs;
-      if(r.zeroSinceMs != null) closeSpin(r, r.zeroSinceMs, false);
-      else closeSpin(r, lastT, true);
+      closeSpin(r, lastT, r.lowSinceMs == null);
       paintCurves();
     }
 
@@ -681,10 +816,13 @@ export function mountWheelBench(host){
   }
 
   function paintCharts(){
+    const lc = liveCurve();
     const c1 = host.querySelector('#awbChart');
-    if(c1) drawTestChart(c1, chartCurves, liveCurve());
+    if(c1) drawTestChart(c1, chartCurves, lc);
+    const cd = host.querySelector('#awbDev');
+    if(cd) drawDevChart(cd, chartCurves, lc);
     const c2 = host.querySelector('#awbDeriv');
-    if(c2) drawDerivChart(c2, chartCurves, liveCurve());
+    if(c2) drawDerivChart(c2, chartCurves, lc);
   }
 
   function paintLive(){
@@ -713,9 +851,11 @@ export function mountWheelBench(host){
     host.querySelector('#awbCounter').innerHTML = `counter <b>${last ? last[1] : '—'}</b> · led <b>${last ? last[2] : '—'}</b>`;
     const badge = host.querySelector('#awbSpinBadge');
     badge.className = 'awb-spinbadge' + (rec.spinning ? ' on' : '');
-    badge.textContent = rec.spinning
-      ? `Spin ${rec.spins.length + 1} — max ${Math.round(rec.maxRpm)} rpm — ${((t - rec.spinStartMs) / 1000).toFixed(0)}s`
-      : `${rec.spins.length} spin${rec.spins.length === 1 ? '' : 's'} recorded — waiting for a spin`;
+    badge.textContent = !rec.spinning
+      ? `${rec.spins.length} spin${rec.spins.length === 1 ? '' : 's'} recorded — waiting for a spin`
+      : rec.lowSinceMs != null
+        ? `Spin ${rec.spins.length + 1} — TAIL WATCH, hands off! ${Math.max(0, Math.ceil((TAIL_OBS_MS - (t - rec.lowSinceMs)) / 1000))}s left`
+        : `Spin ${rec.spins.length + 1} — max ${Math.round(rec.maxRpm)} rpm — ${((t - rec.spinStartMs) / 1000).toFixed(0)}s`;
     paintCharts();
   }
 
@@ -732,6 +872,9 @@ export function mountWheelBench(host){
           <span>spin ${c.spinN}</span>
           <span>${c.T245 != null ? 'T24→5: <b>' + c.T245.toFixed(1) + 's</b>' : '—'}</span>
           <span class="awb-score ${c.cls}">${c.score != null ? c.score + ' · ' + c.grade : 'n/a'}</span>
+          <span class="awb-tail">${c.tail
+            ? (c.tail.stopped ? 'tail: stopped' : `tail Ø${c.tail.avg_rpm.toFixed(1)} rpm · ${c.tail.pickups} pickup${c.tail.pickups === 1 ? '' : 's'}`)
+            : ''}</span>
           <button type="button" class="awb-cx" data-rm="${i}" title="Remove from chart">×</button>
         </li>`).join('');
     }
@@ -782,8 +925,10 @@ export function mountWheelBench(host){
       <h2>How it works</h2>
       <ol class="awb-steps">
         <li>Connect a wheel (header <b>Connect</b>), type its <b>serial number</b>, press <b>Start</b>.</li>
-        <li><b>Spin the wheel hard</b> (aim above 100 rpm), let go, let it coast to a <b>full stop</b>. No drafts, no touching the table.</li>
-        <li>Each finished spin lands on the chart with a score. <b>Stop &amp; save</b> stores the wheel; the next serial can follow immediately.</li>
+        <li><b>Spin the wheel hard</b> (aim above 100 rpm), let go — and then <b>hands off to the very end</b>: after the
+            coast-down the badge switches to “TAIL WATCH” for 30&nbsp;s, recording how the untouched wheel responds to the
+            room's air. Don't stop the wheel by hand.</li>
+        <li>Each finished spin lands on the chart with a score + tail reading. <b>Stop &amp; save</b> stores the wheel; the next serial can follow immediately.</li>
       </ol>
     </div>
 
@@ -827,6 +972,7 @@ export function mountWheelBench(host){
     <div class="adm-card">
       <h2>Test chart <button type="button" class="awb-mini" id="awbClear" style="float:right">Clear chart</button></h2>
       <canvas id="awbChart" class="awb-chart"></canvas>
+      <canvas id="awbDev" class="awb-dev"></canvas>
       <canvas id="awbDeriv" class="awb-deriv"></canvas>
       <ul class="awb-curves" id="awbCurveList"></ul>
     </div>
@@ -843,12 +989,18 @@ export function mountWheelBench(host){
         <b>Chart:</b> every curve is aligned so 0&nbsp;s = the moment it slows through 24 rpm; the dashed line is the
         ideal wheel computed from the physics model, the shaded band is the “good” zone — a curve inside the band is fine.
         Sloping <b>below/left</b> of the band = extra brake (seating → dust → damage, in that order of likelihood).
+        The <b>deviation strip</b> under it is the magnifier: 0% = exactly the ideal wheel; a steady drift
+        <b>below</b> zero = a few percent extra brake (a slightly weaker wheel shows here long before the score moves),
+        drift <b>above</b> = coasting longer than ideal (great wheel — or a helping draft; check the blue zone below).
         <b>Score</b> = T(24→5&nbsp;s) versus the 15.0&nbsp;s reference. The lower <b>braking chart</b> is color-coded —
         the zone a dot lands in names the culprit directly: <span style="color:#0f8a52;font-weight:700">green band</span> = healthy,
         <span style="color:#c2415b;font-weight:700">red</span> = friction (reseat → clean),
         <span style="color:#8a6a08;font-weight:700">amber</span> = extra air drag (wheel shape),
         <span style="color:#2c4bbd;font-weight:700">blue</span> = a draft is pushing the wheel (environment, not the wheel).
         One weak spin proves nothing — judge a wheel on its <b>best</b> spin of 3 (bad seating can only subtract, never add).
+        The <b>tail reading</b> (30&nbsp;s untouched after the coast-down) is the SENSITIVITY axis: higher average rpm and more
+        pickups = the wheel catches the room's faint air movement more easily. It depends on the room too, so compare tails
+        only <b>within one session</b> — and it deliberately does not enter the score.
       </p>
     </div>
 
