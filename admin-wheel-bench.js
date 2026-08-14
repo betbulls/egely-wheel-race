@@ -30,7 +30,15 @@ const CHART_GAP_MS     = 2500;   // frame gap beyond this = BLE outage → pen-u
 // The recorded tuple layout — single owner for ingest, payload format string,
 // and any future decoder. Bump the format version on ANY change here.
 const FRAME_COLS = ['t_ms', 'counter', 'raw_led', 'led'];
-const FORMAT = 'wheel-bench v1; frames=[' + FRAME_COLS.join(',') + ']; led=rpm (0-24, device-railed at 24)';
+const FORMAT = 'wheel-bench v1; frames=[' + FRAME_COLS.join(',') + ']; led=rpm (0-24, device-railed at 24); true rpm=6000/counter';
+
+// Decoded 2026-08-14 from the first real bench capture, validated against the
+// device's own LED on every frame: the 16-bit counter is the revolution period
+// in ~10 ms units, so TRUE rpm ~= 6000/counter — and the device keeps measuring
+// far above the 24-rpm display rail (375 rpm observed on a hand spin).
+// counter 0 = standstill. Absolute scale to be confirmed by video (~3%).
+const rpmOf = c => c > 0 ? 6000 / c : 0;
+const RPM_MIN_COUNTER = 8;   // counter below this (>750 rpm) = glitch/artifact, ignore for stats
 
 // Saved wheels survive tab switches (mount closures die, the day's bench work
 // must not): the store and a repaint hook for the currently mounted instance
@@ -83,6 +91,8 @@ function styles(){
   .awb-saved .adm-row{flex-wrap:wrap}
   .awb-dbok{color:#0f8a52;font-size:12px;font-weight:700}
   .awb-dberr{color:#c2415b;font-size:12px;font-weight:700}
+  .awb-errtext{flex-basis:100%;color:#c2415b;font-size:11.5px;font-family:ui-monospace,Menlo,Consolas,monospace;
+    word-break:break-word;padding-top:2px}
   .awb-mini{font-family:'Inter',sans-serif;font-size:12px;font-weight:700;padding:7px 13px;border-radius:999px;
     cursor:pointer;background:#fff;border:1px solid #dfe3e6;color:#401d91;flex-shrink:0}
   .awb-mini:hover{border-color:#5230da}
@@ -125,7 +135,7 @@ export function mountWheelBench(host){
     fw: '', hw: '', lastBattery: null,
     // spin segmentation (rawLed-based — see header comment)
     lastCounter: null, startHits: 0, firstHitMs: 0, spinning: false,
-    spinStartMs: 0, zeroSinceMs: null, maxLed: 0, prevRaw: null,
+    spinStartMs: 0, zeroSinceMs: null, maxLed: 0, maxRpm: 0, pendMaxRpm: 0, prevRaw: null,
     simUsed: false,
   });
 
@@ -155,21 +165,24 @@ export function mountWheelBench(host){
     // a real hand-spin stays high across reports, the glitch does not.
     const glitch = rec.prevRaw != null && frame.rawLed >= 22 && (frame.rawLed - rec.prevRaw) >= 10;
     const fresh = frame.counter !== rec.lastCounter;
+    const rpm = frame.counter >= RPM_MIN_COUNTER ? rpmOf(frame.counter) : 0;
     rec.lastCounter = frame.counter;
     if(!rec.spinning){
       if(fresh){
         if(frame.rawLed >= SPIN_START_LED){
-          if(rec.startHits === 0) rec.firstHitMs = t;   // spin window starts at the FIRST high report
+          if(rec.startHits === 0){ rec.firstHitMs = t; rec.pendMaxRpm = 0; }  // spin window starts at the FIRST high report
+          if(rpm > rec.pendMaxRpm) rec.pendMaxRpm = rpm;   // the true peak usually IS the first report
           rec.startHits++;
           if(rec.startHits >= SPIN_START_HITS){
             rec.spinning = true; rec.spinStartMs = rec.firstHitMs;
-            rec.zeroSinceMs = null; rec.maxLed = frame.rawLed;
+            rec.zeroSinceMs = null; rec.maxLed = frame.rawLed; rec.maxRpm = rec.pendMaxRpm;
             rec.startHits = 0;
           }
         } else rec.startHits = 0;
       }
     } else if(!glitch){
       if(frame.rawLed > rec.maxLed) rec.maxLed = frame.rawLed;
+      if(rpm > rec.maxRpm) rec.maxRpm = rpm;
       if(frame.rawLed <= 0){
         if(rec.zeroSinceMs == null) rec.zeroSinceMs = t;
         else if(t - rec.zeroSinceMs >= SPIN_END_ZERO_MS) endSpin();
@@ -191,11 +204,12 @@ export function mountWheelBench(host){
         t_end_ms: endMs,
         duration_s: Math.round(dur / 100) / 10,
         max_led: r.maxLed,
+        max_rpm: Math.round(r.maxRpm),   // TRUE peak from the counter (can far exceed 24)
       };
       if(interrupted) spin.interrupted = true;   // wheel had not settled at zero
       r.spins.push(spin);
     }
-    r.spinning = false; r.zeroSinceMs = null; r.maxLed = 0;
+    r.spinning = false; r.zeroSinceMs = null; r.maxLed = 0; r.maxRpm = 0;
   }
   function endSpin(){
     closeSpin(rec, rec.zeroSinceMs, false);
@@ -220,14 +234,15 @@ export function mountWheelBench(host){
       const rpm = sim.omega * 60 / (2 * Math.PI);
       if(t - sim.lastReport >= 700 && rpm >= 0.3){
         sim.lastReport = t;
-        sim.counter = Math.min(65535, Math.max(1, Math.round(2500 / Math.max(rpm, 0.5))));
+        // real device formula: counter = rev period in ~10 ms units = 6000/rpm
+        sim.counter = Math.min(65535, Math.max(1, Math.round(6000 / Math.max(rpm, 0.5))));
       }
       const led = Math.max(0, Math.min(24, Math.round(rpm)));
       ingest({ counter: sim.counter, rawLed: led, led, battery: 'OK', hw: 'SIM', fw: 'SIM' }, true);
     }, 71);
     paintLive();
   }
-  function simSpin(){ if(sim) sim.omega = (28 + Math.random() * 14) * 2 * Math.PI / 60; }
+  function simSpin(){ if(sim) sim.omega = (150 + Math.random() * 220) * 2 * Math.PI / 60; }   // real hand spins hit 150-375 rpm
   function simStop(){
     if(!sim) return;
     clearInterval(sim.lineTimer); clearInterval(sim.physTimer); sim = null;
@@ -363,15 +378,18 @@ export function mountWheelBench(host){
 
     const t = now();
     const last = rec.frames.length ? rec.frames[rec.frames.length - 1] : null;
-    const rpm = last ? last[2] : 0;
-    host.querySelector('#awbRpm').innerHTML = `${rpm}<small>rpm (raw)</small>`;
+    // Big readout = TRUE rpm from the counter (the display LED rails at 24; the
+    // counter keeps measuring — 375 rpm was seen on a real hand spin).
+    const trueRpm = last && last[1] >= RPM_MIN_COUNTER ? Math.min(999, rpmOf(last[1])) : 0;
+    const rpmText = trueRpm >= 10 ? String(Math.round(trueRpm)) : (Math.round(trueRpm * 10) / 10).toFixed(1);
+    host.querySelector('#awbRpm').innerHTML = `${rpmText}<small>rpm</small>`;
     host.querySelector('#awbElapsed').innerHTML = `elapsed <b>${Math.floor(t / 60000)}:${String(Math.floor(t / 1000) % 60).padStart(2, '0')}</b>`;
     host.querySelector('#awbFrames').innerHTML = `lines <b>${rec.frames.length}</b>`;
-    host.querySelector('#awbCounter').innerHTML = `counter <b>${last ? last[1] : '—'}</b>`;
+    host.querySelector('#awbCounter').innerHTML = `counter <b>${last ? last[1] : '—'}</b> · led <b>${last ? last[2] : '—'}</b>`;
     const badge = host.querySelector('#awbSpinBadge');
     badge.className = 'awb-spinbadge' + (rec.spinning ? ' on' : '');
     badge.textContent = rec.spinning
-      ? `Spin ${rec.spins.length + 1} — max ${rec.maxLed} rpm — ${((t - rec.spinStartMs) / 1000).toFixed(0)}s`
+      ? `Spin ${rec.spins.length + 1} — max ${Math.round(rec.maxRpm)} rpm — ${((t - rec.spinStartMs) / 1000).toFixed(0)}s`
       : `${rec.spins.length} spin${rec.spins.length === 1 ? '' : 's'} recorded — waiting for a spin`;
 
     // rolling raw-RPM chart over the last CHART_WINDOW_MS (anchored at 0 while
@@ -398,7 +416,7 @@ export function mountWheelBench(host){
     const tb = host.querySelector('#awbSpinRows');
     if(!tb || !rec) return;
     tb.innerHTML = rec.spins.map(s =>
-      `<tr><td>#${s.n}${s.interrupted ? ' ⚠' : ''}</td><td>${s.max_led} rpm</td><td>${s.duration_s.toFixed(1)} s</td>
+      `<tr><td>#${s.n}${s.interrupted ? ' ⚠' : ''}</td><td>${s.max_rpm != null ? s.max_rpm : s.max_led} rpm</td><td>${s.duration_s.toFixed(1)} s</td>
        <td>${(s.t_start_ms / 1000).toFixed(1)}s → ${(s.t_end_ms / 1000).toFixed(1)}s</td></tr>`).join('');
   }
 
@@ -410,7 +428,11 @@ export function mountWheelBench(host){
       const p = e.payload;
       const db = e.db === 'ok' ? '<span class="awb-dbok">DB ✓</span>'
         : e.db === 'saving' ? '<span class="adm-src">saving…</span>'
-        : `<span class="awb-dberr" title="${esc(e.db.slice(4))}">DB failed</span> <button type="button" class="awb-mini" data-retry="${i}">Retry</button>`;
+        : `<span class="awb-dberr">DB failed</span> <button type="button" class="awb-mini" data-retry="${i}">Retry</button>`;
+      // Show the actual DB error text inline — a tooltip-only error already cost
+      // one office morning of guessing.
+      const errLine = (e.db && e.db.startsWith('err:'))
+        ? `<div class="awb-errtext">${esc(e.db.slice(4, 200))}</div>` : '';
       return `<li class="adm-row">
         <div class="adm-info">
           <div class="adm-name">${esc(p.serial)}${p.env && p.env.sim ? '<span class="awb-simtag">SIM</span>' : ''}</div>
@@ -418,6 +440,7 @@ export function mountWheelBench(host){
         </div>
         ${db}
         <button type="button" class="awb-mini" data-dl="${i}">JSON</button>
+        ${errLine}
       </li>`;
     }).join('');
   }
