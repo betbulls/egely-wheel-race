@@ -21,6 +21,8 @@ import { createPanelStack } from './research-panels.js';
 // The calibration tab shows the exact same chart TRIO as the admin Wheel test
 // (owner request) — the renderers are shared from there.
 import { drawTestChart, drawDevChart, drawDerivChart, PALETTE } from './admin-wheel-bench.js';
+// Run replay: the same transport bar + clock every replay in the app uses.
+import { createReplayClock, mountTransport } from './replay.js';
 
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
 const fmtClock = s => Math.floor(s / 60) + ':' + String(Math.floor(s) % 60).padStart(2, '0');
@@ -141,6 +143,7 @@ function styles(){
     line-height:1.55;padding:10px 14px;margin-top:14px}
   .rs-dl{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
   .rs-calchart{width:100%;height:340px;display:block;margin-top:12px}
+  .rs-replaybar{display:flex;align-items:center;gap:12px;margin:14px 0 12px}
   .rs-caldev{width:100%;height:150px;display:block;margin-top:6px}
   .rs-calderiv{width:100%;height:240px;display:block;margin-top:6px}
   .rs-progress{height:10px;border-radius:999px;background:#eef1f3;overflow:hidden;flex:1;min-width:140px}
@@ -1379,6 +1382,7 @@ function mountRunDetail(el, runId){
   let stack = null;
   let unsub = null;
   let loadedFor = null;
+  let replayClock = null;
 
   async function load(a){
     if(!a.user){
@@ -1435,6 +1439,7 @@ function mountRunDetail(el, runId){
         </div>
         ${isOwner ? '<div id="rsdLabels"></div>' : ''}
         ${row.notes ? `<p class="rs-note">${esc(row.notes)}</p>` : ''}
+        <div class="rs-replaybar" id="rsdReplay"></div>
         <div id="rsdStackHost"></div>
         <div class="rs-hash">SHA-256 (samples.csv): ${esc(row.sha256 || '—')}</div>
         <div class="rs-dl" id="rsdDl">
@@ -1462,6 +1467,51 @@ function mountRunDetail(el, runId){
     });
     stack.setData({ samples, markers, coasts });
     stack.setReview();
+
+    // ---- REPLAY: play the run back through the same panels, live-style ------
+    // The identical transport every replay in the app uses (play/seek/time/1×).
+    // Idle state = full charts (the clock is born "at the end"); Play rewinds
+    // to 0 and feeds the samples back in at real speed, the window following
+    // the head exactly like a live recording.
+    const durS = Math.max(1, (s.duration_s || (samples.length ? Math.ceil(samples[samples.length - 1].t) : 1)));
+    const durationMs = durS * 1000;
+    const applyAt = (tMs) => {
+      const tS = tMs / 1000;
+      let lo = 0, hi = samples.length;
+      while(lo < hi){ const mid = (lo + hi) >> 1; (samples[mid].t <= tS) ? lo = mid + 1 : hi = mid; }
+      stack.setData({
+        samples: samples.slice(0, lo),
+        markers: markers.filter(x => x.t_ms <= tMs),
+        coasts: coasts.filter(x => x.t_end_ms <= tMs),
+      });
+      stack.tick();
+    };
+    const barEl = el.querySelector('#rsdReplay');
+    let clockRef = null;
+    const transport = mountTransport(barEl, {
+      durationSeconds: durS,
+      onToggle: () => clockRef && clockRef.toggle(),
+      onSeek: ms => clockRef && clockRef.seek(ms),
+      onSpeed: x => clockRef && clockRef.setSpeed(x),
+    });
+    let lastApply = 0;
+    replayClock = createReplayClock({
+      durationMs,
+      onFrame(t){
+        transport.paint(t);
+        // panel repaints throttled to ~7 Hz — fresh data only arrives at
+        // 1.4 Hz anyway, and full-rate rebuilds would burn phones
+        const now = performance.now();
+        if(now - lastApply > 150 || t <= 0 || t >= durationMs){ lastApply = now; applyAt(t); }
+      },
+      onState(st){
+        transport.setPlaying(st.playing, st.done);
+        if(st.playing) stack.setLiveFollow();
+        else if(st.done){ applyAt(durationMs); stack.setReview(); }
+      },
+    });
+    clockRef = replayClock;
+    transport.paint(durationMs);
 
     // CSV export: frames come down only now, chunk by chunk
     el.querySelector('#rsdDl').addEventListener('click', async e => {
@@ -1537,5 +1587,9 @@ function mountRunDetail(el, runId){
   }
 
   unsub = auth.subscribeAuth(load);
-  return () => { if(stack) stack.destroy(); if(unsub) unsub(); };
+  return () => {
+    if(replayClock){ replayClock.destroy(); replayClock = null; }
+    if(stack) stack.destroy();
+    if(unsub) unsub();
+  };
 }

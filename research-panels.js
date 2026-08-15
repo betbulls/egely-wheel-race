@@ -1164,6 +1164,15 @@ export function createPanelStack(host, opts){
       if(opts.onFreezeChange) opts.onFreezeChange(false, 0);
       paintAll(true);
     },
+    // Replay support: behave exactly like a live recording — the window follows
+    // the newest sample (which the replay feeds in progressively).
+    setLiveFollow(){
+      view.mode = 'live'; view.follow = true;
+      if(view.preset === 'full') view.preset = '60';
+      view.selection = null; view.cursorT = null;
+      hideSelPopover();
+      paintAll(true);
+    },
     exportPng,
     destroy(){ hideSelPopover(); stackEl.innerHTML = ''; },
   };

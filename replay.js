@@ -71,7 +71,8 @@ const fmt = ms => {
 // .rp-speed).
 // ---------------------------------------------------------------------------
 const SPEED_STEPS = [1, 2, 4];
-function mountTransport(barEl, opts){
+// Exported: the Research run replay uses the exact same transport bar.
+export function mountTransport(barEl, opts){
   const durationMs = Math.max(1, (opts.durationSeconds || 60) * 1000);
   // Arrow keys on the seek slider should move ~1 second of event time, not
   // 1/1000 of the recording (60ms on a 1-minute solo would be useless).
