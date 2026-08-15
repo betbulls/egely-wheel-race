@@ -213,7 +213,9 @@ function styles(){
   /* Quality cards — same family as the stat band, one size quieter. They were
      11.5px pills the owner could not read; now each is a small card: label on
      top, the value readable, still tappable for its plain-language caption. */
-  .rs-qwrap{margin:0 0 14px}
+  .rs-qwrap{margin:18px 0 16px}
+  .rs-qchip:focus{outline:none}
+  .rs-qchip:focus-visible{outline:2px solid #5230da;outline-offset:2px}
   .rs-qchips{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
   .rs-qchip{font-family:inherit;display:block;text-align:left;border:1px solid #eef1f3;border-radius:12px;
     padding:9px 13px;color:#011624;background:#fff;font-size:13.5px;font-weight:600;
