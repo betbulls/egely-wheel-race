@@ -204,7 +204,7 @@ export function createCapture(opts = {}){
     rpmPts: [],            // fresh-counter true-rpm samples {t, rpm} for charts
     fw: '', hw: '', lastBattery: null,
     // spin segmentation (rawLed-based — see header comment)
-    lastCounter: null, startHits: 0, firstHitMs: 0, spinning: false,
+    lastCounter: null, lastZeroMs: null, startHits: 0, firstHitMs: 0, spinning: false,
     spinStartMs: 0, lowSinceMs: null, maxLed: 0, maxRpm: 0, pendMaxRpm: 0,
     prevRaw: null, railRun: 0,
     simUsed: false, autoStopFired: false,
@@ -245,6 +245,19 @@ export function createCapture(opts = {}){
       const sample = { t, rpm };
       rec.rpmPts.push(sample);
       if(opts.onRpmSample) opts.onRpmSample(sample, rec);
+      rec.lastZeroMs = null;
+    } else if(frame.counter === 0 && !glitch){
+      // Standstill IS a measurement: the device keeps reporting counter 0
+      // while the wheel is at rest, but the value never CHANGES, so the
+      // fresh-only series used to show a stopped wheel as a fake radio gap
+      // (the charts lost their line at 0 rpm — real field feedback). Emit a
+      // 0-rpm sample at the device's own ~0.7 s refresh cadence instead.
+      if(rec.lastZeroMs == null || t - rec.lastZeroMs >= 700){
+        rec.lastZeroMs = t;
+        const sample = { t, rpm: 0 };
+        rec.rpmPts.push(sample);
+        if(opts.onRpmSample) opts.onRpmSample(sample, rec);
+      }
     }
     rec.lastCounter = frame.counter;
     if(!rec.spinning){
@@ -350,10 +363,11 @@ export function createCapture(opts = {}){
       if(!sim) return;
       const t = performance.now();
       const rpm = sim.omega * 60 / (2 * Math.PI);
-      if(t - sim.lastReport >= 700 && rpm >= 0.3){
+      if(t - sim.lastReport >= 700){
         sim.lastReport = t;
-        // real device formula: counter = rev period in ~10 ms units = 6000/rpm
-        sim.counter = Math.min(65535, Math.max(1, Math.round(6000 / Math.max(rpm, 0.5))));
+        // real device formula: counter = rev period in ~10 ms units = 6000/rpm;
+        // counter 0 = standstill (the device reports the stop — so must the sim)
+        sim.counter = rpm >= 0.3 ? Math.min(65535, Math.max(1, Math.round(6000 / Math.max(rpm, 0.5)))) : 0;
       }
       const led = Math.max(0, Math.min(24, Math.round(rpm)));
       ingest({ counter: sim.counter, rawLed: led, led, battery: 'OK', hw: 'SIM', fw: 'SIM' }, true);

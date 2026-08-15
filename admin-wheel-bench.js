@@ -411,19 +411,21 @@ export function drawDerivChart(canvas, curves, liveCurve, opts){
   ctx.beginPath(); ctx.moveTo(xOf(FRICTION_SPLIT), padT); ctx.lineTo(xOf(FRICTION_SPLIT), yOf(bandHi(FRICTION_SPLIT))); ctx.stroke();
   ctx.setLineDash([]);
 
-  // zone labels
+  // zone labels — the bench keeps its punchy diagnostic voice (internal QC
+  // tool, deliberate); opts.calm (Research) states possible INTERPRETATIONS
+  // only, because the software cannot identify the physical cause.
   ctx.font = '700 10.5px Inter, sans-serif'; ctx.textBaseline = 'top';
   ctx.fillStyle = '#c2415b'; ctx.textAlign = 'left';
-  ctx.fillText('FRICTION — bearing/seating → reseat, then clean', xOf(0.6), padT + 4);
+  ctx.fillText(opts.calm ? 'more low-speed braking — possible seating/bearing friction' : 'FRICTION — bearing/seating → reseat, then clean', xOf(0.6), padT + 4);
   ctx.fillStyle = '#8a6a08'; ctx.textAlign = 'right';
-  ctx.fillText('AIR DRAG — wheel shape', xOf(RPM_MAX - 0.5), padT + 4);
+  ctx.fillText(opts.calm ? 'more high-speed braking — consistent with air drag' : 'AIR DRAG — wheel shape', xOf(RPM_MAX - 0.5), padT + 4);
   ctx.fillStyle = '#2c4bbd';
-  ctx.fillText('DRAFT — breeze is pushing the wheel', xOf(RPM_MAX - 0.5), yOf(0) - 14);
+  ctx.fillText(opts.calm ? 'less braking than the model — possible airflow' : 'DRAFT — breeze is pushing the wheel', xOf(RPM_MAX - 0.5), yOf(0) - 14);
   ctx.save();
   ctx.fillStyle = '#0f8a52'; ctx.textAlign = 'center';
   const midR = 21, ang = Math.atan2(yOf(ideal(24)) - yOf(ideal(18)), xOf(24) - xOf(18));
   ctx.translate(xOf(midR), yOf(ideal(midR)) - 9); ctx.rotate(ang);
-  ctx.fillText('GOOD — matches the ideal wheel', 0, 0);
+  ctx.fillText(opts.calm ? 'close to the factory reference' : 'GOOD — matches the ideal wheel', 0, 0);
   ctx.restore();
 
   // grid + axes
@@ -480,7 +482,9 @@ export function drawDerivChart(canvas, curves, liveCurve, opts){
   }
   ctx.globalAlpha = 1;
   ctx.fillStyle = '#67737c'; ctx.font = '11px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  ctx.fillText('braking force [rpm/s] vs speed [rpm] — the zone a dot lands in names the culprit', padL + 4, 2);
+  ctx.fillText(opts.calm
+    ? 'braking force [rpm/s] vs speed [rpm] — zones suggest interpretations, not causes'
+    : 'braking force [rpm/s] vs speed [rpm] — the zone a dot lands in names the culprit', padL + 4, 2);
 }
 
 export function mountWheelBench(host){

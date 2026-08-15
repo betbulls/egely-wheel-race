@@ -95,7 +95,13 @@ function buildPipeline(samples, coef, floorTau){
       if(Math.abs(det) > 1e-9){
         const slope = (m * stw - st * sw) / det;                  // rad/s^2
         const meanRpm = win.reduce((a, p) => a + p.rpm, 0) / m;
-        tau[i] = INERTIA * (slope - alphaBase(meanRpm)) * 1e9;    // nN*m
+        // A wheel AT REST cannot be "braking": the model's A-term would claim
+        // a phantom deceleration at 0 rpm, and the subtraction would turn it
+        // into a fake positive DRIVE reading on a standing wheel (standstill
+        // 0-rpm samples are real data as of v1.2). Baseline = 0 when the
+        // whole window is at rest.
+        const base = meanRpm < 0.2 ? 0 : alphaBase(meanRpm);
+        tau[i] = INERTIA * (slope - base) * 1e9;                  // nN*m
         decel[i] = -slope * 30 / Math.PI;                         // rpm/s
       }
     }

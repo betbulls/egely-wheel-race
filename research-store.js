@@ -16,7 +16,9 @@ import {
 export const RUN_MAX_MS = 10 * 60 * 1000;        // owner decision: 10-minute experiments
 export const CHUNK_LINES = 1000;                 // ~71 s of stream per chunk (~9/run)
 export const CAL_STALE_DAYS = 30;                // amber "stale calibration" threshold
-export const RUN_FORMAT = 'ewr-research v1.1; ' + FORMAT;   // v1.1: 3-spin calibration + derived meta rows
+// v1.2: standstill 0-rpm samples included in rpm_samples (counter 0 reported
+// at the device's ~0.7 s cadence); v1.1: 3-spin calibration + derived meta rows
+export const RUN_FORMAT = 'ewr-research v1.2; ' + FORMAT;
 
 // ---- calibration v3 protocol constants --------------------------------------
 export const CAL_SPINS_TARGET = 3;   // a calibration = three ACCEPTED spins (owner decision, 2026-08-15)

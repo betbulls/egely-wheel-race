@@ -167,6 +167,28 @@ function styles(){
   .rs-spinrow.exc{opacity:.6}
   .rs-spinrow.exc b{text-decoration:line-through}
   .rs-calband{width:100%;height:140px;display:block;margin-top:6px}
+  .rs-dot{display:inline-block;width:10px;height:10px;border-radius:50%;flex-shrink:0}
+  .rs-fithead{font-family:'Montserrat',sans-serif;font-weight:600;font-size:16px;color:#011624;margin:10px 0 4px}
+  .rs-fitgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:10px;margin:4px 0 10px}
+  .rs-fitcard{background:#f7f8f8;border:1px solid #dfe3e6;border-radius:12px;padding:10px 12px}
+  .rs-fitcard .l{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#67737c}
+  .rs-fitcard .v{font-family:'Montserrat',sans-serif;font-weight:600;font-size:20px;color:#011624;margin:3px 0}
+  .rs-fitcard .x{font-size:11.5px;color:#67737c;line-height:1.45}
+  .rs-tech{margin:6px 0 0}
+  .rs-tech summary{cursor:pointer;font-size:12.5px;font-weight:700;color:#401d91}
+  .rs-scale{margin:8px 0 2px}
+  .rs-scale-bar{position:relative;height:13px;border-radius:999px;background:#f2f3f4}
+  .rs-scale-bar i{position:absolute;top:0;height:100%}
+  .rs-scale-bar i.z0{border-radius:999px 0 0 999px}
+  .rs-scale-bar i.z3{border-radius:0 999px 999px 0}
+  .rs-scale-bar b{position:absolute;top:-8px;transform:translateX(-50%);background:#011624;color:#fff;font-size:10.5px;
+    padding:1px 7px;border-radius:999px;line-height:1.6;z-index:2}
+  .rs-scale-l{position:relative;height:13px;font-size:9.5px;color:#99a2a7}
+  .rs-scale-l span{position:absolute;transform:translateX(-50%)}
+  .rs-scale-l span.e0{transform:none;left:0}
+  .rs-scale-l span.e1{transform:none;right:0}
+  .rs-chart-h{font-family:'Montserrat',sans-serif;font-weight:600;font-size:13.5px;color:#011624;margin:16px 0 2px}
+  .rs-chart-x{font-size:12px;color:#67737c;line-height:1.5;margin:0 0 4px}
   .rs-banner{display:flex;align-items:center;gap:10px;background:rgba(82,48,218,.07);border:1px solid rgba(82,48,218,.3);
     color:#401d91;border-radius:12px;padding:10px 14px;font-size:13px;margin-bottom:14px}
   @media (max-width:640px){ .rs-tile .v{font-size:28px} }
@@ -182,7 +204,11 @@ const avatarHtml = (url, name) => url
 function calChipText(cal){
   const age = store.calAgeDays(cal);
   const c = cal.coef || {};
-  return `${cal.location || 'room'} · ${new Date(cal.created_at).toLocaleDateString('en-GB')} (${age}d)`
+  // date AND time — several calibrations on one day must stay tellable apart
+  const d = new Date(cal.created_at);
+  const when = d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })
+    + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  return `${cal.location || 'room'} · ${when} (${age}d)`
     + (c.score != null ? ` · score ${c.score} (${c.grade})` : '')
     + (c.T24_5 != null ? ` · T24→5 ${c.T24_5}s` : '');
 }
@@ -224,31 +250,109 @@ const scorePillHtml = t245 => {
 function tailLabel(tail){
   if(!tail) return '';
   if(tail.stopped) return 'tail: STILL';
-  return `tail: Ø${tail.avg_rpm.toFixed(1)} rpm · ${tail.pickups} pickup${tail.pickups === 1 ? '' : 's'}`;
+  return `tail: Ø${tail.avg_rpm.toFixed(1)} rpm · ${tail.pickups} air nudge${tail.pickups === 1 ? '' : 's'}`;
 }
 const fmtPctSigned = v => v == null ? '—' : (v > 0 ? '+' : '') + v + '%';
 
-// The multi-line calibration result — deliberately NOT one merged score:
-// mechanical condition, repeatability, model fit and coverage answer different
-// questions and hide each other when averaged. Shared by the live tab (after
-// every spin) and the calibration detail view.
-function fitSummaryHtml(fit){
+// Wheel-health scale: where this score sits between 0 and 110, with the grade
+// bands the guide explains (D <72, C 72–84, B 85–92 = factory, A 93+).
+function scoreScaleHtml(score){
+  if(score == null) return '';
+  const pct = v => (v / 110 * 100).toFixed(1) + '%';
+  const pos = Math.max(3, Math.min(97, score / 110 * 100));
+  return `<div class="rs-scale">
+    <div class="rs-scale-bar">
+      <i class="z0" style="left:0;width:${pct(72)};background:rgba(194,65,91,.30)"></i>
+      <i style="left:${pct(72)};width:${pct(13)};background:rgba(217,119,6,.30)"></i>
+      <i style="left:${pct(85)};width:${pct(8)};background:rgba(124,168,12,.30)"></i>
+      <i class="z3" style="left:${pct(93)};width:${pct(17)};background:rgba(15,138,82,.30)"></i>
+      <b style="left:${pos}%">${score}</b>
+    </div>
+    <div class="rs-scale-l">
+      <span class="e0">0</span><span style="left:${pct(72)}">72 · C</span><span style="left:${pct(85)}">85 · B</span><span style="left:${pct(93)}">93 · A</span><span class="e1">110</span>
+    </div>
+  </div>`;
+}
+
+// The calibration result, three layers deep (owner + ChatGPT-feedback round):
+// 1) a plain-language headline + one sentence saying what happened overall,
+// 2) understandable cards (wheel condition with the health scale, repeatability,
+//    cross-check, natural slowdown, validated range),
+// 3) a collapsed "Technical details" with A/K/σ/points/drift for the engineers.
+// Deliberately NOT one merged score — the cards answer different questions.
+function fitSummaryHtml(fit, opts){
   if(!fit) return '';
+  const o = opts || {};
   const spread = fit.quality_pct != null ? (100 - fit.quality_pct) : null;
   const ptsTotal = fit.per_spin ? fit.per_spin.reduce((a, p) => a + (p.pts || 0), 0) : null;
-  const rows = [];
-  rows.push(`<span>wheel score: ${scorePillHtml(fit.T24_5)}${fit.score_basis ? ` <span style="color:#99a2a7;font-size:12px">— based on the ${esc(fit.score_basis)}</span>` : ''}</span>`);
-  rows.push(`<span>baseline: <b>T24→5 ${fit.T24_5 ?? '—'} s</b> · model <b>A=${fit.A} · K=${fit.K}</b> (${fit.fit})</span>`);
-  if(spread != null) rows.push(`<span>repeatability: <b>T24→5 spread ${spread}%</b> across ${fit.spin_count} spins</span>`);
-  if(fit.loo) rows.push(`<span>validation: a model built from the other spins predicts each spin to <b>±${fit.loo.max_abs_pct}%</b> (out-of-sample)</span>`);
-  if(fit.sigma_rel != null) rows.push(`<span>model fit: <b>σ ±${Math.round(fit.sigma_rel * 100)}%</b></span>`);
-  if(fit.w_fit_min != null) rows.push(`<span>fitted range: <b>${fit.w_fit_min}–${fit.w_fit_max} rpm</b>${ptsTotal ? ' · ' + ptsTotal + ' points' : ''}</span>`);
-  if(fit.band_pts) rows.push(`<span>observed range (scatter vs the pooled model): up to <b>${Math.max(...fit.band_pts.map(b => b[1]))} nN·m</b></span>`);
-  if(fit.tail_avg != null) rows.push(`<span>ambient tail: <b>Ø${fit.tail_avg} rpm</b></span>`);
-  if(fit.outlier_ack) rows.push(`<span style="color:#8a6a08">${fit.outlier_unresolved ? 'a flagged spin was left undecided (saved by auto-stop / leaving the page)' : 'saved with a flagged spin kept'}${fit.outlier_pct != null ? ' (±' + fit.outlier_pct + '%)' : ''} — repeatability is limited; the observed range reflects it</span>`);
-  if(fit.drift) rows.push(`<span>vs previous calibration (${fit.drift.days_since}d ago): 24→5 ${fmtPctSigned(fit.drift.t24_5_pct)} · 24→10 ${fmtPctSigned(fit.drift.t24_10_pct)} · 12→6 ${fmtPctSigned(fit.drift.t12_6_pct)}</span>`);
-  return `<div class="rs-meta" style="margin-top:8px;align-items:center">${rows.join('')}</div>`;
+  // wording tiers only — never a scientific verdict
+  const tier = spread == null ? null : spread <= 10 ? 'good' : spread <= 20 ? 'moderate' : 'limited';
+  const tierWord = { good: 'good repeatability', moderate: 'moderate repeatability', limited: 'limited repeatability' };
+  const head = o.progress
+    ? `Calibration in progress — ${fit.spin_count} of ${store.CAL_SPINS_TARGET} spin${fit.spin_count === 1 ? '' : 's'} accepted`
+    : `Calibration result${tier ? ' — ' + tierWord[tier] : ''}`;
+  let sentence = '';
+  if(tier === 'good') sentence = `The ${fit.spin_count} accepted spins matched closely (T24→5 spread ${spread}%), giving a tight reference band.`;
+  else if(tier === 'moderate') sentence = `The ${fit.spin_count} accepted spins matched reasonably (T24→5 spread ${spread}%).`;
+  else if(tier === 'limited') sentence = `The ${fit.spin_count} accepted spins were not closely repeatable (T24→5 spread ${spread}%). The reference band is wider as a result, so smaller experimental deviations may be indistinguishable from normal calibration variation.`;
+  const health = fit.grade === 'C'
+    ? 'This wheel scored below the factory band — reseat it on the needle tip and recalibrate before trusting experiment numbers.'
+    : fit.grade === 'D'
+      ? 'This wheel scored well below the reference band — experiments are not recommended until it improves: reseat it on the needle tip; if the score stays low, clean the bearing.'
+      : '';
+  const cards = [];
+  cards.push(`<div class="rs-fitcard"><div class="l">Wheel condition</div>
+    <div class="v">${scorePillHtml(fit.T24_5)}</div>
+    ${scoreScaleHtml(fit.score)}
+    <div class="x">vs the factory reference wheel — higher = freer running${fit.score_basis ? ' · based on the ' + esc(fit.score_basis) : ''}</div></div>`);
+  if(spread != null) cards.push(`<div class="rs-fitcard"><div class="l">Repeatability</div>
+    <div class="v">${spread}% spread</div>
+    <div class="x">how closely the ${fit.spin_count} spins' T24→5 matched — lower is better</div></div>`);
+  if(fit.loo) cards.push(`<div class="rs-fitcard"><div class="l">Cross-check</div>
+    <div class="v">±${fit.loo.max_abs_pct}%</div>
+    <div class="x">a model built from the other spins predicts each spin this well — lower is better</div></div>`);
+  cards.push(`<div class="rs-fitcard"><div class="l">Natural slowdown</div>
+    <div class="v">${fit.T24_5 ?? '—'} s</div>
+    <div class="x">untouched, from 24 down to 5 rpm (reference wheel: 15.0 s)</div></div>`);
+  if(fit.w_fit_min != null) cards.push(`<div class="rs-fitcard"><div class="l">Validated range</div>
+    <div class="v">${fit.w_fit_min}–${fit.w_fit_max} rpm</div>
+    <div class="x">inside: model built on measured data · outside: extrapolated</div></div>`);
+  const flagged = fit.outlier_ack
+    ? `<div class="rs-warn" style="margin:0 0 10px">${fit.outlier_unresolved ? 'A flagged spin was left undecided (saved by auto-stop or leaving the page)' : 'Saved with a flagged spin kept'}${fit.outlier_pct != null ? ' (±' + fit.outlier_pct + '%)' : ''} — repeatability is limited and the observed range reflects it.</div>` : '';
+  const tech = `
+    <details class="rs-tech"><summary>Technical details</summary>
+      <div class="rs-meta" style="margin-top:8px">
+        <span>model: <b>decel = A + K·ω^1.5</b> · A=${fit.A} · K=${fit.K} (${fit.fit})</span>
+        ${fit.sigma_rel != null ? `<span>in-sample fit residual: <b>σ ±${Math.round(fit.sigma_rel * 100)}%</b></span>` : ''}
+        ${ptsTotal ? `<span>fit points: <b>${ptsTotal}</b></span>` : ''}
+        ${fit.band_pts ? `<span>observed range (scatter vs the pooled model): up to <b>${Math.max(...fit.band_pts.map(b => b[1]))} nN·m</b></span>` : ''}
+        ${fit.tail_avg != null ? `<span>average motion in the untouched tail: <b>Ø${fit.tail_avg} rpm</b></span>` : ''}
+        ${fit.drift ? `<span>vs previous calibration (${fit.drift.days_since}d ago): 24→5 ${fmtPctSigned(fit.drift.t24_5_pct)} · 24→10 ${fmtPctSigned(fit.drift.t24_10_pct)} · 12→6 ${fmtPctSigned(fit.drift.t12_6_pct)}</span>` : ''}
+        ${fit.algo ? `<span style="color:#99a2a7">${esc(fit.algo)}</span>` : ''}
+      </div>
+    </details>`;
+  return `
+    <div class="rs-fithead">${esc(head)}</div>
+    ${sentence ? `<p class="rs-note" style="margin:4px 0 10px">${esc(sentence)}</p>` : ''}
+    ${health ? `<div class="rs-warn" style="margin:0 0 10px">${esc(health)}</div>` : ''}
+    ${flagged}
+    <div class="rs-fitgrid">${cards.join('')}</div>
+    ${tech}`;
 }
+
+// Per-chart titles + plain explanations (shared by the live calibration tab
+// and the detail view) — every chart explains itself where it stands.
+const CAL_CHARTS = {
+  top: { t: 'Do the spins slow down the same way?',
+    x: 'Colored lines = the accepted spins, lined up where each crossed 24 rpm (t = 0). Grey dashed = excluded attempts. Thick dark = the baseline model built from these spins. Thin dashed with the green band = the factory reference wheel. Left of 0 s (greyed) = above 24 rpm — recorded, but outside the fitted range. The rpm scale is logarithmic so the fast and slow parts both stay visible.' },
+  dev: { t: 'Difference from the factory reference wheel [%]',
+    x: '0% = slows exactly like the factory reference wheel. Above 0 = holds its speed longer (less braking); below 0 = loses speed faster (more braking). Small systematic differences show up here first.' },
+  deriv: { t: 'Deceleration pattern by speed',
+    x: 'Each dot is one moment: braking [rpm/s] vs speed [rpm]. Dashed = the factory reference, solid dark = this calibration\'s model. The tinted zones suggest POSSIBLE interpretations of a pattern — they cannot identify the physical cause.' },
+  band: { t: 'How wide is the baseline at each speed?',
+    x: 'Each bar shows how far the accepted spins sat from their combined model in that speed range, as torque. Experimental readings inside this range cannot be distinguished from the calibration\'s own variation.' },
+};
+const chartHead = k => `<div class="rs-chart-h">${esc(CAL_CHARTS[k].t)}</div><p class="rs-chart-x">${CAL_CHARTS[k].x}</p>`;
 
 // "Observed calibration range" strip: per speed band, how far the accepted
 // spins' braking disagreed with the pooled model, in nN·m — the spin-to-spin
@@ -272,13 +376,14 @@ function drawBandStrip(canvas, bandPts, floorTau){
     ctx.fillStyle = '#67737c'; ctx.fillText(String(v), padL - 6, y);
   }
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  for(let r = 0; r <= RPM_MAX; r += 4){ ctx.fillStyle = '#99a2a7'; ctx.fillText(String(r), xOf(r), padT + plotH + 4); }
+  // ticks at the BAND-BIN EDGES — the speed ranges the bars actually cover
+  for(const r of [0, 2, 5, 10, 17, 24]){ ctx.fillStyle = '#99a2a7'; ctx.fillText(String(r), xOf(r), padT + plotH + 4); }
   if(floorTau){
     ctx.strokeStyle = 'rgba(103,115,124,0.6)'; ctx.setLineDash([4, 4]);
     ctx.beginPath(); ctx.moveTo(padL, yOf(floorTau)); ctx.lineTo(padL + plotW, yOf(floorTau)); ctx.stroke();
     ctx.setLineDash([]);
     ctx.fillStyle = '#67737c'; ctx.textAlign = 'left';
-    ctx.fillText('room noise floor ' + floorTau + ' nN·m', padL + 4, Math.max(padT + 6, yOf(floorTau) - 10));
+    ctx.fillText('room noise floor (untouched tail) ' + floorTau + ' nN·m', padL + 4, Math.max(padT + 6, yOf(floorTau) - 10));
   }
   for(const [wc, tau] of bandPts){
     const bw = plotW / RPM_MAX * 2.6;
@@ -598,8 +703,12 @@ function mountCalibration(host, a){
   host.innerHTML = `
     <div class="rs-card">
       <h2>Calibrate a wheel in this room</h2>
-      <p class="rs-note">This records how <b>your</b> wheel coasts <b>in this room</b> with nobody influencing it.
-      Every experiment is measured against this baseline. <b>Re-calibrate when you move to a different room.</b></p>
+      <p class="rs-note"><b>How calibration works:</b> it measures how <b>your</b> wheel naturally slows down
+      <b>in this room</b> with nobody influencing it. Three free spins are combined into a baseline model, and the
+      differences between them become the reference band used during experiments — the narrower the band, the
+      smaller the deviations that can be told apart from normal calibration variability.
+      <b>Re-calibrate when you move to a different room.</b></p>
+      <p class="rs-note" style="font-weight:600;color:#401d91">3 free spins → combined baseline → reference band → experiment comparison</p>
       <ol class="rs-steps">
         <li>Pick the wheel, fill in the environment once, press <b>Start calibration</b>. From then on the settings lock and the process guides itself.</li>
         <li><b>THREE strong spins</b> (above 140 rpm), one after another: spin, let go, <b>hands off</b> while the wheel
@@ -634,23 +743,14 @@ function mountCalibration(host, a){
       </div>
       <div id="rscGate"></div>
       <span class="rs-msg" id="rscMsg"></span>
-      <canvas id="rscChart" class="rs-calchart"></canvas>
-      <canvas id="rscDev" class="rs-caldev"></canvas>
-      <canvas id="rscDeriv" class="rs-calderiv"></canvas>
-      <p class="rs-note" style="margin:8px 0 0">
-      <b>Top chart:</b> every spin, lined up at the moment it slows through 24 rpm — the dashed line is the reference wheel,
-      the green band is the healthy zone. A curve inside the band is a good spin; longer to the right = less braking.
-      Once a fit exists, the <b>thick dark line</b> is this calibration's own model, the greyed left half (above 24 rpm)
-      is recorded but outside the fitted range, and excluded attempts draw dashed.
-      <b>Middle strip:</b> the magnifier — the same spins as percent difference from the reference; a steady drift below 0%
-      means a few percent extra brake even when the top chart looks fine.
-      <b>Bottom map:</b> where the braking comes from — each dot is one moment;
-      <span style="color:#0f8a52;font-weight:700">green band</span> = healthy,
-      <span style="color:#c2415b;font-weight:700">red</span> = bearing friction (reseat, then clean),
-      <span style="color:#8a6a08;font-weight:700">amber</span> = extra air drag,
-      <span style="color:#2c4bbd;font-weight:700">blue</span> = a draft is pushing the wheel.</p>
-      <div id="rscSpins" style="margin-top:12px"></div>
       <div id="rscFit"></div>
+      <div id="rscSpins" style="margin-top:12px"></div>
+      ${chartHead('top')}
+      <canvas id="rscChart" class="rs-calchart"></canvas>
+      ${chartHead('dev')}
+      <canvas id="rscDev" class="rs-caldev"></canvas>
+      ${chartHead('deriv')}
+      <canvas id="rscDeriv" class="rs-calderiv"></canvas>
     </div>
     <div class="rs-card">
       <h2>Calibrations</h2>
@@ -703,7 +803,7 @@ function mountCalibration(host, a){
     const cd = $('rscDev');
     if(cd) drawDevChart(cd, calCurves, lc);
     const c2 = $('rscDeriv');
-    if(c2) drawDerivChart(c2, calCurves, lc, { model: lastFit && lastFit.K ? lastFit : null });
+    if(c2) drawDerivChart(c2, calCurves, lc, { model: lastFit && lastFit.K ? lastFit : null, calm: true });
   }
 
   function paintLive(){
@@ -757,11 +857,12 @@ function mountCalibration(host, a){
     paintCharts();
   }
 
-  function paintSpins(){
-    const box = $('rscSpins');
-    if(!box) return;
-    box.innerHTML = spins.map(s => `
+  function spinRowHtml(s){
+    // the dot carries the SAME color the spin's curve has on the charts
+    const color = s.excluded ? '#99a2a7' : PALETTE[(s.color_idx ?? 0) % PALETTE.length];
+    return `
       <div class="rs-spinrow${s.excluded ? ' exc' : ''}">
+        <span class="rs-dot" style="background:${color}"></span>
         <b>spin ${s.n}</b>
         <span class="rs-kbadge${s.excluded ? ' grey' : ''}">${s.excluded ? 'excluded' : 'accepted'}</span>
         <span>peak ${s.max_rpm} rpm</span>
@@ -769,12 +870,20 @@ function mountCalibration(host, a){
         ${s.excluded ? '' : scorePillHtml(s.T24_5)}
         <span>${tailLabel(s.tail)}</span>
         ${s.excluded && s.exclude_reason ? `<span style="flex-basis:100%;color:#99a2a7;font-size:12px">${esc(s.exclude_reason)}</span>` : ''}
-      </div>`).join('');
+      </div>`;
+  }
+  function paintSpins(){
+    const box = $('rscSpins');
+    if(!box) return;
+    const acc = spins.filter(s => !s.excluded), exc = spins.filter(s => s.excluded);
+    // excluded attempts stay OPEN while recording (the fresh verdict must be
+    // seen) and collapse into one line afterwards
+    box.innerHTML = acc.map(spinRowHtml).join('')
+      + (exc.length ? `<details class="rs-tech"${cap.isRecording() ? ' open' : ''}>
+          <summary>${exc.length} excluded attempt${exc.length === 1 ? '' : 's'}</summary>
+          ${exc.map(spinRowHtml).join('')}</details>` : '');
     lastFit = spins.length ? store.fitCalibration(spins, curves) : null;
-    $('rscFit').innerHTML = lastFit ? fitSummaryHtml(lastFit) + `
-      <p class="rs-note" style="margin:8px 0 0">Score 100 = the reference wheel (15.0 s from 24→5 rpm) — the same score as the
-      Wheel test: <b>93+ (A)</b> excellent · <b>85–92 (B)</b> factory-good · <b>72–84 (C)</b> reseat the wheel and recalibrate ·
-      <b>below 72 (D)</b> reseat; if it stays low, clean the bearing.</p>` : '';
+    $('rscFit').innerHTML = lastFit ? fitSummaryHtml(lastFit, { progress: cap.isRecording() }) : '';
   }
 
   function start(){
@@ -1159,8 +1268,20 @@ function mountExperiments(host, a){
     const cal = cals.find(x => x.id === sel.calId);
     if(!cal){ box.innerHTML = '<div class="rs-warn">This wheel has no calibration yet — calibrate it in this room first (Calibration tab). Experiments need a baseline.</div>'; return; }
     const age = store.calAgeDays(cal);
-    box.innerHTML = age > store.CAL_STALE_DAYS
-      ? `<div class="rs-warn">This calibration is <b>${age} days old</b>. Rooms drift (temperature, drafts, dust) — consider recalibrating. If you continue, the age is recorded in the run.</div>` : '';
+    const cf = cal.coef || {};
+    // a wheel below the reference band should not be experimenting — advisory
+    // only (trust model: the researcher decides), but it must be SAID
+    const scoreWarn = cf.grade === 'D'
+      ? `<div class="rs-warn">This calibration's wheel score is <b>${cf.score} (D)</b> — well below the reference band.
+         Experiments with this wheel are <b>not recommended</b>: reseat it on the needle tip (if the score stays low,
+         clean the bearing), then recalibrate.</div>`
+      : cf.grade === 'C'
+        ? `<div class="rs-warn">This calibration's wheel score is <b>${cf.score} (C)</b> — below the factory band.
+           Reseat the wheel and recalibrate before trusting experiment numbers.</div>`
+        : '';
+    box.innerHTML = (age > store.CAL_STALE_DAYS
+      ? `<div class="rs-warn">This calibration is <b>${age} days old</b>. Rooms drift (temperature, drafts, dust) — consider recalibrating. If you continue, the age is recorded in the run.</div>` : '')
+      + scoreWarn;
   }
 
   function paintLabelChips(){
@@ -1242,6 +1363,7 @@ function mountExperiments(host, a){
     const cal = cals.find(x => x.id === sel.calId);
     run.innerHTML = `
       <div class="rs-status" id="rseStatus"></div>
+      <div id="rseSummary"></div>
       <div class="rs-hero" id="rseHero" style="display:none">
         <div class="rs-tile"><span class="rs-pip" id="rsePip"></span>
           <div class="v" id="rseTileRpm">—</div><div class="l">True RPM</div><div class="f">ω = 6000 / counter</div></div>
@@ -1256,8 +1378,7 @@ function mountExperiments(host, a){
         <input type="text" id="rseNote" placeholder="quick note… (Enter attaches it at this moment)" autocomplete="off">
         <button type="button" class="rs-mini" id="rseSimSpin" style="display:none">SIM: spin</button>
         <button type="button" class="rs-btn stop" id="rseStop">Stop experiment</button>
-      </div>
-      <div id="rseSummary"></div>`;
+      </div>`;
 
     // status strip content
     const st = host.querySelector('#rseStatus');
@@ -1415,6 +1536,10 @@ function mountExperiments(host, a){
     if(uiTimer){ clearInterval(uiTimer); uiTimer = null; }
     const box = host.querySelector('#rseSummary');
     if(box) box.innerHTML = `<div class="rs-card"><h2>Saving…</h2><p class="rs-note">Local JSON backup downloads first, then the database.</p></div>`;
+    // The save outcome must be UNMISSABLE — the card sits right under the
+    // status strip, and we scroll to it ("Stopping… and nothing happens" was
+    // a real field report: the card used to render below the 10-panel stack).
+    if(box) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
     let rec = null;
     try {
       rec = cap.stop();
@@ -1442,6 +1567,8 @@ function mountExperiments(host, a){
         <p class="rs-note">${esc((e && e.message) || 'unknown error')} — a raw JSON backup was just downloaded,
         and the interrupted-run recovery will also offer this recording on your next visit.</p>
         <button type="button" class="rs-ghostbtn" id="rseNewErr">Back to setup</button></div>`;
+      const tl = host.querySelector('#rseTools');
+      if(tl) tl.style.display = 'none';
       const nb = box && box.querySelector('#rseNewErr');
       if(nb) nb.addEventListener('click', () => {
         if(stack){ stack.destroy(); stack = null; }
@@ -1498,6 +1625,10 @@ function mountExperiments(host, a){
       buildSetup(); paintRuns();
     });
     renderSummaryLabels(res.id, m);
+    // recording is over — the sticky toolbar (with its dead Stop button) only
+    // obscures the review; the panels below stay for inspection
+    const tl = host.querySelector('#rseTools');
+    if(tl) tl.style.display = 'none';
   }
 
   // Post-run label editing on the summary card — things often become clear
@@ -1686,29 +1817,33 @@ function mountCalDetail(el, calId){
       </div>
       <div class="rs-card">
         ${coef ? fitSummaryHtml(coef) : '<p class="rs-empty">No usable baseline was fitted from this recording.</p>'}
+        <div id="rscdSpins" style="margin-top:12px">${(() => {
+          const rowOf = s => { const ps = psBy.get(s.n); const loo = looBy.get(s.n);
+            const color = s.excluded ? '#99a2a7' : PALETTE[(s.color_idx != null ? s.color_idx : 0) % PALETTE.length];
+            return `
+            <div class="rs-spinrow${s.excluded ? ' exc' : ''}">
+              <span class="rs-dot" style="background:${color}"></span>
+              <b>spin ${s.n}</b>
+              <span class="rs-kbadge${s.excluded ? ' grey' : ''}">${s.excluded ? 'excluded' : 'accepted'}</span>
+              <span>peak ${s.max_rpm} rpm</span>
+              <span>${s.T24_5 != null ? 'T24→5 <b>' + Number(s.T24_5).toFixed(1) + ' s</b>' : 'no 24-rpm coast'}</span>
+              ${ps && ps.t24_10 != null ? `<span>24→10 ${ps.t24_10} s</span>` : ''}
+              ${loo != null ? `<span title="Out-of-sample: the other spins' model vs this spin">vs others ${fmtPctSigned(loo)}</span>` : ''}
+              <span>${tailLabel(s.tail)}</span>
+              ${s.excluded && s.exclude_reason ? `<span style="flex-basis:100%;color:#99a2a7;font-size:12px">${esc(s.exclude_reason)}</span>` : ''}
+            </div>`; };
+          const acc = spins.filter(s => !s.excluded), exc = spins.filter(s => s.excluded);
+          if(!spins.length) return '<p class="rs-empty">No spins recorded.</p>';
+          return acc.map(rowOf).join('')
+            + (exc.length ? `<details class="rs-tech"><summary>${exc.length} excluded attempt${exc.length === 1 ? '' : 's'}</summary>${exc.map(rowOf).join('')}</details>` : '');
+        })()}</div>
+        ${chartHead('top')}
         <canvas id="rscdChart" class="rs-calchart"></canvas>
+        ${chartHead('dev')}
         <canvas id="rscdDev" class="rs-caldev"></canvas>
+        ${chartHead('deriv')}
         <canvas id="rscdDeriv" class="rs-calderiv"></canvas>
-        ${coef && coef.band_pts ? '<canvas id="rscdBand" class="rs-calband"></canvas>' : ''}
-        <p class="rs-note" style="margin:8px 0 0"><b>Top chart:</b> the spins lined up at the 24-rpm crossing — thick dark line =
-        this calibration's model, dashed grey = excluded attempts, greyed left half = above 24 rpm (recorded, outside the fitted range).
-        <b>Middle strip:</b> percent difference from the reference wheel. <b>Bottom map:</b> braking vs speed, with the fitted model as a solid line.
-        ${coef && coef.band_pts ? `<b>Range strip:</b> the observed calibration range — the largest per-spin deviation from the
-        pooled model, as torque. An experiment reading inside this range is indistinguishable from the calibration's own scatter.` : ''}</p>
-        <div id="rscdSpins" style="margin-top:12px">
-          ${spins.map(s => { const ps = psBy.get(s.n); const loo = looBy.get(s.n); return `
-          <div class="rs-spinrow${s.excluded ? ' exc' : ''}">
-            <b>spin ${s.n}</b>
-            <span class="rs-kbadge${s.excluded ? ' grey' : ''}">${s.excluded ? 'excluded' : 'accepted'}</span>
-            <span>peak ${s.max_rpm} rpm</span>
-            <span>${s.T24_5 != null ? 'T24→5 <b>' + Number(s.T24_5).toFixed(1) + ' s</b>' : 'no 24-rpm coast'}</span>
-            ${ps && ps.t24_10 != null ? `<span>24→10 ${ps.t24_10} s</span>` : ''}
-            ${ps && ps.A != null ? `<span>own fit A=${ps.A} · K=${ps.K}</span>` : ''}
-            ${loo != null ? `<span title="Out-of-sample: the other spins' model vs this spin">vs others ${fmtPctSigned(loo)}</span>` : ''}
-            <span>${tailLabel(s.tail)}</span>
-            ${s.excluded && s.exclude_reason ? `<span style="flex-basis:100%;color:#99a2a7;font-size:12px">${esc(s.exclude_reason)}</span>` : ''}
-          </div>`; }).join('') || '<p class="rs-empty">No spins recorded.</p>'}
-        </div>
+        ${coef && coef.band_pts ? chartHead('band') + '<canvas id="rscdBand" class="rs-calband"></canvas>' : ''}
         <div class="rs-dl">
           <button type="button" class="rs-mini" id="rscdJson">Download raw JSON</button>
           ${row.archived ? '' : '<button type="button" class="rs-ghostbtn" id="rscdArch" style="margin-left:auto">Archive</button>'}
@@ -1727,7 +1862,7 @@ function mountCalDetail(el, calId){
       const cd = el.querySelector('#rscdDev');
       if(cd) drawDevChart(cd, curvesD, null);
       const c2 = el.querySelector('#rscdDeriv');
-      if(c2) drawDerivChart(c2, curvesD, null, { model: coef && coef.K ? coef : null });
+      if(c2) drawDerivChart(c2, curvesD, null, { model: coef && coef.K ? coef : null, calm: true });
       const cb = el.querySelector('#rscdBand');
       if(cb && coef && coef.band_pts) drawBandStrip(cb, coef.band_pts, store.noiseFloorNNm(coef).tau);
     };
