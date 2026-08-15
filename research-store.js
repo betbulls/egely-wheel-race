@@ -10,60 +10,122 @@
 import { supabase } from './db.js';
 import {
   rpmOf, RPM_MIN_COUNTER, FACTORY_COEF, decelOf, FORMAT, INERTIA, downloadBlob, scoreOf,
+  integrateModel, crossTime,
 } from './wheel-capture.js';
 
 export const RUN_MAX_MS = 10 * 60 * 1000;        // owner decision: 10-minute experiments
 export const CHUNK_LINES = 1000;                 // ~71 s of stream per chunk (~9/run)
 export const CAL_STALE_DAYS = 30;                // amber "stale calibration" threshold
-export const RUN_FORMAT = 'ewr-research v1; ' + FORMAT;
+export const RUN_FORMAT = 'ewr-research v1.1; ' + FORMAT;   // v1.1: 3-spin calibration + derived meta rows
+
+// ---- calibration v3 protocol constants --------------------------------------
+export const CAL_SPINS_TARGET = 3;   // a calibration = three ACCEPTED spins (owner decision, 2026-08-15)
+// ADVISORY UX trigger only — NOT a scientific verdict and NOT an auto-exclude:
+// above this spin-to-spin T24->5 deviation the auto-save pauses and offers
+// "Save anyway / Repeat spin N". Threshold to be re-tuned once real-world
+// three-spin calibrations accumulate.
+export const CAL_OUTLIER_PCT = 20;
+// Speed bands of the "observed calibration range" (spin-to-spin spread, 2-24 rpm).
+export const CAL_BAND_BINS = [[2, 5], [5, 10], [10, 17], [17, 24]];
+// Analysis-algorithm fingerprint — travels in coef.algo + the meta CSV so every
+// number can be traced to the code that made it. Bump on ANY fit/band/loo change.
+export const CAL_ALGO = 'cal-v3: equal-weight lsq (A+K*w^1.5, 2-24 rpm); loo gate-times; observed-band 4 bins; outlier advisory ' + CAL_OUTLIER_PCT + '%';
 
 // Explicit column lists — NEVER select * on tables that carry jsonb frames
 // (one careless list query would pull megabytes into a phone).
 export const RUN_LIST_COLS = 'id, wheel_id, calibration_id, subject_user_id, title, temp_c, rh_pct, labels, notes, started_at, ended_at, status, frame_count, summary, sha256';
 export const RUN_DETAIL_COLS = RUN_LIST_COLS + ', user_id, fw, hw, env, markers, rpm_samples, format';
 export const CAL_LIST_COLS = 'id, wheel_id, location, temp_c, rh_pct, notes, started_at, ended_at, frame_count, coef, archived, created_at';
+// Detail view only — pulls the full raw frames (a ~3-4 min calibration is a
+// few hundred KB; NEVER use these columns in a list query). NOTE: the deployed
+// research_calibrations table has NO env column (env lives on research_runs
+// only) — SIM provenance comes from fw/hw === 'SIM'.
+export const CAL_DETAIL_COLS = CAL_LIST_COLS + ', user_id, fw, hw, spins, events, frames, format';
 
 // ---- calibration fit --------------------------------------------------------
-// Fit the braking model decel = A + K*w^1.5 (B kept 0, like the factory fit)
-// to the clean anchored curves of a calibration's spins, by linear least
-// squares on the basis [1, w^1.5] over central-difference (w, decel) points.
+// v3 (three-spin protocol): fit the braking model decel = A + K*w^1.5 (B kept
+// 0, like the factory fit) by EQUAL-WEIGHT least squares over the accepted
+// spins' central-difference (w, decel) points — every spin contributes the
+// same total weight, so a slow spin's many low-rpm points cannot dominate.
+// On top of the pooled model: per-spin fits, leave-one-out gate-time
+// validation (out-of-sample, unlike sigma_rel which is measured on the fitted
+// data), and the omega-binned "observed calibration range" (spin-to-spin
+// spread as torque — NEVER presented as a confidence interval).
 // Falls back to a one-parameter time-scale fit from the best spin's T24->5
 // when the LSQ turns unphysical (negative coefficients).
-function derivPoints(curvePts){
+export function derivPoints(curvePts){
   const out = [];
   for(let i = 1; i < curvePts.length - 1; i++){
     const p0 = curvePts[i - 1], p1 = curvePts[i], p2 = curvePts[i + 1];
     if(p1.x < 0) continue;                       // clean decay window only
     const dt = p2.x - p0.x;
     if(dt <= 0 || dt > 4) continue;
-    if(p1.y < 2 || p1.y > 100) continue;         // the regime the model is for
+    // The regime the model claims: 2-24 rpm. The anchor puts x=0 at the 24
+    // crossing, so >24 post-anchor points only come from a re-flick during the
+    // tail — they must never feed the fit (and every label says 2-24).
+    if(p1.y < 2 || p1.y > 24) continue;
     const d = (p0.y - p2.y) / dt;
     if(d > 0 && d < 8) out.push({ w: p1.y, d });
   }
   return out;
 }
 
+const medianOf = sorted => !sorted.length ? null
+  : sorted.length % 2 ? sorted[(sorted.length - 1) / 2]
+  : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
+
+// Weighted normal equations for d = A + K*b, b = w^1.5 (u = point weight).
+// Null when singular or unphysical (A<0 / K<=0) — callers fall back explicitly.
+function lsqAK(pts){
+  let su = 0, sb = 0, sbb = 0, sd = 0, sbd = 0;
+  for(const p of pts){
+    const u = p.u == null ? 1 : p.u, b = Math.pow(p.w, 1.5);
+    su += u; sb += u * b; sbb += u * b * b; sd += u * p.d; sbd += u * b * p.d;
+  }
+  const det = su * sbb - sb * sb;
+  if(Math.abs(det) <= 1e-9) return null;
+  const A = (sbb * sd - sb * sbd) / det, K = (su * sbd - sb * sd) / det;
+  return (A < 0 || K <= 0) ? null : { A, K };
+}
+
+// Model time from `from` rpm down to `to` rpm — a dedicated fine-step (5 ms)
+// integration, NOT the drawing-grade integrateModel: the chart integrator's
+// 20 ms Euler steps + point thinning put a ~0.5% systematic bias on gate
+// times, which would show up as fake leave-one-out "error" on a perfect wheel.
+function modelGate(coef, from, to){
+  let w = from * 1.2 + 2, t = 0, tFrom = null, tTo = null;
+  while(w > to * 0.5 && t < 600){
+    const prevW = w, prevT = t;
+    w -= decelOf(coef, w) * 0.005;
+    t += 0.005;
+    if(w >= prevW) return null;                          // unphysical coef guard
+    if(tFrom == null && w <= from) tFrom = prevT + (prevW - from) / (prevW - w) * 0.005;
+    if(w <= to){ tTo = prevT + (prevW - to) / (prevW - w) * 0.005; break; }
+  }
+  return (tFrom != null && tTo != null) ? tTo - tFrom : null;
+}
+
 export function fitCalibration(spins, curves){
+  // "clean" = accepted: crossed 24 with a clean decay, not interrupted, and
+  // not set aside as an Excluded attempt (excluded spins stay in the payload
+  // for the audit trail but never touch the model)
   const clean = spins.map((s, i) => ({ s, c: curves[i] }))
-    .filter(x => x.c && x.s.T24_5 != null && !x.s.interrupted);
+    .filter(x => x.c && x.s.T24_5 != null && !x.s.interrupted && !x.s.excluded);
   const t245s = clean.map(x => x.s.T24_5).sort((a, b) => a - b);
   const best = t245s.length ? t245s[t245s.length - 1] : null;   // best seating = longest coast
 
-  // pooled derivative points from every clean spin
-  const pts = clean.flatMap(x => derivPoints(x.c.pts));
+  const perSpinPts = clean.map(x => derivPoints(x.c.pts));
+  // pooled points, EQUAL weight per spin (each spin sums to weight 1)
+  const pooled = [];
+  clean.forEach((x, i) => {
+    for(const p of perSpinPts[i]) pooled.push({ w: p.w, d: p.d, u: 1 / perSpinPts[i].length });
+  });
   let A = null, K = null, fit = 'none';
-  if(pts.length >= 8){
-    // normal equations for d = A + K*b, b = w^1.5
-    let n = pts.length, sb = 0, sbb = 0, sd = 0, sbd = 0;
-    for(const p of pts){ const b = Math.pow(p.w, 1.5); sb += b; sbb += b * b; sd += p.d; sbd += b * p.d; }
-    const det = n * sbb - sb * sb;
-    if(Math.abs(det) > 1e-9){
-      A = (sbb * sd - sb * sbd) / det;
-      K = (n * sbd - sb * sd) / det;
-      fit = 'lsq';
-    }
+  if(pooled.length >= 8){
+    const r = lsqAK(pooled);
+    if(r){ A = r.A; K = r.K; fit = 'lsq'; }
   }
-  if(A == null || K == null || A < 0 || K <= 0){
+  if(A == null || K == null){
     // time-scale fallback: coasting s-times longer = uniformly s-times less brake
     if(best == null) return null;
     const s = best / FACTORY_COEF.T24_5;
@@ -71,40 +133,164 @@ export function fitCalibration(spins, curves){
     fit = 'scale';
   }
   const coef = { A: Math.round(A * 1000) / 1000, B: 0, K: Math.round(K * 100000) / 100000 };
-  // relative residual of the fit (the deviation-band width of this room)
+
+  // relative residual of the pooled fit (weighted like the fit itself) —
+  // in-sample; the out-of-sample number is loo below
   let sigma_rel = null;
-  if(pts.length >= 8){
-    let ss = 0, m = 0;
-    for(const p of pts){
+  if(pooled.length >= 8){
+    let ss = 0, uSum = 0, m = 0;
+    for(const p of pooled){
       const pred = decelOf(coef, p.w);
-      if(pred > 0.05){ ss += Math.pow((p.d - pred) / pred, 2); m++; }
+      if(pred > 0.05){ ss += p.u * Math.pow((p.d - pred) / pred, 2); uSum += p.u; m++; }
     }
-    if(m > 4) sigma_rel = Math.round(Math.sqrt(ss / m) * 1000) / 1000;
+    if(m > 4 && uSum > 0) sigma_rel = Math.round(Math.sqrt(ss / uSum) * 1000) / 1000;
   }
-  // spin-to-spin consistency (the "calibration quality" number): spread of
-  // T24->5 relative to the median. One spin -> no quality claim.
+
+  // spin-to-spin consistency: spread of T24->5 relative to the median.
+  // One spin -> no quality claim. (Alive again under the 3-spin protocol.)
   let quality_pct = null;
   if(t245s.length >= 2){
-    const med = t245s[Math.floor(t245s.length / 2)];
+    const med = medianOf(t245s);
     const spread = (t245s[t245s.length - 1] - t245s[0]) / med;
     quality_pct = Math.max(0, Math.round(100 * (1 - spread)));
   }
+
+  // per-spin record: own fit + gate times — repeatability made visible
+  const per_spin = clean.map((x, i) => {
+    const own = perSpinPts[i].length >= 8 ? lsqAK(perSpinPts[i]) : null;
+    const t2410 = crossTime(x.c.pts.filter(p => p.x >= 0), 10);
+    return {
+      n: x.s.n, T24_5: x.s.T24_5,
+      t24_10: t2410 != null ? Math.round(t2410 * 10) / 10 : null,
+      max_rpm: x.s.max_rpm,
+      A: own ? Math.round(own.A * 1000) / 1000 : null,
+      K: own ? Math.round(own.K * 100000) / 100000 : null,
+      pts: perSpinPts[i].length,
+    };
+  });
+
+  // leave-one-out: the OTHER spins' model predicts the held-out spin's 24->5
+  // time. Out-of-sample honesty — "a model built from the other spins predicts
+  // a fresh coast to within X%".
+  let loo = null;
+  if(clean.length >= 2){
+    const errs = [];
+    clean.forEach((x, i) => {
+      const others = [];
+      clean.forEach((y, j) => {
+        if(j === i) return;
+        for(const p of perSpinPts[j]) others.push({ w: p.w, d: p.d, u: 1 / perSpinPts[j].length });
+      });
+      let c2 = others.length >= 8 ? lsqAK(others) : null;
+      if(!c2){
+        const bt = clean.filter((y, j) => j !== i).map(y => y.s.T24_5).sort((a, b) => a - b);
+        if(!bt.length) return;
+        const s = bt[bt.length - 1] / FACTORY_COEF.T24_5;
+        c2 = { A: FACTORY_COEF.A / s, K: FACTORY_COEF.K / s };
+      }
+      const pred = modelGate({ A: c2.A, B: 0, K: c2.K }, 24, 5);
+      // compare against the UNROUNDED curve time — the 0.1 s rounding on the
+      // stored T24_5 would add ±0.3% quantization noise to a honesty metric
+      const meas = (x.c && x.c.T245 != null) ? x.c.T245 : x.s.T24_5;
+      if(pred) errs.push({ n: x.s.n, pct: Math.round((meas / pred - 1) * 1000) / 10 });
+    });
+    if(errs.length){
+      const abs = errs.map(e => Math.abs(e.pct));
+      loo = {
+        errs,
+        max_abs_pct: Math.round(Math.max(...abs) * 10) / 10,
+        mean_abs_pct: Math.round(abs.reduce((a, b) => a + b, 0) / abs.length * 10) / 10,
+      };
+    }
+  }
+
+  // observed calibration range: per speed band, how much the accepted spins'
+  // mean braking disagreed with the pooled model, as torque [nN*m]. Spin-to-
+  // spin spread from real coasts — never a confidence interval.
+  let band_pts = null;
+  if(clean.length >= 2 && fit === 'lsq'){
+    const rows = [];
+    for(const [lo, hi] of CAL_BAND_BINS){
+      const devs = [];
+      clean.forEach((x, i) => {
+        const ps = perSpinPts[i].filter(p => p.w >= lo && p.w < hi);
+        if(ps.length < 2) return;
+        devs.push(ps.reduce((a, p) => a + (p.d - decelOf(coef, p.w)), 0) / ps.length);
+      });
+      if(devs.length >= 2){
+        const spread = Math.max(...devs.map(Math.abs));
+        rows.push([(lo + hi) / 2, Math.round(INERTIA * spread * Math.PI / 30 * 1e9 * 10) / 10]);
+      }
+    }
+    if(rows.length) band_pts = rows;
+  }
+
+  // the rpm range the fit actually saw — beyond it every model number is
+  // extrapolation (experiments regularly exceed 24 rpm; the display must say
+  // so). Only meaningful for a real LSQ: the scale fallback never fitted the
+  // pooled points, so claiming a "fitted range" from them would be false.
+  let w_fit_min = null, w_fit_max = null;
+  if(pooled.length && fit === 'lsq'){
+    const ws = pooled.map(p => p.w);
+    w_fit_min = Math.round(Math.min(...ws) * 10) / 10;
+    w_fit_max = Math.round(Math.max(...ws) * 10) / 10;
+  }
+
   // untouched-tail stats — the ambient noise floor of THIS room
   const tails = clean.map(x => x.s.tail).filter(Boolean);
   const tailAvgs = tails.map(t => t.avg_rpm).sort((a, b) => a - b);
-  // the SAME factory score the admin Wheel test shows (owner requirement)
+  // the SAME factory score the admin Wheel test shows (owner requirement) —
+  // judged on the BEST spin (benchmark lesson: bad seating only subtracts)
   const sc = scoreOf(best);
-  const coefFull = {
+  return {
     ...coef,
     T24_5: best != null ? Math.round(best * 10) / 10 : null,
     score: sc.score, grade: sc.grade,
+    score_basis: clean.length ? 'best of ' + clean.length + ' calibration spin' + (clean.length === 1 ? '' : 's') : null,
     sigma_rel, quality_pct, fit,
     spin_count: clean.length,
-    tail_avg: tailAvgs.length ? tailAvgs[Math.floor(tailAvgs.length / 2)] : null,
+    per_spin, loo, band_pts, w_fit_min, w_fit_max,
+    algo: CAL_ALGO,
+    tail_avg: tailAvgs.length ? medianOf(tailAvgs) : null,
     tail_max: tailAvgs.length ? tailAvgs[tailAvgs.length - 1] : null,
     pickups_max: tails.length ? Math.max(...tails.map(t => t.pickups || 0)) : null,
   };
-  return coefFull;
+}
+
+// Advisory spread check across the ACCEPTED spins (>=3): the worst spin's
+// T24->5 deviation from the mean of the others, in %. Returns {n, pct} above
+// the CAL_OUTLIER_PCT advisory line, else null. UX trigger only — never a
+// verdict and never an auto-exclude: the researcher decides.
+export function calOutlier(spins){
+  const ts = spins.filter(s => !s.excluded && !s.interrupted && s.T24_5 != null);
+  if(ts.length < 3) return null;
+  let worst = null;
+  for(const s of ts){
+    const others = ts.filter(y => y !== s);
+    const m = others.reduce((a, y) => a + y.T24_5, 0) / others.length;
+    if(m <= 0) continue;
+    const pct = Math.abs(s.T24_5 - m) / m * 100;
+    if(!worst || pct > worst.pct) worst = { n: s.n, pct: Math.round(pct * 10) / 10 };
+  }
+  return worst && worst.pct > CAL_OUTLIER_PCT ? worst : null;
+}
+
+// Long-term drift vs the previous calibration of the SAME wheel in the SAME
+// location — measured on PREDICTED GATE TIMES, not on A/K directly (the two
+// fit parameters co-move; comparing them percentage-wise misleads). Neutral
+// numbers only; interpretation stays with the researcher.
+export function calDrift(prevCal, coef){
+  if(!prevCal || !prevCal.coef || !prevCal.coef.K || !coef || !coef.K) return null;
+  const g = (from, to) => {
+    const p = modelGate(prevCal.coef, from, to), n = modelGate(coef, from, to);
+    return (p != null && n != null && p > 0) ? Math.round((n / p - 1) * 1000) / 10 : null;
+  };
+  return {
+    prev_id: prevCal.id, prev_created_at: prevCal.created_at, days_since: calAgeDays(prevCal),
+    t24_5_pct: g(24, 5), t24_10_pct: g(24, 10), t12_6_pct: g(12, 6), t6_3_pct: g(6, 3),
+    prev_score: prevCal.coef.score ?? null,
+    prev_quality_pct: prevCal.coef.quality_pct ?? null,
+  };
 }
 
 // Torque noise floor [nN*m] of a room from its calibration tail stats: the
@@ -208,7 +394,9 @@ export function buildMarkersCsv(rec){
 // the calibration provenance travel WITH the data.
 export function buildMetaCsv(rec, meta){
   const kv = [
-    ['format_version', RUN_FORMAT],
+    // the RUN's own stored format — a re-export of an old run must not claim
+    // the current builder's version (archival honesty)
+    ['format_version', meta.format || RUN_FORMAT],
     ['export_utc', new Date().toISOString()],
     ['run_id', meta.runId || ''],
     ['run_kind', meta.kind || 'experiment'],
@@ -236,6 +424,15 @@ export function buildMetaCsv(rec, meta){
     ['calibration_wheel_score', meta.coef && meta.coef.score != null ? meta.coef.score : ''],
     ['calibration_wheel_grade', meta.coef && meta.coef.grade ? meta.coef.grade : ''],
     ['calibration_sigma_rel', meta.coef ? (meta.coef.sigma_rel == null ? '' : meta.coef.sigma_rel) : ''],
+    // v1.1: three-spin calibration provenance — repeatability and validation
+    // travel WITH the data, so an exported run is judgeable on its own
+    ['calibration_spin_count', meta.coef && meta.coef.spin_count != null ? meta.coef.spin_count : ''],
+    ['calibration_score_basis', meta.coef && meta.coef.score_basis ? meta.coef.score_basis : ''],
+    ['calibration_quality_pct', meta.coef && meta.coef.quality_pct != null ? meta.coef.quality_pct : ''],
+    ['calibration_loo_max_abs_pct', meta.coef && meta.coef.loo ? meta.coef.loo.max_abs_pct : ''],
+    ['calibration_observed_band_nnm', meta.coef && meta.coef.band_pts ? meta.coef.band_pts.map(b => b[0] + 'rpm:' + b[1]).join('|') : ''],
+    ['calibration_fitted_range_rpm', meta.coef && meta.coef.w_fit_min != null ? meta.coef.w_fit_min + '-' + meta.coef.w_fit_max : ''],
+    ['calibration_algo', meta.coef && meta.coef.algo ? meta.coef.algo : ''],
     ['moment_of_inertia_kgm2', '1.7e-7 (+-10%)'],
     ['counter_semantics', 'counter = revolution period in ~10 ms units; rpm_true = 6000/counter; 0 = standstill; led 0-24 device-railed at 24'],
     ['disclaimer', 'This software cannot distinguish air currents, static or vibration from any other influence; shielding and controls are the researcher\'s responsibility.'],
@@ -412,6 +609,11 @@ export const calAgeDays = cal => Math.floor((Date.now() - new Date(cal.created_a
 
 export async function saveCalibration(row){
   return supabase.from('research_calibrations').insert(row).select('id').maybeSingle();
+}
+export async function loadCalibration(id){
+  const { data, error } = await supabase.from('research_calibrations')
+    .select(CAL_DETAIL_COLS).eq('id', id).maybeSingle();
+  return { row: data, error };
 }
 export async function archiveCalibration(id){
   return supabase.from('research_calibrations').update({ archived: true }).eq('id', id);

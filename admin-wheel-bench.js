@@ -170,7 +170,13 @@ function idealAt(x){
 // ---- chart renderers (setupCanvas comes from the shared engine) -------------
 // drawTestChart is exported: the Research calibration tab shows the exact same
 // anchored comparison chart (owner request — "ahogy a tesztnél").
-export function drawTestChart(canvas, curves, liveCurve){
+// Optional opts (Research calibration v3; the bench passes none — unchanged):
+//   opts.model         — anchored {x,y} pts of the FITTED pooled model: thick
+//                        dark line for x>=0, faint dashed above 24 rpm (x<0)
+//   opts.shadeOutside  — tint the x<0 half ("above 24 rpm — outside fitted range")
+//   curves[i].dashed   — excluded-attempt curve: dashed + faded
+export function drawTestChart(canvas, curves, liveCurve, opts){
+  opts = opts || {};
   const s = setupCanvas(canvas);
   if(!s) return;
   const { ctx, w, h } = s;
@@ -197,6 +203,16 @@ export function drawTestChart(canvas, curves, liveCurve){
     ctx.strokeStyle = x === 0 ? 'rgba(1,22,36,0.2)' : 'rgba(1,22,36,0.05)';
     ctx.beginPath(); ctx.moveTo(px, padT); ctx.lineTo(px, padT + plotH); ctx.stroke();
     ctx.fillStyle = '#99a2a7'; ctx.fillText(x + 's', px, padT + plotH + 5);
+  }
+  // honesty tint: everything left of t=0 is above 24 rpm — recorded, but
+  // outside the range the calibration model was fitted on
+  if(opts.shadeOutside){
+    ctx.fillStyle = 'rgba(1,22,36,0.035)';
+    ctx.fillRect(padL, padT, xOf(0) - padL, plotH);
+    ctx.fillStyle = '#99a2a7'; ctx.font = '9.5px Inter, sans-serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillText('above 24 rpm — outside fitted range', padL + 4, padT + plotH - 4);
+    ctx.textBaseline = 'top';
   }
 
   const poly = (pts, scaleX) => {
@@ -245,12 +261,23 @@ export function drawTestChart(canvas, curves, liveCurve){
   poly(IDEAL_PTS, 1); ctx.stroke();
   ctx.setLineDash([]);
 
-  // recorded curves
+  // recorded curves (dashed + faded = excluded attempt)
   for(const c of curves){
-    ctx.lineWidth = 1.8; ctx.strokeStyle = c.color; ctx.globalAlpha = 0.9;
+    ctx.lineWidth = 1.8; ctx.strokeStyle = c.color; ctx.globalAlpha = c.dashed ? 0.55 : 0.9;
+    if(c.dashed) ctx.setLineDash([5, 4]);
     poly(c.pts, 1); ctx.stroke();
+    ctx.setLineDash([]);
   }
   ctx.globalAlpha = 1;
+  // fitted pooled model: solid + thick where the fit is valid (x>=0, i.e.
+  // 24 rpm and below), faint dashed above 24 (extrapolation)
+  if(opts.model){
+    const valid = opts.model.filter(p => p.x >= 0), extra = opts.model.filter(p => p.x < 0.5);
+    ctx.strokeStyle = '#011624'; ctx.globalAlpha = 0.5; ctx.lineWidth = 1.4; ctx.setLineDash([3, 4]);
+    poly(extra, 1); ctx.stroke();
+    ctx.setLineDash([]); ctx.globalAlpha = 1; ctx.lineWidth = 2.6;
+    poly(valid, 1); ctx.stroke();
+  }
   // in-progress spin on top, accent + thick
   if(liveCurve){
     ctx.lineWidth = 3; ctx.strokeStyle = '#5230da';
@@ -259,7 +286,9 @@ export function drawTestChart(canvas, curves, liveCurve){
 
   // labels
   ctx.fillStyle = '#67737c'; ctx.font = '11px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  ctx.fillText('rpm (log) — dashed: ideal wheel · shaded: good band · t=0 at 24 rpm', padL + 4, 2);
+  ctx.fillText(opts.model
+    ? 'rpm (log) — dashed: reference wheel · thick dark: this calibration\'s model · t=0 at 24 rpm'
+    : 'rpm (log) — dashed: ideal wheel · shaded: good band · t=0 at 24 rpm', padL + 4, 2);
 }
 
 // Deviation magnifier: percentage difference from the ideal wheel over the
@@ -315,9 +344,10 @@ export function drawDevChart(canvas, curves, liveCurve){
     ctx.fillStyle = '#99a2a7'; ctx.fillText(x + 's', xOf(x), padT + plotH + 4);
   }
 
-  // curve deviations
+  // curve deviations (dashed + faded = excluded attempt)
   const devLine = (c, color, width) => {
-    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.globalAlpha = 0.9;
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.globalAlpha = c.dashed ? 0.45 : 0.9;
+    if(c.dashed) ctx.setLineDash([5, 4]);
     ctx.beginPath();
     let on = false;
     for(const p of c.pts){
@@ -328,7 +358,7 @@ export function drawDevChart(canvas, curves, liveCurve){
       if(on) ctx.lineTo(xOf(p.x), yOf(d)); else ctx.moveTo(xOf(p.x), yOf(d));
       on = true;
     }
-    ctx.stroke(); ctx.globalAlpha = 1;
+    ctx.stroke(); ctx.globalAlpha = 1; ctx.setLineDash([]);
   };
   for(const c of curves) devLine(c, c.color, 1.8);
   if(liveCurve) devLine(liveCurve, '#5230da', 3);
@@ -337,7 +367,11 @@ export function drawDevChart(canvas, curves, liveCurve){
   ctx.fillText('deviation from ideal [%] — the magnifier: small differences show up here first', padL + 4, 2);
 }
 
-export function drawDerivChart(canvas, curves, liveCurve){
+// Optional opts (Research calibration v3): opts.model = fitted coef {A,B,K} —
+// drawn as a solid dark braking line next to the dashed factory ideal.
+// curves[i].dashed (excluded attempt) fades that spin's dots.
+export function drawDerivChart(canvas, curves, liveCurve, opts){
+  opts = opts || {};
   const s = setupCanvas(canvas);
   if(!s) return;
   const { ctx, w, h } = s;
@@ -412,6 +446,17 @@ export function drawDerivChart(canvas, curves, liveCurve){
     if(r === 1) ctx.moveTo(xOf(r), yOf(d)); else ctx.lineTo(xOf(r), yOf(d));
   }
   ctx.stroke(); ctx.setLineDash([]);
+  // fitted pooled model (Research calibration): solid dark line
+  if(opts.model && opts.model.K){
+    const m = opts.model;
+    ctx.lineWidth = 2.2; ctx.strokeStyle = '#011624';
+    ctx.beginPath();
+    for(let r = 1; r <= RPM_MAX; r += 0.5){
+      const d = m.A + (m.B || 0) * r + m.K * Math.pow(r, 1.5);
+      if(r === 1) ctx.moveTo(xOf(r), yOf(d)); else ctx.lineTo(xOf(r), yOf(d));
+    }
+    ctx.stroke();
+  }
 
   // measured dots: central differences on anchored pts
   const derivPts = c => {
@@ -427,10 +472,10 @@ export function drawDerivChart(canvas, curves, liveCurve){
     return out;
   };
   const all = [];
-  for(const c of curves) all.push({ color: c.color, pts: derivPts(c) });
+  for(const c of curves) all.push({ color: c.color, pts: derivPts(c), faded: !!c.dashed });
   if(liveCurve) all.push({ color: '#5230da', pts: derivPts(liveCurve) });
   for(const c of all){
-    ctx.fillStyle = c.color; ctx.globalAlpha = 0.8;
+    ctx.fillStyle = c.color; ctx.globalAlpha = c.faded ? 0.3 : 0.8;
     for(const p of c.pts){ ctx.beginPath(); ctx.arc(xOf(p.rpm), yOf(p.d), 2.2, 0, Math.PI * 2); ctx.fill(); }
   }
   ctx.globalAlpha = 1;
