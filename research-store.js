@@ -831,6 +831,27 @@ export async function deleteRun(id){
   return supabase.from('research_runs').delete().eq('id', id);
 }
 
+// ---- research media (camera / voice takes) ----------------------------------
+// Uploaded CLIENT-SIDE into the existing 'session-camera' bucket under a
+// research/<uid>/ path — the avatars pattern: path-scoped storage policies
+// (SQL handed to the owner) instead of the solo-camera Edge Fn, which only
+// authorizes results/sessions. The reference travels in the run's env jsonb.
+export async function uploadResearchMedia(uid, runId, take){
+  const ext = /mp4/.test(take.blob.type) ? 'mp4' : 'webm';
+  // bucket mime whitelists match the BASE type — strip codec parameters
+  const contentType = (take.blob.type.split(';')[0] || '').trim()
+    || (take.media === 'video' ? 'video/webm' : 'audio/webm');
+  const path = `research/${uid}/${runId}-${Date.now()}.${ext}`;
+  const { error } = await supabase.storage.from('session-camera')
+    .upload(path, take.blob, { contentType, upsert: false });
+  return { path: error ? null : path, error };
+}
+// Fresh short-lived signed URL per play — a stored URL would go stale.
+export async function researchMediaUrl(path){
+  const { data, error } = await supabase.storage.from('session-camera').createSignedUrl(path, 3600);
+  return { url: data ? data.signedUrl : null, error };
+}
+
 // Insert the run row, then the full-resolution chunks one by one (per-chunk
 // retry keeps a flaky network from losing the tail). Returns {id, chunkErrors}.
 export async function saveRun(row, frames){

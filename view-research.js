@@ -21,8 +21,11 @@ import { createPanelStack, computeRunMetrics, computeRunSeries } from './researc
 // The calibration tab shows the exact same chart TRIO as the admin Wheel test
 // (owner request) — the renderers are shared from there.
 import { drawTestChart, drawDevChart, drawDerivChart, PALETTE } from './admin-wheel-bench.js';
-// Run replay: the same transport bar + clock every replay in the app uses.
-import { createReplayClock, mountTransport } from './replay.js';
+// Run replay: the same transport bar + clock every replay in the app uses;
+// camReplayMedia = the shared camera-take card. The capture engine itself is
+// the solo dock (createSoloVoice) with research copy — nothing reinvented.
+import { createReplayClock, mountTransport, camReplayMedia } from './replay.js';
+import { createSoloVoice } from './solo-voice.js';
 
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
 const fmtClock = s => Math.floor(s / 60) + ':' + String(Math.floor(s) % 60).padStart(2, '0');
@@ -1194,6 +1197,8 @@ function mountExperiments(host, a){
   let runMarkers = [];            // user markers {t_ms,type,value,note}
   let markCount = 0;
   let runQualityCtx = null;       // quality-header context frozen at start
+  let soloVoice = null;           // optional camera/voice take (shared solo dock, research flavor)
+  let mediaTake = null;           // the sealed take waiting for upload after save
   let coasts = [];
   let samples = [];               // {t (s), rpm} — feeds the panel stack
   let lastFlushed = 0, draftId = null;
@@ -1351,6 +1356,11 @@ function mountExperiments(host, a){
             Subject (optional) — one of your connected Members</div>
           <div class="rs-chips" id="rseSubject"><span class="rs-empty">Loading members…</span></div>
         </div>
+        <div style="margin-top:14px">
+          <div style="font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#67737c;margin-bottom:8px">
+            Record yourself (optional) — replays in sync with the data</div>
+          <div id="rseVoiceDock"></div>
+        </div>
         <div class="rs-field" style="margin-top:14px">
           <label>Notes (optional)<input id="rseNotes" type="text" placeholder="protocol, intention, conditions…" autocomplete="off"></label>
         </div>
@@ -1367,6 +1377,9 @@ function mountExperiments(host, a){
         const nEl = host.querySelector(q);
         if(nEl) nEl.addEventListener('input', paintCalWarn);
       }
+      // the optional camera/voice dock — the EXACT solo capture engine
+      if(soloVoice) soloVoice.destroy();
+      soloVoice = createSoloVoice(host.querySelector('#rseVoiceDock'), { flavor: 'research' });
     });
   }
 
@@ -1549,7 +1562,16 @@ function mountExperiments(host, a){
     draftId = 'run-' + Date.now().toString(36);
     cap.start({ kind: 'experiment' });
     recordingActive = true;
+    // the take is anchored to the experiment start — start it in the same tick
+    if(soloVoice && soloVoice.armed) soloVoice.start();
     buildRunUi();
+    // the dock follows onto the live screen (self-view ring + Mute + ● REC)
+    if(soloVoice && soloVoice.armed){
+      const dock = host.querySelector('#rseVoiceDock');
+      const runEl = host.querySelector('#rseRun');
+      const anchor = host.querySelector('#rseQuality');
+      if(dock && runEl && anchor) runEl.insertBefore(dock, anchor.nextSibling);
+    }
     host.querySelector('#rseHero').style.display = '';
     host.querySelector('#rseStack').style.display = '';
     host.querySelector('#rseTools').style.display = '';
@@ -1726,11 +1748,26 @@ function mountExperiments(host, a){
       rec.markers = runMarkers;
       const m = draftMeta();
       m.startedAt = rec.startedAt;
+      // seal the camera/voice take (if any) — the devices go dark now; the
+      // upload itself runs after the run row exists (finishSave)
+      mediaTake = null;
+      if(soloVoice){
+        try { mediaTake = await soloVoice.takeRecording(); }
+        catch(e){ console.error('research: takeRecording failed', e); }
+      }
       await finishSave(rec, m, reason, box);
       // cosmetic pass LAST — a chart error must never block the save
       try { if(stack) stack.setReview(); } catch(e){ console.error('research: setReview failed', e); }
     } catch(e){
       console.error('research: stop/save failed', e);
+      // a sealed camera/voice take must not vanish with the error either
+      if(mediaTake){
+        try {
+          const ext = /mp4/.test(mediaTake.blob.type) ? 'mp4' : 'webm';
+          downloadBlob('ewr-research_recording_salvage.' + ext, mediaTake.blob);
+        } catch {}
+        mediaTake = null;
+      }
       // salvage: the recording must never be lost — raw JSON straight to disk
       try {
         if(rec) downloadJson({
@@ -1808,6 +1845,47 @@ function mountExperiments(host, a){
     // obscures the review; the panels below stay for inspection
     const tl = host.querySelector('#rseTools');
     if(tl) tl.style.display = 'none';
+    // store the camera/voice take — AFTER the row exists; reference in env.
+    // Failure never loses field data: the take downloads locally instead.
+    if(mediaTake){
+      const mt = mediaTake;
+      mediaTake = null;
+      const card = box.querySelector('.rs-card');
+      const note = document.createElement('div');
+      note.className = 'rs-warn';
+      note.textContent = mt.media === 'video' ? 'Storing your camera take…' : 'Storing your voice take…';
+      if(card) card.appendChild(note);
+      const localFallback = () => {
+        try {
+          const ext = /mp4/.test(mt.blob.type) ? 'mp4' : 'webm';
+          downloadBlob('ewr-research_recording_' + (rec.startedAt || '').replace(/[:.]/g, '-') + '.' + ext, mt.blob);
+        } catch {}
+      };
+      if(res.id){
+        try {
+          const up = await store.uploadResearchMedia(uid, res.id, mt);
+          if(up.error) throw up.error;
+          const recording = {
+            path: up.path, media: mt.media, mime: mt.mime,
+            duration_s: Math.max(1, Math.round((mt.stopMs - mt.startedMs) / 1000)),
+            started_ms: mt.startedMs,
+            offset_ms: Math.max(0, mt.startedMs - new Date(rec.startedAt).getTime()),
+          };
+          built.row.env = { ...built.row.env, recording };
+          await store.updateRun(res.id, { env: built.row.env });
+          note.className = 'rs-msg ok';
+          note.textContent = (mt.media === 'video' ? 'Camera take stored ✓' : 'Voice take stored ✓') + ' — replay it in sync on the run page.';
+        } catch(e){
+          console.error('research: media upload failed', e);
+          localFallback();
+          note.textContent = 'The recording could not be stored (' + ((e && e.message) || e)
+            + ') — it was downloaded to your device instead. If this is the first recording, the storage policies may not be applied yet.';
+        }
+      } else {
+        localFallback();
+        note.textContent = 'The run could not reach the database — the recording was downloaded to your device.';
+      }
+    }
   }
 
   // Post-run label editing on the summary card — things often become clear
@@ -1943,6 +2021,7 @@ function mountExperiments(host, a){
     if(stack){ stack.destroy(); stack = null; }
     cap.detach();
     if(unsubStatus) unsubStatus();
+    if(soloVoice){ soloVoice.destroy(); soloVoice = null; }
   };
 }
 
@@ -2110,6 +2189,7 @@ function mountRunDetail(el, runId){
   let unsub = null;
   let loadedFor = null;
   let replayClock = null;
+  let mediaCleanup = null;
 
   async function load(a){
     if(!a.user){
@@ -2244,11 +2324,66 @@ function mountRunDetail(el, runId){
       onSeek: ms => clockRef && clockRef.seek(ms),
       onSpeed: x => clockRef && clockRef.setSpeed(x),
     });
+
+    // ---- recorded camera/voice take (env.recording), clock-synced -----------
+    // The exact media-sync pattern every replay in the app uses: pause outside
+    // the window, 0.35 s drift snap, playbackRate from state, autoplay-hint
+    // button when the browser eats the gesture. Owner-only (the storage
+    // policy is path-scoped to the owner; the subject sees data only).
+    const recTake = (envSnap.recording && envSnap.recording.path && isOwner) ? envSnap.recording : null;
+    let mediaEl = null, mediaTried = false, mediaPlaying = false;
+    const mediaOffsetMs = recTake ? (recTake.offset_ms || 0) : 0;
+    function showMediaHint(){
+      if(!barEl || barEl.querySelector('[data-rsd-mediafix]')) return;
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'rp-speed'; b.setAttribute('data-rsd-mediafix', '');
+      b.textContent = recTake && recTake.media === 'video' ? '🎥 Enable recording' : '🎙 Enable audio';
+      b.addEventListener('click', () => { const p = mediaEl && mediaEl.play(); if(p && p.catch) p.catch(() => {}); });
+      barEl.appendChild(b);
+    }
+    function syncMedia(t){
+      if(!mediaEl) return;
+      const desired = (t - mediaOffsetMs) / 1000;
+      if(!mediaPlaying || t >= durationMs || desired < 0 || (mediaEl.duration && desired > mediaEl.duration)){
+        if(!mediaEl.paused) mediaEl.pause();
+        return;
+      }
+      if(Math.abs(mediaEl.currentTime - desired) > 0.35) mediaEl.currentTime = Math.max(0, desired);
+      if(mediaEl.paused){
+        const p = mediaEl.play();
+        if(p && p.catch) p.catch(() => showMediaHint());
+      }
+    }
+    async function ensureMedia(){
+      if(mediaTried || !recTake) return;
+      mediaTried = true;
+      try {
+        const { url, error } = await store.researchMediaUrl(recTake.path);
+        if(error || !url) throw error || new Error('no url');
+        if(recTake.media === 'video'){
+          mediaEl = camReplayMedia(el, url, '#rsdReplay');
+        } else {
+          mediaEl = new Audio(url);
+          mediaEl.preload = 'auto';
+          const chip = document.createElement('span');
+          chip.className = 'rs-pill';
+          chip.textContent = '🎙 Voice take';
+          barEl.appendChild(chip);
+        }
+        mediaEl.addEventListener('play', () => {
+          const h = barEl.querySelector('[data-rsd-mediafix]');
+          if(h) h.remove();
+        });
+      } catch(e){ console.error('research: media load failed', e); }
+    }
+    mediaCleanup = () => { if(mediaEl){ try { mediaEl.pause(); mediaEl.src = ''; } catch {} mediaEl = null; } };
+
     let lastApply = 0;
     replayClock = createReplayClock({
       durationMs,
       onFrame(t){
         transport.paint(t);
+        syncMedia(t);
         // panel repaints throttled to ~7 Hz — fresh data only arrives at
         // 1.4 Hz anyway, and full-rate rebuilds would burn phones
         const now = performance.now();
@@ -2256,6 +2391,12 @@ function mountRunDetail(el, runId){
       },
       onState(st){
         transport.setPlaying(st.playing, st.done);
+        mediaPlaying = st.playing && !st.done;
+        if(mediaEl){
+          mediaEl.playbackRate = st.speed;
+          if(!st.playing && !mediaEl.paused) mediaEl.pause();
+        }
+        if(st.playing && !mediaTried) ensureMedia();
         if(st.playing) stack.setLiveFollow();
         else if(st.done){ applyAt(durationMs); stack.setReview(); }
       },
@@ -2369,6 +2510,7 @@ function mountRunDetail(el, runId){
   unsub = auth.subscribeAuth(load);
   return () => {
     if(replayClock){ replayClock.destroy(); replayClock = null; }
+    if(mediaCleanup){ mediaCleanup(); mediaCleanup = null; }
     if(stack) stack.destroy();
     if(unsub) unsub();
   };

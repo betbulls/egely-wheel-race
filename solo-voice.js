@@ -72,8 +72,13 @@ function injectCss() {
   document.head.appendChild(s);
 }
 
-export function createSoloVoice(mountEl) {
+export function createSoloVoice(mountEl, opts) {
   injectCss();
+  opts = opts || {};
+  // flavor 'research': same dock, same engine — only the small copy changes
+  // (a research take replays in sync with the run's data; there is no share
+  // video and no closing-words post-roll in that flow).
+  const RESEARCH = opts.flavor === 'research';
 
   const prefersReduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const homeMount = mountEl;   // the setup-panel slot; the row lives here except during the post-roll
@@ -206,7 +211,9 @@ export function createSoloVoice(mountEl) {
           <span class="vd-ring">${micRing()}</span>
           <span class="vd-txt">
             <b>Record yourself</b>
-            <small class="${armError ? 'slv-warn' : ''}">${armError || 'Your voice — or your face too — is recorded while you measure and becomes your share video.'}</small>
+            <small class="${armError ? 'slv-warn' : ''}">${armError || (RESEARCH
+              ? 'Your voice — or your face too — is recorded during the experiment and replays in sync with the data.'
+              : 'Your voice — or your face too — is recorded while you measure and becomes your share video.')}</small>
           </span>
           <button type="button" class="vd-btn" data-arm-cam>With camera</button>
           <button type="button" class="vd-btn ghost" data-arm>Voice only</button>
@@ -219,9 +226,11 @@ export function createSoloVoice(mountEl) {
           ${ringHtml(true)}
           <span class="vd-txt">
             <b>${vid ? 'Camera ready' : 'Voice ready'}</b>
-            <small>${vid
-              ? 'Keep your face inside the bright frame — that’s what your share video shows. Recording starts when you begin measuring.'
-              : 'Recording starts when you begin measuring — it plays on your share video.'}</small>
+            <small>${RESEARCH
+              ? 'Recording starts with the experiment and stops with it — you can replay it in sync with the charts.'
+              : vid
+                ? 'Keep your face inside the bright frame — that’s what your share video shows. Recording starts when you begin measuring.'
+                : 'Recording starts when you begin measuring — it plays on your share video.'}</small>
           </span>
           <button type="button" class="vd-btn ghost" data-off>Off</button>
         </div>`;
@@ -233,7 +242,9 @@ export function createSoloVoice(mountEl) {
             <b><span class="vd-dot"></span>${muted ? 'Muted' : (vid ? 'Recording you' : 'Recording your voice')} · <span data-el>${fmtClock(elapsedSec())}</span><span class="vd-rec">● REC</span></b>
             <small>${muted
               ? (vid ? 'This part will be silent on your video — the camera keeps rolling.' : 'This part will be silent on your video — unmute to keep recording.')
-              : (vid ? 'Your face and everything you say become your share video.' : 'Everything you say is kept — it plays on your share video.')}</small>
+              : RESEARCH
+                ? (vid ? 'Camera and voice are recorded with the run — say what you observe, it lands on the timeline.' : 'Your voice is recorded with the run — say what you observe, it lands on the timeline.')
+                : (vid ? 'Your face and everything you say become your share video.' : 'Everything you say is kept — it plays on your share video.')}</small>
           </span>
           <button type="button" class="vd-btn ghost" data-mute>${muted ? 'Unmute' : 'Mute'}</button>
         </div>`;
@@ -255,7 +266,9 @@ export function createSoloVoice(mountEl) {
           <span class="vd-ring">${micRing()}</span>
           <span class="vd-txt">
             <b>${takeMode === 'video' ? 'Camera captured ✓ · camera off' : 'Voice captured ✓'}</b>
-            <small>${takeMode === 'video' ? 'Save your measurement to attach it to your share video.' : 'It plays on your share video — save your measurement to keep it.'}</small>
+            <small>${RESEARCH
+              ? 'The recording is stored with the run — replay it in sync with the data on the run page.'
+              : takeMode === 'video' ? 'Save your measurement to attach it to your share video.' : 'It plays on your share video — save your measurement to keep it.'}</small>
           </span>
         </div>`;
     }
@@ -455,6 +468,20 @@ export function createSoloVoice(mountEl) {
         armError = 'Recording could not start in this browser — the measurement continues without it.';
         disarm();
       }
+    },
+    // Research flow: hand the FINISHED take to the caller for its own storage
+    // path (saveFor below targets the solo-camera/solo-audio Fns, which only
+    // know results/sessions — research runs store under research/<uid>/ with
+    // path-scoped policies). Ends the recording, waits for the sealed blob,
+    // clears internal ownership and releases the devices.
+    async takeRecording() {
+      await endPostRoll();
+      if (stopping) { try { await stopping; } catch (_) {} }
+      if (!blob || !blob.size) return null;
+      const out = { blob, mime: recMime || blob.type, media: takeMode, startedMs: recStartMs, stopMs: recStopMs || Date.now() };
+      blob = null;
+      disarm();
+      return out;
     },
     // After the results row exists: store the recording server-side (audio via
     // the solo-audio Fn; video via the solo-camera broker + signed upload).

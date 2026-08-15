@@ -42,7 +42,8 @@ function injectCamCss(){
 // Camera-take media for the race/session replays: the sync engine drives a
 // visible <video> exactly like a bare Audio (same HTMLMediaElement API); the
 // card sits inside the replay board and leaves with it on close/teardown.
-function camReplayMedia(el, url, beforeSel){
+// Exported: the Research run replay mounts the same card for its recordings.
+export function camReplayMedia(el, url, beforeSel){
   injectCamCss();
   const card = document.createElement('div');
   card.className = 'rp-camcard';
