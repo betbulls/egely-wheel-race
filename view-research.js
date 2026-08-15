@@ -210,17 +210,23 @@ function styles(){
   .rs-scale-l span.e1{transform:none;right:0}
   .rs-chart-h{font-family:'Montserrat',sans-serif;font-weight:600;font-size:13.5px;color:#011624;margin:16px 0 2px}
   .rs-chart-x{font-size:12px;color:#67737c;line-height:1.5;margin:0 0 4px}
-  .rs-qwrap{margin:0 0 12px}
-  .rs-qchips{display:flex;flex-wrap:wrap;gap:6px}
-  .rs-qchip{font-family:inherit;font-size:11.5px;border:1px solid #dfe3e6;border-radius:999px;padding:4px 11px;color:#27384e;background:#fff;
-    font-variant-numeric:tabular-nums;cursor:pointer}
+  /* Quality cards — same family as the stat band, one size quieter. They were
+     11.5px pills the owner could not read; now each is a small card: label on
+     top, the value readable, still tappable for its plain-language caption. */
+  .rs-qwrap{margin:0 0 14px}
+  .rs-qchips{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
+  .rs-qchip{font-family:inherit;display:block;text-align:left;border:1px solid #eef1f3;border-radius:12px;
+    padding:9px 13px;color:#011624;background:#fff;font-size:13.5px;font-weight:600;
+    font-variant-numeric:tabular-nums;cursor:pointer;min-width:0}
   .rs-qchip:hover{border-color:#b9a7f5}
   .rs-qchip.open{border-color:#5230da;box-shadow:0 0 0 1px #5230da inset}
-  .rs-qchip b{font-weight:700;color:#67737c;text-transform:uppercase;font-size:9.5px;letter-spacing:.05em;margin-right:5px}
+  .rs-qchip b{display:block;font-weight:700;color:#99a2a7;text-transform:uppercase;font-size:9.5px;
+    letter-spacing:.08em;margin:0 0 3px}
   .rs-qchip.warn{border-color:rgba(184,134,11,.5);background:rgba(184,134,11,.07);color:#8a6a08}
   .rs-qchip.warn b{color:#8a6a08}
-  .rs-qcap{margin-top:6px;color:#67737c;font-size:12px;line-height:1.5;background:#fbfbfc;
-    border:1px solid #eef1f3;border-radius:8px;padding:7px 10px}
+  .rs-qcap{margin-top:8px;color:#4d5a66;font-size:12.5px;line-height:1.55;background:#fbfbfc;
+    border:1px solid #eef1f3;border-radius:10px;padding:9px 12px}
+  @media (max-width:640px){ .rs-qchips{grid-template-columns:1fr 1fr} .rs-qchip{font-size:12.5px;padding:8px 11px} }
   .rs-banner{display:flex;align-items:center;gap:10px;background:rgba(82,48,218,.07);border:1px solid rgba(82,48,218,.3);
     color:#401d91;border-radius:12px;padding:10px 14px;font-size:13px;margin-bottom:14px}
   @media (max-width:640px){ .rs-tile .v{font-size:28px} }
