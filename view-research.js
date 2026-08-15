@@ -331,9 +331,13 @@ function fitSummaryHtml(fit, opts){
         ${fit.algo ? `<span style="color:#99a2a7">${esc(fit.algo)}</span>` : ''}
       </div>
     </details>`;
+  const scaleNote = fit.fit === 'scale'
+    ? '<p class="rs-note" style="margin:4px 0 10px">Model: time-scaled from the best spin — the decay was too fast for enough clean fit points (typical for a heavily braked wheel; the score still measures its condition).</p>'
+    : '';
   return `
     <div class="rs-fithead">${esc(head)}</div>
     ${sentence ? `<p class="rs-note" style="margin:4px 0 10px">${esc(sentence)}</p>` : ''}
+    ${scaleNote}
     ${health ? `<div class="rs-warn" style="margin:0 0 10px">${esc(health)}</div>` : ''}
     ${flagged}
     <div class="rs-fitgrid">${cards.join('')}</div>
@@ -600,11 +604,16 @@ function mountCalibration(host, a){
     tailMs: CAL_TAIL_MS,
     onSpinClosed(spin, curve, r){
       spins.push(spin); curves.push(curve);
-      // immediate verdict — anything unusable is kept as an audit-trail row
+      // immediate verdict — anything unusable is kept as an audit-trail row.
+      // Deliberately NO minimum fit-point gate: a heavily braked wheel dies
+      // from 24 to 2 rpm in a few seconds and yields only a handful of clean
+      // samples — and measuring exactly HOW BAD such a wheel is, is the whole
+      // point of calibrating it (real field feedback: a score-30 wheel's spins
+      // kept getting rejected). With few pooled points the fit falls back to
+      // time-scaling ('scale') and the result card says so.
       let reason = null;
       if(spin.interrupted) reason = 'interrupted';
       else if(spin.T24_5 == null) reason = 'no clean 24-rpm coast — spin harder (above 140 rpm) and keep hands off';
-      else if(store.derivPoints(curve.pts).length < 8) reason = 'too few clean samples in the 2–24 rpm range';
       if(reason){ spin.excluded = true; spin.exclude_reason = reason; }
       else spin.color_idx = calColorIdx++;   // persisted on the spin so the detail view recolors identically
       // display curve from the RAW lines: continuous down to the floor (zero)

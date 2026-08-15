@@ -31,7 +31,7 @@ export const CAL_OUTLIER_PCT = 20;
 export const CAL_BAND_BINS = [[2, 5], [5, 10], [10, 17], [17, 24]];
 // Analysis-algorithm fingerprint — travels in coef.algo + the meta CSV so every
 // number can be traced to the code that made it. Bump on ANY fit/band/loo change.
-export const CAL_ALGO = 'cal-v3: equal-weight lsq (A+K*w^1.5, 2-24 rpm); loo gate-times; observed-band 4 bins; outlier advisory ' + CAL_OUTLIER_PCT + '%';
+export const CAL_ALGO = 'cal-v3.1: equal-weight lsq (A+K*w^1.5, 2-24 rpm, d<15); loo gate-times; observed-band 4 bins; outlier advisory ' + CAL_OUTLIER_PCT + '%; no min-point spin gate';
 
 // Explicit column lists — NEVER select * on tables that carry jsonb frames
 // (one careless list query would pull megabytes into a phone).
@@ -67,7 +67,11 @@ export function derivPoints(curvePts){
     // tail — they must never feed the fit (and every label says 2-24).
     if(p1.y < 2 || p1.y > 24) continue;
     const d = (p0.y - p2.y) / dt;
-    if(d > 0 && d < 8) out.push({ w: p1.y, d });
+    // Upper cap: a hand-grab decelerates at ~50 rpm/s, but a heavily braked
+    // wheel legitimately reaches 8-12 rpm/s just below 24 rpm (score-30 field
+    // wheel: ~7.2 at 24) — the old <8 cap silently starved exactly the wheels
+    // that most need measuring. 15 keeps terrible wheels, still kills grabs.
+    if(d > 0 && d < 15) out.push({ w: p1.y, d });
   }
   return out;
 }
