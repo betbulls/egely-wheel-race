@@ -192,12 +192,17 @@ function styles(){
   .rs-scale-l span.e1{transform:none;right:0}
   .rs-chart-h{font-family:'Montserrat',sans-serif;font-weight:600;font-size:13.5px;color:#011624;margin:16px 0 2px}
   .rs-chart-x{font-size:12px;color:#67737c;line-height:1.5;margin:0 0 4px}
-  .rs-qchips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
-  .rs-qchip{font-size:11.5px;border:1px solid #dfe3e6;border-radius:999px;padding:4px 11px;color:#27384e;background:#fff;
-    font-variant-numeric:tabular-nums;cursor:default}
+  .rs-qwrap{margin:0 0 12px}
+  .rs-qchips{display:flex;flex-wrap:wrap;gap:6px}
+  .rs-qchip{font-family:inherit;font-size:11.5px;border:1px solid #dfe3e6;border-radius:999px;padding:4px 11px;color:#27384e;background:#fff;
+    font-variant-numeric:tabular-nums;cursor:pointer}
+  .rs-qchip:hover{border-color:#b9a7f5}
+  .rs-qchip.open{border-color:#5230da;box-shadow:0 0 0 1px #5230da inset}
   .rs-qchip b{font-weight:700;color:#67737c;text-transform:uppercase;font-size:9.5px;letter-spacing:.05em;margin-right:5px}
   .rs-qchip.warn{border-color:rgba(184,134,11,.5);background:rgba(184,134,11,.07);color:#8a6a08}
   .rs-qchip.warn b{color:#8a6a08}
+  .rs-qcap{margin-top:6px;color:#67737c;font-size:12px;line-height:1.5;background:#fbfbfc;
+    border:1px solid #eef1f3;border-radius:8px;padding:7px 10px}
   .rs-banner{display:flex;align-items:center;gap:10px;background:rgba(82,48,218,.07);border:1px solid rgba(82,48,218,.3);
     color:#401d91;border-radius:12px;padding:10px 14px;font-size:13px;margin-bottom:14px}
   @media (max-width:640px){ .rs-tile .v{font-size:28px} }
@@ -475,12 +480,19 @@ function computeQuality(samples, coef){
     speedPct: moving > 0 ? Math.round(inRange / moving * 100) : null,
   };
 }
+// One chip may be "open": its explanation shows as a caption line under the
+// row. Module-level so the live screen's 1 Hz re-render keeps it open. Chips
+// were tooltip-only before — tooltips do not exist on touch.
+let qchipOpen = null;
 function qualityChipsHtml(q){
-  const chip = (label, val, warn, title) =>
-    `<span class="rs-qchip${warn ? ' warn' : ''}" title="${esc(title)}"><b>${label}</b>${val}</span>`;
+  const caps = {};
+  const chip = (key, label, val, warn, title) => {
+    caps[key] = title;
+    return `<button type="button" class="rs-qchip${warn ? ' warn' : ''}${qchipOpen === key ? ' open' : ''}" data-qk="${key}" title="${esc(title)}"><b>${label}</b>${val}</button>`;
+  };
   const out = [];
   if(q.factory){
-    out.push(chip('cal', 'factory model', true,
+    out.push(chip('cal', 'cal', 'factory model', true,
       'No room calibration — every torque number leans on the factory reference.'));
   } else {
     const parts = [q.ageDays != null ? q.ageDays + 'd old' : '—'];
@@ -488,7 +500,7 @@ function qualityChipsHtml(q){
     if(q.dRh != null) parts.push('ΔRH ' + (q.dRh > 0 ? '+' : '') + q.dRh + '%');
     const warn = (q.ageDays != null && q.ageDays > store.CAL_STALE_DAYS)
       || (q.dT != null && Math.abs(q.dT) > 3) || (q.dRh != null && Math.abs(q.dRh) > 15);
-    out.push(chip('cal match', parts.join(' · '), warn,
+    out.push(chip('cal', 'cal match', parts.join(' · '), warn,
       'Calibration age and the temperature/humidity difference vs the calibration. Rooms drift — a stale or mismatched calibration widens what "normal" looks like.'));
     const c = q.coef || {};
     const spread = c.quality_pct != null ? 100 - c.quality_pct : null;
@@ -496,16 +508,35 @@ function qualityChipsHtml(q){
       + (c.quality_spread_s != null
         ? ' · spread ' + (c.quality_spread_s < 0.1 ? '<0.1' : c.quality_spread_s) + 's'
         : (spread != null ? ' · spread ' + spread + '%' : ''));
-    out.push(chip('reference', val, spread != null && spread > 20,
+    out.push(chip('ref', 'reference', val, spread != null && spread > 20,
       'Model fit on the calibration\'s own spins (σ) and the three-spin repeatability (spread). A wide reference hides small effects.'));
   }
-  out.push(chip('speed', q.speedPct != null ? q.speedPct + '% ≤ ' + q.wmax + ' rpm' : '—',
+  out.push(chip('speed', 'speed', q.speedPct != null ? q.speedPct + '% ≤ ' + q.wmax + ' rpm' : '—',
     q.speedPct != null && q.speedPct < 70,
     'Share of moving samples inside the calibration\'s fitted range — above it the baseline model is extrapolated.'));
-  out.push(chip('data', q.uptimePct != null ? q.uptimePct + '% uptime' : '—',
+  out.push(chip('data', 'data', q.uptimePct != null ? q.uptimePct + '% uptime' : '—',
     q.uptimePct != null && q.uptimePct < 90,
     'Gap-free share of the radio stream. Dropouts blank the affected torque estimates.'));
-  return `<div class="rs-qchips">${out.join('')}</div>`;
+  const cap = qchipOpen && caps[qchipOpen] ? `<div class="rs-qcap">${esc(caps[qchipOpen])}</div>` : '';
+  return `<div class="rs-qwrap"><div class="rs-qchips">${out.join('')}</div>${cap}</div>`;
+}
+// Tap a chip → its explanation appears under the row (delegated, idempotent —
+// the live screen replaces the innerHTML every second, the listener survives).
+function wireQualityChips(container){
+  if(!container || container.dataset.qwired) return;
+  container.dataset.qwired = '1';
+  container.addEventListener('click', e => {
+    const b = e.target.closest('[data-qk]');
+    if(!b) return;
+    qchipOpen = qchipOpen === b.dataset.qk ? null : b.dataset.qk;
+    const wrap = container.querySelector('.rs-qwrap');
+    if(!wrap) return;
+    wrap.querySelectorAll('[data-qk]').forEach(x => x.classList.toggle('open', x.dataset.qk === qchipOpen));
+    let cap = wrap.querySelector('.rs-qcap');
+    if(!qchipOpen){ if(cap) cap.remove(); return; }
+    if(!cap){ cap = document.createElement('div'); cap.className = 'rs-qcap'; wrap.appendChild(cap); }
+    cap.textContent = b.title;
+  });
 }
 
 // ---- mount ------------------------------------------------------------------
@@ -1626,7 +1657,10 @@ function mountExperiments(host, a){
       // quality header refresh ~1 Hz (fresh data only arrives at 1.4 Hz)
       if(qTick++ % 4 === 0){
         const qEl = host.querySelector('#rseQuality');
-        if(qEl && runQualityCtx) qEl.innerHTML = qualityChipsHtml({ ...runQualityCtx, ...computeQuality(samples, runQualityCtx.coef) });
+        if(qEl && runQualityCtx){
+          qEl.innerHTML = qualityChipsHtml({ ...runQualityCtx, ...computeQuality(samples, runQualityCtx.coef) });
+          wireQualityChips(qEl);
+        }
       }
       const clock = host.querySelector('#rseClock');
       if(clock) clock.textContent = fmtClock(cap.now() / 1000);
@@ -2281,13 +2315,16 @@ function mountRunDetail(el, runId){
       const calT = (cal && cal.temp_c != null) ? cal.temp_c : null;
       const calRh = (cal && cal.rh_pct != null) ? cal.rh_pct : null;
       const qEl = el.querySelector('#rsdQuality');
-      if(qEl) qEl.innerHTML = qualityChipsHtml({
-        factory, coef,
-        ageDays: envSnap.calibration_age_days != null ? envSnap.calibration_age_days : null,
-        dT: (row.temp_c != null && calT != null) ? Math.round((row.temp_c - calT) * 10) / 10 : null,
-        dRh: (row.rh_pct != null && calRh != null) ? Math.round(row.rh_pct - calRh) : null,
-        ...computeQuality(samples, coef),
-      });
+      if(qEl){
+        qEl.innerHTML = qualityChipsHtml({
+          factory, coef,
+          ageDays: envSnap.calibration_age_days != null ? envSnap.calibration_age_days : null,
+          dT: (row.temp_c != null && calT != null) ? Math.round((row.temp_c - calT) * 10) / 10 : null,
+          dRh: (row.rh_pct != null && calRh != null) ? Math.round(row.rh_pct - calRh) : null,
+          ...computeQuality(samples, coef),
+        });
+        wireQualityChips(qEl);
+      }
     }
     stack = createPanelStack(el.querySelector('#rsdStackHost'), {
       mode: 'review', coef,

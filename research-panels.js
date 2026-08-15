@@ -316,7 +316,7 @@ export function createPanelStack(host, opts){
   }
 
   // ---- persistence ----------------------------------------------------------
-  const DEFAULT_ORDER = ['timeline', 'torque', 'impulse', 'logspeed', 'deviation', 'phase', 'byspeed', 'revs', 'energy', 'work', 'coasts', 'quality'];
+  const DEFAULT_ORDER = ['timeline', 'wheel3d', 'torque', 'impulse', 'logspeed', 'deviation', 'phase', 'byspeed', 'revs', 'energy', 'work', 'coasts', 'quality'];
   const DEFAULT_OPEN = { timeline: true, torque: true };
   const LENS_KEYS = ['all', 'motion', 'forces', 'energy', 'compare', 'quality'];
   let layout = { order: DEFAULT_ORDER.slice(), open: { ...DEFAULT_OPEN }, prefs: {}, lens: 'all' };
@@ -407,6 +407,48 @@ export function createPanelStack(host, opts){
     for(let i = arr.length - 1; i >= 0; i--) if(arr[i] != null) return { v: arr[i], i };
     return null;
   }
+  // wrapped in-canvas caption — the old 9.5px one-liners clipped mid-word on
+  // narrow canvases and sat below the contrast floor; captions must be READABLE
+  // or they are decoration
+  function caption(ctx, text, x, y, maxW, opts){
+    const o = opts || {};
+    const maxLines = o.maxLines || 2;   // captions annotate, they must never flood the plot
+    ctx.font = (o.bold ? '700 ' : '') + '10.5px Inter, sans-serif';
+    ctx.fillStyle = o.color || GREY;
+    ctx.textAlign = o.align || 'left'; ctx.textBaseline = 'top';
+    const words = String(text).split(' ');
+    const lines = [];
+    let line = '';
+    for(const w of words){
+      const probe = line ? line + ' ' + w : w;
+      if(ctx.measureText(probe).width > maxW && line){ lines.push(line); line = w; }
+      else line = probe;
+    }
+    if(line) lines.push(line);
+    if(lines.length > maxLines){
+      lines.length = maxLines;
+      let last = lines[maxLines - 1];
+      while(last && ctx.measureText(last + '…').width > maxW) last = last.slice(0, -1);
+      lines[maxLines - 1] = last + '…';
+    }
+    let yy = y;
+    for(const l of lines){ ctx.fillText(l, x, yy); yy += 13; }
+    return yy;
+  }
+  // tight extent of a numeric series over the samples inside the visible window
+  // (a zoomed chart must rescale to what is on screen — a full-run scale turns
+  // the very stretch being inspected into a flat line)
+  function visExtent(arr, extra){
+    let lo = Infinity, hi = -Infinity;
+    for(let i = 0; i < samples.length; i++){
+      const t = samples[i].t;
+      if(t < view.t0 || t > view.t1 || arr[i] == null) continue;
+      const pad = extra ? extra(i) : 0;
+      if(arr[i] - pad < lo) lo = arr[i] - pad;
+      if(arr[i] + pad > hi) hi = arr[i] + pad;
+    }
+    return isFinite(lo) ? { lo, hi } : null;
+  }
   function drawPennants(ctx, xOf){
     ctx.font = '9px Inter, sans-serif'; ctx.textAlign = 'center';
     for(const m of markers){
@@ -439,6 +481,11 @@ export function createPanelStack(host, opts){
       formula: 'Speed timeline + ghost    ·    ω = 6000 / counter [rpm]    ·    ghost: dω̂/dt = −(A + B·ω̂ + K·ω̂^1.5)',
       explain: 'The solid dark line is the measured speed, with a violet dot for each fresh reading (the dots hide when they crowd). Each dashed grey line is a ghost — the calibration played forward from the start of one hands-off slow-down, so a run shows one per slow-down; the faint caption marks where the most recent one reaches zero. Rules on the left are rpm; the dashed rule at 24 rpm is where the wheel\'s own display stops counting. Violet triangles along the top are your markers. While a ghost is running and the newest reading is on screen, the bold figure top-left gives the current distance between the two lines in rpm. Pale red blocks are radio dropouts and the line breaks across them; the labels along the bottom are m:ss of the run.',
       draw(ctx, W, H){
+        if(!samples.length){
+          ctx.fillStyle = FAINT; ctx.font = '11.5px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText('waiting for the first reading — spin the wheel to begin', W / 2, H / 2);
+          return;
+        }
         const { xOf } = timeAxis(W);
         const { yOf, max } = rpmScale(H);
         drawTimeGrid(ctx, W, H, xOf); drawGaps(ctx, W, H, xOf);
@@ -494,8 +541,13 @@ export function createPanelStack(host, opts){
       formula: 'Drive-torque instrument    ·    τ_drive = I·(α_meas − α_base(ω))    ·    I = 1.7×10⁻⁷ kg·m²',
       explain: 'The top half is a live meter: a pale track, a dark zero line down the middle, a grey block for the reference band at the current speed, and one bar out of the middle — violet right for a push, amber left for a drag, grey while it stays inside the band. The scale is deliberately squashed, small readings getting most of the room, so read the bar against the grey band rather than measuring its length. When the newest usable reading is 20 seconds old or more, no bar is drawn at all and the number falls back to a dash. The bottom half is the same reading against the clock: dark line, grey ribbon for the reference band (its height follows the speed), a thin flat line at zero. Pale red stripes are dropouts, and the line breaks wherever a reading could not be worked out.',
       draw(ctx, W, H){
+        if(!samples.length){
+          ctx.fillStyle = FAINT; ctx.font = '11.5px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText('no readings yet — the meter wakes with the first spin', W / 2, H / 2);
+          return;
+        }
         const p = ensurePipe();
-        const gaugeH = 84;
+        const gaugeH = 100;   // includes room for a two-line wrapped caption on phones
         const bNow = samples.length ? p.band[samples.length - 1] : floor.tau;   // B(ω) at the current speed
         // --- gauge (horizontal bipolar symlog bar) ---
         const L = Math.max(20, floor.tau * 2);      // linear zone bound [nN*m]
@@ -526,8 +578,7 @@ export function createPanelStack(host, opts){
         ctx.fillStyle = AMBER; ctx.textAlign = 'left'; ctx.fillText('← EXTRA BRAKE', gx0, 2);
         ctx.fillStyle = live ? INK : FAINT; ctx.textAlign = 'center'; ctx.font = '700 15px Inter, sans-serif';
         ctx.fillText(live ? ((lastTau >= 0 ? '+' : '') + fmtSig2(lastTau) + ' nN·m') : '—', gxm, 52);
-        ctx.font = '9.5px Inter, sans-serif'; ctx.fillStyle = FAINT;
-        ctx.fillText('grey band = the reference band at this speed, ±' + fmtSig2(bNow) + ' nN·m — a reading inside it is too small to tell apart from the calibration', gxm, 70);
+        caption(ctx, 'grey band = the reference band at this speed, ±' + fmtSig2(bNow) + ' nN·m — a reading inside it is too small to tell apart from the calibration', gxm, 70, gx1 - gx0 - 8, { align: 'center' });
 
         // --- strip vs shared time axis ---
         const { xOf } = timeAxis(W);
@@ -554,6 +605,16 @@ export function createPanelStack(host, opts){
         if(bandPen){ ctx.closePath(); ctx.fill(); }
         ctx.strokeStyle = 'rgba(1,22,36,0.3)';
         ctx.beginPath(); ctx.moveTo(PAD_L, yOf(0)); ctx.lineTo(W - PAD_R, yOf(0)); ctx.stroke();
+        // the strip finally gets a vertical scale (it had none): squashed like
+        // the gauge, so the labels name the landmarks rather than a linear axis
+        ctx.font = '10px Inter, sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+        for(const v of [-TMAX, -L, 0, L, TMAX]){
+          ctx.fillStyle = GREY;
+          ctx.fillText((v > 0 ? '+' : '') + v, PAD_L - 6, yOf(v));
+        }
+        ctx.fillStyle = FAINT; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+        ctx.font = '10px Inter, sans-serif';
+        ctx.fillText('nN·m', PAD_L + 4, top);
         drawTimeGrid(ctx, W, H, xOf);
         ctx.lineWidth = 2.2;
         let pen = false;
@@ -583,10 +644,17 @@ export function createPanelStack(host, opts){
       formula: 'Drive impulse J(t)    ·    J(t) = ∫ τ_drive dt  [nN·m·s]    ·    J_out = ∫ sign(τ)·max(|τ|−B(ω), 0) dt',
       explain: 'The violet line is the running total counted from the start of the run: it climbs while there is a push, sinks while there is a drag, holds level where a reading could not be worked out, and breaks across a dropout. Only in the full-run view does it start from zero at the left edge — in a zoomed or live window it enters at whatever total it had already reached. The grey band around it is how far this total can drift on the calibration alone, and it only ever widens. The text along the top counts how many seconds the reading spent outside the reference band, out of how many seconds could be measured at all; then the longest single stretch, how many separate stretches, and what those stretches add up to once the width of the band is subtracted from every reading.',
       draw(ctx, W, H){
+        if(!samples.length){
+          ctx.fillStyle = FAINT; ctx.font = '11.5px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText('the running total starts with the first reading', W / 2, H / 2);
+          return;
+        }
         const p = ensurePipe();
         const { xOf } = timeAxis(W);
         drawTimeGrid(ctx, W, H, xOf); drawGaps(ctx, W, H, xOf);
-        const maxJ = Math.max(5, ...p.imp.map((v, i) => Math.abs(v) + p.impSig[i])) * 1.1;
+        // scale to the VISIBLE window — a zoom must magnify, not flatten
+        const ext = visExtent(p.imp, i => p.impSig[i]);
+        const maxJ = Math.max(5, ext ? Math.max(Math.abs(ext.lo), Math.abs(ext.hi)) : 0) * 1.1;
         const yOf = v => PAD_T + (H - PAD_T - PAD_B) * (0.5 - v / (2 * maxJ));
         ctx.strokeStyle = 'rgba(1,22,36,0.3)';
         ctx.beginPath(); ctx.moveTo(PAD_L, yOf(0)); ctx.lineTo(W - PAD_R, yOf(0)); ctx.stroke();
@@ -615,14 +683,16 @@ export function createPanelStack(host, opts){
         }
         ctx.stroke();
         // outside-band ledger — the honest aggregate, stamped onto the chart
+        // (suppressed until there is anything measured: jargon on emptiness was
+        // the first live impression of the whole panel)
         const o = p.outside;
-        ctx.fillStyle = GREY; ctx.font = '700 9.5px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-        const pct = o.certified_s > 0 ? Math.round(o.s / o.certified_s * 100) : 0;
-        ctx.fillText('outside the reference band: ' + fmtSig2(o.s) + ' s of the ' + fmtSig2(o.certified_s) + ' s that could be measured (' + pct + '%) · longest stretch '
-          + fmtSig2(o.longest_s) + ' s · ' + o.count + ' stretch' + (o.count === 1 ? '' : 'es')
-          + ' · ' + (o.jout >= 0 ? '+' : '') + fmtSig2(o.jout) + ' nN·m·s once the band is subtracted', PAD_L + 4, PAD_T);
-        ctx.fillStyle = FAINT; ctx.font = '9.5px Inter, sans-serif';
-        ctx.fillText('nN·m·s · grey band = how far this total could drift on the calibration alone', PAD_L + 4, PAD_T + 13);
+        if(o.certified_s > 0){
+          const pct = Math.round(o.s / o.certified_s * 100);
+          const y2 = caption(ctx, 'outside the reference band: ' + fmtSig2(o.s) + ' s of the ' + fmtSig2(o.certified_s) + ' s that could be measured (' + pct + '%) · longest stretch '
+            + fmtSig2(o.longest_s) + ' s · ' + o.count + ' stretch' + (o.count === 1 ? '' : 'es')
+            + ' · ' + (o.jout >= 0 ? '+' : '') + fmtSig2(o.jout) + ' nN·m·s once the band is subtracted', PAD_L + 4, PAD_T, W - PAD_L - PAD_R - 8, { bold: true });
+          caption(ctx, 'nN·m·s · grey band = how far this total could drift on the calibration alone', PAD_L + 4, y2, W - PAD_L - PAD_R - 8, { color: FAINT, maxLines: 1 });
+        }
       },
       readout(){
         const p = ensurePipe();
@@ -631,6 +701,50 @@ export function createPanelStack(host, opts){
         return (p.imp[i] >= 0 ? '+' : '') + fmtSig2(p.imp[i]) + ' ± ' + fmtSig2(p.impSig[i]) + ' nN·m·s';
       },
       value(t){ const p = ensurePipe(); const i = nearestIdx(t); return i < 0 ? '—' : fmtSig2(p.imp[i]) + ' nN·m·s'; },
+    },
+
+    wheel3d: {
+      title: 'The wheel itself, in 3D', h: 0, dom: true, cat: 'motion',
+      lede: 'Here you see the wheel turning at the speed the measurement shows right now, with the device\'s own 24-LED dial underneath.',
+      formula: '3D model: egely_wheel_20230814v2.gltf (1:1 scan) · LED n = n rpm · 6 rpm = 100% vitality quotient',
+      explain: 'The model is the real device: housing and foil wheel at true proportions. The figure below the dial is the measured reading itself; the rotation glides between readings, which arrive about every 0.7 s. During a live run or a replay it follows the newest reading; click a chart to plant the cursor and it shows that moment instead. Drag the picture to look around it, hold Ctrl and scroll to zoom. The two staggered rows of dots below are the device\'s own dial: LED n lights while the wheel does n turns per minute — red up to 6, yellow to 12, green to 24, and above 24 rpm the top LED simply stays lit. The lit LED pulses once for every completed revolution; at high speed the pulses blend into a steady glow.',
+      renderDom(el){
+        // idempotent: the render loop lives its own life once mounted
+        if(el.dataset.rw3) return;
+        el.dataset.rw3 = '1';
+        el.innerHTML = '<div class="rsp-empty">Loading the 3D viewer…</div>';
+        import('./research-wheel3d.js').then(m => {
+          if(!el.isConnected) { delete el.dataset.rw3; return; }
+          el.innerHTML = '';
+          m.createWheel3d(el, {
+            rpm: () => {
+              // the moment the panel must show: the planted cursor, else the
+              // head. null = no reading exists — the viewer must say so, a
+              // fake "0 rpm" would violate the blank-state rule
+              if(view.cursorT != null){ const s = nearest(view.cursorT); return s ? s.rpm : null; }
+              const s = samples[samples.length - 1];
+              return s ? s.rpm : null;
+            },
+          });
+        }).catch(err => {
+          console.error('wheel3d load:', err);
+          // keep the guard SET ('err') — paintPanel re-enters renderDom every
+          // tick, and clearing the guard here meant an endless 4 Hz reload
+          // flicker; the Retry button is the only path back
+          el.dataset.rw3 = 'err';
+          el.innerHTML = '<div class="rsp-empty">Could not load the 3D viewer. The measurement is unaffected. '
+            + '<button type="button" class="rsp-retry" data-rw3-retry>Retry</button></div>';
+          const b = el.querySelector('[data-rw3-retry]');
+          if(b) b.addEventListener('click', () => { delete el.dataset.rw3; PANELS.wheel3d.renderDom(el); });
+        });
+      },
+      readout(){
+        const s = samples[samples.length - 1];
+        if(!s) return '—';
+        const led = s.rpm >= 0.5 ? Math.min(24, Math.round(s.rpm)) : 0;
+        return fmtSig2(s.rpm) + ' rpm' + (led ? ' · LED ' + led : '');
+      },
+      value(t){ const s = nearest(t); return s ? fmtSig2(s.rpm) + ' rpm' : '—'; },
     },
 
     logspeed: {
@@ -670,8 +784,7 @@ export function createPanelStack(host, opts){
         // stopped glyphs pinned at the floor (0 cannot log)
         ctx.fillStyle = FAINT;
         for(const s of visSamples()) if(s.rpm < 1.6){ ctx.fillRect(xOf(s.t) - 1.5, H - PAD_B - 4, 3, 3); }
-        ctx.fillStyle = FAINT; ctx.font = '9.5px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-        ctx.fillText('log scale — squares at the floor = below 1.6 rpm (near standstill)', PAD_L + 4, PAD_T);
+        caption(ctx, 'stretched scale — squares at the floor = below 1.6 rpm (near standstill)', PAD_L + 4, PAD_T, W - PAD_L - PAD_R - 8, { color: FAINT });
       },
       readout(){ const s = samples[samples.length - 1]; return s ? fmtSig2(s.rpm) + ' rpm' : '—'; },
       value(t){ const s = nearest(t); return s ? fmtSig2(s.rpm) + ' rpm' : '—'; },
@@ -694,7 +807,9 @@ export function createPanelStack(host, opts){
         const band = Math.max(5, (coef.sigma_rel || SIGMA_DEFAULT) * 200);   // ±2σ in %
         const DEV = Math.max(15, band * 2);
         const yOf = d => PAD_T + (H - PAD_T - PAD_B) * (0.5 - Math.max(-DEV, Math.min(DEV, d)) / (2 * DEV));
-        ctx.fillStyle = 'rgba(32,178,107,0.10)';
+        // grey like every other reference band — green is the app's success
+        // colour, and "inside the band" is not a pass, just not distinguishable
+        ctx.fillStyle = 'rgba(103,115,124,0.14)';
         ctx.fillRect(PAD_L, yOf(band), W - PAD_L - PAD_R, yOf(-band) - yOf(band));
         ctx.strokeStyle = 'rgba(1,22,36,0.3)'; ctx.setLineDash([6, 4]);
         ctx.beginPath(); ctx.moveTo(PAD_L, yOf(0)); ctx.lineTo(W - PAD_R, yOf(0)); ctx.stroke(); ctx.setLineDash([]);
@@ -711,8 +826,7 @@ export function createPanelStack(host, opts){
           pen ? ctx.lineTo(xOf(s.t), yOf(d)) : ctx.moveTo(xOf(s.t), yOf(d)); pen = true;
         }
         ctx.stroke();
-        ctx.fillStyle = FAINT; ctx.font = '9.5px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-        ctx.fillText('band = ±' + Math.round(band) + '% — how closely the ' + (floor.factory ? 'factory' : 'room') + ' calibration repeats itself · drawn only during a hands-off slow-down, down to 2 rpm', PAD_L + 4, PAD_T);
+        caption(ctx, 'band = ±' + Math.round(band) + '% — how closely the ' + (floor.factory ? 'factory' : 'room') + ' calibration repeats itself · drawn only during a hands-off slow-down, down to 2 rpm', PAD_L + 4, PAD_T, W - PAD_L - PAD_R - 8, { color: FAINT });
       },
       readout(){
         const p = ensurePipe();
@@ -750,6 +864,14 @@ export function createPanelStack(host, opts){
         }
         ctx.textAlign = 'center'; ctx.textBaseline = 'top';
         for(let r = 0; r <= RPM_MAX; r += RPM_MAX > 60 ? 20 : 5){ ctx.fillStyle = FAINT; ctx.fillText(String(Math.round(r)), xOf(r), H - PAD_B + 5); }
+        // the only chart with two measured axes — both get named (they had no
+        // label at all, which made the whole picture unreadable cold)
+        ctx.fillStyle = GREY; ctx.font = '10.5px Inter, sans-serif';
+        ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+        ctx.fillText('wheel speed [rpm] →', W - PAD_R, H - PAD_B - 3);
+        ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+        ctx.fillText('↑ how hard it was slowing [rpm/s]', PAD_L + 4, PAD_T + 2);
+        ctx.font = '10px Inter, sans-serif';
         ctx.fillStyle = FAINT; ctx.textAlign = 'left';
         ctx.fillText('holding speed', PAD_L + 4, yOf(0) + 4);
         // baseline + tint zones
@@ -850,8 +972,7 @@ export function createPanelStack(host, opts){
           ctx.fillStyle = FAINT; ctx.font = '9.5px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
           ctx.fillText(isFinite(BINS[b][1]) ? BINS[b][0] + '–' + BINS[b][1] : BINS[b][0] + '+', xC(b), H - PAD_B + 5);
         }
-        ctx.fillStyle = FAINT; ctx.font = '9.5px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-        ctx.fillText('nN·m per rpm band · grey = the reference band there · faded = the calibration never measured above ' + fmtSig2(Math.min(24, wmax)) + ' rpm', PAD_L + 4, H - PAD_B - 14);
+        caption(ctx, 'nN·m per rpm band · grey = the reference band there · faded = the calibration never measured above ' + fmtSig2(Math.min(24, wmax)) + ' rpm', PAD_L + 4, H - PAD_B - 30, W - PAD_L - PAD_R - 8, { color: FAINT });
       },
       readout(){
         const p = ensurePipe();
@@ -883,10 +1004,19 @@ export function createPanelStack(host, opts){
         const p = ensurePipe();
         const { xOf } = timeAxis(W);
         drawTimeGrid(ctx, W, H, xOf); drawGaps(ctx, W, H, xOf);
-        const maxN = Math.max(1, p.revs[p.revs.length - 1] || 1) * 1.05;
-        const yOf = v => PAD_T + (H - PAD_T - PAD_B) * (1 - v / maxN);
+        // window-scaled: zooming into a slow stretch must show ITS accumulation,
+        // not a flat line under the full-run total
+        const ext = visExtent(p.revs);
+        const lo = ext ? ext.lo : 0;
+        const span = Math.max(0.5, ext ? ext.hi - ext.lo : 1);
+        const yOf = v => PAD_T + (H - PAD_T - PAD_B) * (1 - (v - lo + span * 0.04) / (span * 1.1));
         ctx.font = '10px Inter, sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-        for(const f of [0, 0.5, 1]){ ctx.fillStyle = GREY; ctx.fillText(String(Math.round(maxN * f)), PAD_L - 6, yOf(maxN * f)); }
+        // decimals follow the tick step — in a near-flat window whole numbers
+        // would print the same label three times
+        const dec = span / 2 >= 2 ? 0 : span / 2 >= 0.5 ? 1 : 2;
+        for(const f of [0, 0.5, 1]){ const v = lo + span * f; ctx.fillStyle = GREY; ctx.fillText(v.toFixed(dec), PAD_L - 6, yOf(v)); }
+        ctx.fillStyle = FAINT; ctx.font = '10px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+        ctx.fillText('turns', PAD_L + 4, PAD_T);
         ctx.strokeStyle = INK; ctx.lineWidth = 2;
         ctx.beginPath(); let pen = false;
         for(let i = 0; i < samples.length; i++){
@@ -925,14 +1055,19 @@ export function createPanelStack(host, opts){
         const p = ensurePipe();
         const { xOf } = timeAxis(W);
         drawTimeGrid(ctx, W, H, xOf); drawGaps(ctx, W, H, xOf);
-        const maxE = Math.max(0.6, ...p.energy) * 1.06;
+        // window-scaled: one 300-rpm hand spin is ~150 µJ against 0.54 µJ at
+        // 24 rpm — on a full-run scale the whole hands-off part sat ON the axis
+        const ext = visExtent(p.energy);
+        const maxE = Math.max(0.6, ext ? ext.hi : 0) * 1.06;
         const yOf = v => PAD_T + (H - PAD_T - PAD_B) * (1 - v / maxE);
         ctx.font = '10px Inter, sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
         for(const f of [0, 0.5, 1]){ ctx.fillStyle = GREY; ctx.fillText(fmtSig2(maxE * f) + '', PAD_L - 6, yOf(maxE * f)); }
-        ctx.strokeStyle = 'rgba(1,22,36,0.15)'; ctx.setLineDash([4, 4]);
-        ctx.beginPath(); ctx.moveTo(PAD_L, yOf(0.54)); ctx.lineTo(W - PAD_R, yOf(0.54)); ctx.stroke(); ctx.setLineDash([]);
-        ctx.fillStyle = FAINT; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; ctx.font = '9.5px Inter, sans-serif';
-        ctx.fillText('0.54 µJ = 24 rpm', PAD_L + 4, yOf(0.54) - 2);
+        if(0.54 < maxE){
+          ctx.strokeStyle = 'rgba(1,22,36,0.15)'; ctx.setLineDash([4, 4]);
+          ctx.beginPath(); ctx.moveTo(PAD_L, yOf(0.54)); ctx.lineTo(W - PAD_R, yOf(0.54)); ctx.stroke(); ctx.setLineDash([]);
+          ctx.fillStyle = FAINT; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; ctx.font = '9.5px Inter, sans-serif';
+          ctx.fillText('0.54 µJ = 24 rpm', PAD_L + 4, yOf(0.54) - 2);
+        }
         ctx.strokeStyle = VIOLET; ctx.lineWidth = 2;
         ctx.beginPath(); let pen = false;
         for(let i = 0; i < samples.length; i++){
@@ -958,7 +1093,9 @@ export function createPanelStack(host, opts){
         const { xOf } = timeAxis(W);
         drawTimeGrid(ctx, W, H, xOf); drawGaps(ctx, W, H, xOf);
         const sig = coef.sigma_rel || SIGMA_DEFAULT;
-        const maxW = Math.max(0.5, ...p.work.map((w, i) => Math.abs(w) + p.dissip[i] * sig)) * 1.1;
+        // window-scaled, same rule as the impulse panel
+        const extW = visExtent(p.work, i => p.dissip[i] * sig);
+        const maxW = Math.max(0.5, extW ? Math.max(Math.abs(extW.lo), Math.abs(extW.hi)) : 0) * 1.1;
         const yOf = v => PAD_T + (H - PAD_T - PAD_B) * (0.5 - v / (2 * maxW));
         ctx.strokeStyle = 'rgba(1,22,36,0.3)';
         ctx.beginPath(); ctx.moveTo(PAD_L, yOf(0)); ctx.lineTo(W - PAD_R, yOf(0)); ctx.stroke();
@@ -986,8 +1123,7 @@ export function createPanelStack(host, opts){
           pen ? ctx.lineTo(xOf(t), yOf(p.work[i])) : ctx.moveTo(xOf(t), yOf(p.work[i])); pen = true;
         }
         ctx.stroke();
-        ctx.fillStyle = FAINT; ctx.font = '9.5px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-        ctx.fillText('µJ · grey band = how far the calibration\'s own repeatability (±' + Math.round(sig * 100) + '%) could shift this total', PAD_L + 4, PAD_T);
+        caption(ctx, 'µJ · grey band = how far the calibration\'s own repeatability (±' + Math.round(sig * 100) + '%) could shift this total', PAD_L + 4, PAD_T, W - PAD_L - PAD_R - 8, { color: FAINT });
       },
       readout(){
         const p = ensurePipe();
@@ -1129,7 +1265,20 @@ export function createPanelStack(host, opts){
   const nearest = t => { const i = nearestIdx(t); return i < 0 ? null : samples[i]; };
 
   // ---- DOM ------------------------------------------------------------------
-  host.innerHTML = `<div class="rsp-lenses" id="rspLenses"></div><div class="rsp-stack" id="rspStack"></div>`;
+  // The key block defines, ONCE and always visibly, the four words every chart
+  // leans on — and closes with the honesty line the live screen never had.
+  host.innerHTML = `
+  <div class="rsp-key">
+    <b>How to read these charts.</b> Everything is compared with <b>the calibration</b> —
+    how this wheel slowed down on its own when you calibrated it${calNote === 'factory model' ? ' (right now: the factory model, not your room)' : ''}.
+    The dashed <b>ghost line</b> replays that slow-down; the grey <b>reference band</b> is how much
+    the calibration itself wobbles, so only readings outside it count as a real departure.
+    On the force charts <span class="rsp-kv" style="color:${VIOLET}">■ violet = push</span> and
+    <span class="rsp-kv" style="color:${AMBER}">■ amber = drag</span>;
+    <span class="rsp-kv" style="color:${RED}">■ pale red stripes = lost readings</span> everywhere.
+    <span class="rsp-kdim">The app measures — what a departure means is yours to decide.</span>
+  </div>
+  <div class="rsp-lenses" id="rspLenses"></div><div class="rsp-stack" id="rspStack"></div>`;
   const stackEl = host.querySelector('#rspStack');
   const lensEl = host.querySelector('#rspLenses');
   const bodies = {};   // id -> {card, bodyEl, canvas, overlay, domEl}
@@ -1645,6 +1794,11 @@ function styles(){
   el.id = 'rspStyles';
   el.textContent = `
   .rsp-lenses{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+  .rsp-key{background:#fbfbfc;border:1px solid #eef1f3;border-radius:12px;padding:10px 14px;margin:0 0 10px;
+    color:#4d5a66;font-size:12.5px;line-height:1.6}
+  .rsp-key b{color:#011624}
+  .rsp-kv{white-space:nowrap;font-weight:700;font-size:12px;margin-right:4px}
+  .rsp-kdim{display:block;margin-top:2px;color:#99a2a7;font-size:12px}
   .rsp-lens{font-family:'Montserrat',sans-serif;font-weight:700;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
     padding:6px 14px;border-radius:999px;border:1px solid #dfe3e6;background:#fff;color:#67737c;cursor:pointer;transition:all .12s}
   .rsp-lens:hover{border-color:#5230da;color:#401d91}
@@ -1690,6 +1844,9 @@ function styles(){
     background:#f7f8f8;border:1px solid #eef1f3;border-radius:8px;padding:6px 10px;margin-top:6px;
     overflow-x:auto;white-space:nowrap}
   .rsp-empty,.rsp-dim{color:#99a2a7;font-size:12.5px}
+  .rsp-retry{margin-left:8px;font-family:inherit;font-size:12px;font-weight:700;padding:3px 12px;border-radius:999px;
+    cursor:pointer;background:#fff;border:1px solid #dfe3e6;color:#401d91}
+  .rsp-retry:hover{border-color:#5230da}
   .rsp-coast{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;background:#f7f8f8;border:1px solid #dfe3e6;
     border-radius:10px;padding:8px 12px;margin-bottom:6px;font-size:12.5px;color:#27384e;font-variant-numeric:tabular-nums}
   .rsp-coast.int{opacity:.55;text-decoration:line-through}
