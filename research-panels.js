@@ -205,7 +205,9 @@ export function createPanelStack(host, opts){
   }
   function drawTimeGrid(ctx, W, H, xOf){
     const span = view.t1 - view.t0;
-    const step = span <= 70 ? 10 : span <= 320 ? 60 : 120;
+    // aim for ~6-8 labeled ticks at every zoom — two lonely labels made a
+    // full-session view unreadable
+    const step = span <= 40 ? 5 : span <= 90 ? 10 : span <= 180 ? 20 : span <= 420 ? 60 : 120;
     ctx.font = '10px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     for(let t = Math.ceil(view.t0 / step) * step; t <= view.t1; t += step){
       const x = xOf(t);
@@ -884,14 +886,17 @@ export function createPanelStack(host, opts){
           ctx.beginPath(); ctx.moveTo(x, PAD_T); ctx.lineTo(x, h - PAD_B); ctx.stroke(); ctx.setLineDash([]);
           const val = P.value(t);
           if(val){
+            // label at the BOTTOM of the plot — the top edge belongs to the
+            // window-extent text and badges, and the cursor line must run free
             ctx.font = '700 10.5px Inter, sans-serif';
             const label = val + ' · t=' + fmtClock(t);
             const tw = ctx.measureText(label).width + 12;
             const bx = Math.min(w - PAD_R - tw, Math.max(PAD_L, x + 6));
-            ctx.fillStyle = 'rgba(255,255,255,0.92)'; ctx.fillRect(bx, PAD_T + 2, tw, 17);
-            ctx.strokeStyle = '#dfe3e6'; ctx.strokeRect(bx, PAD_T + 2, tw, 17);
+            const by = h - PAD_B - 21;
+            ctx.fillStyle = 'rgba(255,255,255,0.94)'; ctx.fillRect(bx, by, tw, 17);
+            ctx.strokeStyle = '#dfe3e6'; ctx.strokeRect(bx, by, tw, 17);
             ctx.fillStyle = INK; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-            ctx.fillText(label, bx + 6, PAD_T + 11);
+            ctx.fillText(label, bx + 6, by + 9);
           }
         }
       }

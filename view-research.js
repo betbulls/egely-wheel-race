@@ -1440,6 +1440,14 @@ function mountRunDetail(el, runId){
         ${isOwner ? '<div id="rsdLabels"></div>' : ''}
         ${row.notes ? `<p class="rs-note">${esc(row.notes)}</p>` : ''}
         <div class="rs-replaybar" id="rsdReplay"></div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 10px">
+          <span class="rs-presets" id="rsdPresets" style="margin-left:0">
+            <button type="button" class="rs-preset" data-preset="60">60 s</button>
+            <button type="button" class="rs-preset" data-preset="300">5 min</button>
+            <button type="button" class="rs-preset on" data-preset="full">Full</button>
+          </span>
+          <span class="rs-note" style="margin:0;font-size:12px">Shift+drag = pan · Ctrl+scroll = zoom · click a chart = inspect a sample · drag = stats for a stretch</span>
+        </div>
         <div id="rsdStackHost"></div>
         <div class="rs-hash">SHA-256 (samples.csv): ${esc(row.sha256 || '—')}</div>
         <div class="rs-dl" id="rsdDl">
@@ -1512,6 +1520,16 @@ function mountRunDetail(el, runId){
     });
     clockRef = replayClock;
     transport.paint(durationMs);
+
+    // zoom presets — the live screen has them in its status bar; the detail
+    // page needs them too (a 2-minute run squeezed into one width is unreadable)
+    const presetBox = el.querySelector('#rsdPresets');
+    presetBox.addEventListener('click', e => {
+      const b = e.target.closest('[data-preset]');
+      if(!b) return;
+      presetBox.querySelectorAll('[data-preset]').forEach(x => x.classList.toggle('on', x === b));
+      stack.setPreset(b.dataset.preset);
+    });
 
     // CSV export: frames come down only now, chunk by chunk
     el.querySelector('#rsdDl').addEventListener('click', async e => {
