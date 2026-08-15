@@ -31,14 +31,31 @@ const MODEL_URL = 'assets/egely_wheel_20230814v2.gltf';
 const ledColorOf = i => i === 0 ? null : i <= RED_MAX ? LED_COLORS.red : i <= YELLOW_MAX ? LED_COLORS.yellow : LED_COLORS.green;
 export const ledIndexOf = rpm => rpm >= 0.5 ? Math.min(LED_COUNT, Math.round(rpm)) : 0;
 
-// The LEDs of the REAL dial, as painted into the housing's 2048x2048 baseColor
-// texture (the dial island sits upside-down in the atlas). Measured off the
-// extracted texture: odd LEDs 1..23 run right-to-left along one row, even LEDs
-// 2..24 along the second. The glow is drawn onto an emissiveMap at exactly
-// these texels, so the housing's own LEDs light up — no fake overlay geometry.
-const LED_TEX = {};   // n -> {x, y} in 2048-space
+// The LEDs of the REAL dial live in the housing's 2048x2048 texture atlas in
+// TWO places: the flat panel face carries a small socket ring per LED (the
+// dial island sits upside-down in the atlas), while each raised dome cap is
+// its own UV island (a big circle elsewhere in the atlas). Lighting only the
+// socket made a ring glow around a dark dome — the dome island itself must be
+// filled for the whole LED to light. Both tables were measured off the actual
+// mesh: sockets from the extracted texture; dome islands by walking the
+// geometry (vertices near each dome's 3D spot, panel-face UVs excluded).
+const LED_TEX = {};    // n -> socket ring {x, y} on the panel face (2048-space)
 for(let n = 1; n <= 23; n += 2)  LED_TEX[n] = { x: 1354.9 - (n - 1) / 2 * 36.86, y: 1815.6 };
 for(let n = 2; n <= 24; n += 2)  LED_TEX[n] = { x: 1336.2 - (n - 2) / 2 * 36.86, y: 1878.6 };
+const LED_DOME = {     // n -> dome cap UV island {x, y, r} (2048-space)
+  1:  { x: 1350, y: 117,  r: 59 },  2:  { x: 1937, y: 1832, r: 65 },
+  3:  { x: 1930, y: 124,  r: 72 },  4:  { x: 1930, y: 1977, r: 71 },
+  5:  { x: 794,  y: 114,  r: 71 },  6:  { x: 803,  y: 1473, r: 71 },
+  7:  { x: 1974, y: 1429, r: 71 },  8:  { x: 1946, y: 901,  r: 71 },
+  9:  { x: 1922, y: 1674, r: 85 },  10: { x: 1900, y: 1551, r: 77 },
+  11: { x: 1966, y: 760,  r: 85 },  12: { x: 1946, y: 613,  r: 71 },
+  13: { x: 1925, y: 425,  r: 84 },  14: { x: 1636, y: 1206, r: 71 },
+  15: { x: 938,  y: 129,  r: 82 },  16: { x: 1216, y: 113,  r: 72 },
+  17: { x: 513,  y: 116,  r: 73 },  18: { x: 1635, y: 106,  r: 71 },
+  19: { x: 1075, y: 113,  r: 71 },  20: { x: 1776, y: 99,   r: 71 },
+  21: { x: 649,  y: 117,  r: 72 },  22: { x: 1944, y: 292,  r: 72 },
+  23: { x: 1494, y: 104,  r: 40 },  24: { x: 1921, y: 1303, r: 62 },
+};
 
 let threeMod = null, loaderMod = null, gltfPromise = null;
 async function loadThree(){
@@ -166,19 +183,34 @@ export function createWheel3d(host, api){
         mat.emissiveIntensity = 0;
         mat.needsUpdate = true;
         let cur = 0;
+        const S = ES / 2048;
         setLed = idx => {
           if(idx === cur) return;
           cur = idx;
           ectx.fillStyle = '#000'; ectx.fillRect(0, 0, ES, ES);
           if(idx > 0){
+            const col = ledColorOf(idx);
+            // 1) the WHOLE dome cap burns: its UV island filled solid, with a
+            //    white-hot core so it reads as a lit LED, not a tinted bump
+            const d = LED_DOME[idx];
+            const dx = d.x * S, dy = d.y * S, dr = (d.r + 6) * S;
+            const dome = ectx.createRadialGradient(dx, dy, 0, dx, dy, dr);
+            dome.addColorStop(0, '#ffffff');
+            dome.addColorStop(0.45, col);
+            dome.addColorStop(0.92, col);
+            dome.addColorStop(1, 'rgba(0,0,0,0)');
+            ectx.fillStyle = dome;
+            ectx.beginPath(); ectx.arc(dx, dy, dr, 0, Math.PI * 2); ectx.fill();
+            // 2) soft spill onto the panel around the dome's base
             const p = LED_TEX[idx];
-            const x = p.x / 2048 * ES, y = p.y / 2048 * ES;
-            const halo = ectx.createRadialGradient(x, y, 0, x, y, 12);
-            halo.addColorStop(0, ledColorOf(idx));
-            halo.addColorStop(0.35, ledColorOf(idx));
+            const x = p.x * S, y = p.y * S;
+            const halo = ectx.createRadialGradient(x, y, 0, x, y, 14 * S * 2);
+            halo.addColorStop(0, col);
             halo.addColorStop(1, 'rgba(0,0,0,0)');
+            ectx.globalAlpha = 0.55;
             ectx.fillStyle = halo;
-            ectx.fillRect(x - 12, y - 12, 24, 24);
+            ectx.beginPath(); ectx.arc(x, y, 14 * S * 2, 0, Math.PI * 2); ectx.fill();
+            ectx.globalAlpha = 1;
           }
           etex.needsUpdate = true;
         };
@@ -218,7 +250,7 @@ export function createWheel3d(host, api){
     if(three && three.setLed) three.setLed(idx);
     // revolution flash rides on the emissive intensity — a per-frame uniform,
     // no texture upload; base glow between flashes is 50% (handoff contract)
-    if(three && three.housingMat) three.housingMat.emissiveIntensity = idx ? (0.5 + 0.5 * flash) * 2.4 : 0;
+    if(three && three.housingMat) three.housingMat.emissiveIntensity = idx ? (0.6 + 0.4 * flash) * 3.4 : 0;
     const shown = noData ? null : Math.round(measured * 10) / 10;
     if(shown !== lastShown){
       lastShown = shown;
