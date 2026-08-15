@@ -31,6 +31,15 @@ const MODEL_URL = 'assets/egely_wheel_20230814v2.gltf';
 const ledColorOf = i => i === 0 ? null : i <= RED_MAX ? LED_COLORS.red : i <= YELLOW_MAX ? LED_COLORS.yellow : LED_COLORS.green;
 export const ledIndexOf = rpm => rpm >= 0.5 ? Math.min(LED_COUNT, Math.round(rpm)) : 0;
 
+// The LEDs of the REAL dial, as painted into the housing's 2048x2048 baseColor
+// texture (the dial island sits upside-down in the atlas). Measured off the
+// extracted texture: odd LEDs 1..23 run right-to-left along one row, even LEDs
+// 2..24 along the second. The glow is drawn onto an emissiveMap at exactly
+// these texels, so the housing's own LEDs light up — no fake overlay geometry.
+const LED_TEX = {};   // n -> {x, y} in 2048-space
+for(let n = 1; n <= 23; n += 2)  LED_TEX[n] = { x: 1354.9 - (n - 1) / 2 * 36.86, y: 1815.6 };
+for(let n = 2; n <= 24; n += 2)  LED_TEX[n] = { x: 1336.2 - (n - 2) / 2 * 36.86, y: 1878.6 };
+
 let threeMod = null, loaderMod = null, gltfPromise = null;
 async function loadThree(){
   if(!threeMod){
@@ -68,32 +77,11 @@ export function createWheel3d(host, api){
       <div class="rw3-note">Loading the 3D model…</div>
       <div class="rw3-hint">drag to turn · Ctrl+scroll to zoom</div>
     </div>
-    <div class="rw3-leds" aria-label="24-LED vitality scale (LED n = n rpm)"></div>
     <div class="rw3-row"><span class="rw3-rpm">—</span><span class="rw3-q">vitality quotient —</span></div>`;
   const canvas = host.querySelector('.rw3-canvas');
   const note = host.querySelector('.rw3-note');
-  const ledsEl = host.querySelector('.rw3-leds');
   const rpmEl = host.querySelector('.rw3-rpm');
   const qEl = host.querySelector('.rw3-q');
-
-  // LED scale DOM: two staggered rows like the device top — odd (1..23) above,
-  // even (2..24) below. Percent marks at 100/200/300/400% (LEDs 6/12/18/24).
-  const cells = [];
-  const row = which => {
-    const r = document.createElement('div');
-    r.className = 'rw3-ledrow ' + which;
-    for(let n = which === 'odd' ? 1 : 2; n <= LED_COUNT; n += 2){
-      const d = document.createElement('span');
-      d.className = 'rw3-led';
-      d.style.setProperty('--led', ledColorOf(n));
-      d.title = 'LED ' + n + ' = ' + n + ' rpm' + (n % 6 === 0 ? ' · ' + (n / 6 * 100) + '%' : '');
-      r.appendChild(d);
-      cells[n] = d;
-    }
-    return r;
-  };
-  ledsEl.appendChild(row('odd'));
-  ledsEl.appendChild(row('even'));
 
   // Driver state — the handoff contract: angle accumulates, a completed
   // revolution sets flash to 1, flash decays at 3.2/s (~0.3 s).
@@ -153,9 +141,52 @@ export function createWheel3d(host, api){
       const model = gltf.scene.clone(true);
       scene.add(model);
       const wheelNode = model.getObjectByName(WHEEL_NODE);
+
+      // ---- LED glow on the housing itself -----------------------------------
+      // The dial's LEDs are painted into the baseColor texture; we light one up
+      // by drawing a glow dot at its texel onto an emissiveMap. The intensity
+      // (uniform, free per frame) carries the revolution flash; the texture is
+      // only re-uploaded when the ACTIVE LED changes.
+      let housing = null;
+      model.traverse(o => { if(o.isMesh && o.material && o.material.name === 'Vitality' && !housing) housing = o; });
+      let setLed = null;
+      if(housing){
+        const mat = housing.material.clone();   // never mutate the shared cached material
+        housing.material = mat;
+        const ES = 1024;                        // emissiveMap resolution (UVs are normalized)
+        const ecv = document.createElement('canvas');
+        ecv.width = ES; ecv.height = ES;
+        const ectx = ecv.getContext('2d');
+        ectx.fillStyle = '#000'; ectx.fillRect(0, 0, ES, ES);
+        const etex = new THREE.CanvasTexture(ecv);
+        etex.flipY = false;                     // match the GLTF texture convention
+        etex.colorSpace = THREE.SRGBColorSpace;
+        mat.emissive = new THREE.Color(0xffffff);
+        mat.emissiveMap = etex;
+        mat.emissiveIntensity = 0;
+        mat.needsUpdate = true;
+        let cur = 0;
+        setLed = idx => {
+          if(idx === cur) return;
+          cur = idx;
+          ectx.fillStyle = '#000'; ectx.fillRect(0, 0, ES, ES);
+          if(idx > 0){
+            const p = LED_TEX[idx];
+            const x = p.x / 2048 * ES, y = p.y / 2048 * ES;
+            const halo = ectx.createRadialGradient(x, y, 0, x, y, 12);
+            halo.addColorStop(0, ledColorOf(idx));
+            halo.addColorStop(0.35, ledColorOf(idx));
+            halo.addColorStop(1, 'rgba(0,0,0,0)');
+            ectx.fillStyle = halo;
+            ectx.fillRect(x - 12, y - 12, 24, 24);
+          }
+          etex.needsUpdate = true;
+        };
+      }
+
       const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 10);
       // aim at the wheel's height (housing origin + 15.4 mm per the handoff)
-      three = { renderer, scene, camera, wheelNode, target: { x: 0, y: 0.028, z: 0 } };
+      three = { renderer, scene, camera, wheelNode, housingMat: housing ? housing.material : null, setLed, target: { x: 0, y: 0.028, z: 0 } };
       applyCam();
       note.remove();
       resize();
@@ -180,17 +211,14 @@ export function createWheel3d(host, api){
   // The FIGURE and the LED show the measured reading itself; only the rotation
   // is eased. A displayed number must always be a real sample — and before any
   // sample exists the state is unknown, never a fake "0 rpm / still".
-  let lastLed = -1, lastShown;   // undefined ≠ null: the very first paint must run even with no data
+  let lastShown;   // undefined ≠ null: the very first paint must run even with no data
   function paintLeds(measured){
     const noData = measured == null;
     const idx = noData ? 0 : ledIndexOf(measured);
-    if(idx !== lastLed){
-      for(let n = 1; n <= LED_COUNT; n++) cells[n].classList.toggle('on', n === idx);
-      lastLed = idx;
-    }
-    // flash rides on the active LED's glow strength
-    const active = idx ? cells[idx] : null;
-    if(active) active.style.setProperty('--glow', (0.5 + 0.5 * flash).toFixed(2));
+    if(three && three.setLed) three.setLed(idx);
+    // revolution flash rides on the emissive intensity — a per-frame uniform,
+    // no texture upload; base glow between flashes is 50% (handoff contract)
+    if(three && three.housingMat) three.housingMat.emissiveIntensity = idx ? (0.5 + 0.5 * flash) * 2.4 : 0;
     const shown = noData ? null : Math.round(measured * 10) / 10;
     if(shown !== lastShown){
       lastShown = shown;
@@ -252,18 +280,9 @@ export function wheel3dStyles(){
   .rw3-note{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
     color:#67737c;font-size:12.5px;pointer-events:none}
   .rw3-hint{position:absolute;left:10px;bottom:8px;color:#99a2a7;font-size:10.5px;pointer-events:none}
-  .rw3-leds{display:flex;flex-direction:column;gap:3px;margin:12px 2px 0}
-  .rw3-ledrow{display:flex;gap:0;justify-content:space-between}
-  .rw3-ledrow.odd{padding-right:4.1666%}
-  .rw3-ledrow.even{padding-left:4.1666%}
-  .rw3-led{width:12px;height:12px;border-radius:50%;background:#e3e7ea;border:1px solid #d3d9dd;
-    position:relative;transition:background .15s}
-  .rw3-led.on{background:var(--led);border-color:var(--led);
-    box-shadow:0 0 calc(10px * var(--glow,0.5)) calc(2px * var(--glow,0.5)) var(--led)}
   .rw3-row{display:flex;align-items:baseline;gap:14px;margin:10px 2px 0}
   .rw3-rpm{font-family:'Montserrat',sans-serif;font-weight:800;font-size:20px;color:#011624;
     font-variant-numeric:tabular-nums}
   .rw3-q{color:#67737c;font-size:12.5px;font-variant-numeric:tabular-nums}
-  @media (max-width:640px){ .rw3-led{width:9px;height:9px} }
   `;
 }

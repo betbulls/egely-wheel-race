@@ -705,9 +705,9 @@ export function createPanelStack(host, opts){
 
     wheel3d: {
       title: 'The wheel itself, in 3D', h: 0, dom: true, cat: 'motion',
-      lede: 'Here you see the wheel turning at the speed the measurement shows right now, with the device\'s own 24-LED dial underneath.',
+      lede: 'Here you see the wheel turning at the speed the measurement shows right now — and the LED on its dial lighting up, like the real device.',
       formula: '3D model: egely_wheel_20230814v2.gltf (1:1 scan) · LED n = n rpm · 6 rpm = 100% vitality quotient',
-      explain: 'The model is the real device: housing and foil wheel at true proportions. The figure below the dial is the measured reading itself; the rotation glides between readings, which arrive about every 0.7 s. During a live run or a replay it follows the newest reading; click a chart to plant the cursor and it shows that moment instead. Drag the picture to look around it, hold Ctrl and scroll to zoom. The two staggered rows of dots below are the device\'s own dial: LED n lights while the wheel does n turns per minute — red up to 6, yellow to 12, green to 24, and above 24 rpm the top LED simply stays lit. The lit LED pulses once for every completed revolution; at high speed the pulses blend into a steady glow.',
+      explain: 'The model is the real device: housing and foil wheel at true proportions. The figure below is the measured reading itself; the rotation glides between readings, which arrive about every 0.7 s. During a live run or a replay it follows the newest reading; click a chart to plant the cursor and it shows that moment instead. Drag the picture to look around it, hold Ctrl and scroll to zoom. The dial on the housing behaves like the real one: LED n lights while the wheel does n turns per minute — red up to 6, yellow to 12, green to 24, and above 24 rpm the top LED simply stays lit. The lit LED pulses once for every completed revolution; at high speed the pulses blend into a steady glow.',
       renderDom(el){
         // idempotent: the render loop lives its own life once mounted
         if(el.dataset.rw3) return;
