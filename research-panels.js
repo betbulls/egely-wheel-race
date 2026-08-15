@@ -1732,6 +1732,12 @@ export function computeRunMetrics(samples, coef, floorTau, coasts){
     outside_count: p.outside.count,
     outside_impulse_nnms: r1(p.outside.jout),
     stability_pct: p.stab ? p.stab.pct : null,
+    // total energy the wheel RECEIVED over the run — from the hand, the air,
+    // anything (owner request). Physics: energy in = what its motion gained
+    // + what the calibrated drag took while it turned = the work ledger's
+    // final value. The sigma is the calibration's own repeatability share.
+    energy_in_uj: last >= 0 ? r1(p.work[last]) : null,
+    energy_in_sigma_uj: last >= 0 ? r1(p.dissip[last] * (c.sigma_rel || SIGMA_DEFAULT)) : null,
   };
   // per-coast gate times vs the calibration model (coast-time gain, Δs)
   if(coasts && coasts.length){

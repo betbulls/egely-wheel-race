@@ -452,6 +452,8 @@ export function buildMetaCsv(rec, meta){
     ['metric_excursion_count', meta.metrics ? meta.metrics.outside_count : ''],
     ['metric_outside_band_impulse_nnms', meta.metrics ? meta.metrics.outside_impulse_nnms : ''],
     ['metric_analysis_stability_pct', meta.metrics && meta.metrics.stability_pct != null ? meta.metrics.stability_pct : ''],
+    ['metric_energy_in_uj', meta.metrics && meta.metrics.energy_in_uj != null ? meta.metrics.energy_in_uj : ''],
+    ['metric_energy_in_sigma_uj', meta.metrics && meta.metrics.energy_in_sigma_uj != null ? meta.metrics.energy_in_sigma_uj : ''],
     ['metric_coast_gates', meta.metrics && meta.metrics.coast_gates
       ? meta.metrics.coast_gates.map(g => 'n' + g.n
           + (g.t24_5 != null ? ' 24-5 ' + g.t24_5 + 's(' + (g.d24_5 >= 0 ? '+' : '') + g.d24_5 + ')' : '')

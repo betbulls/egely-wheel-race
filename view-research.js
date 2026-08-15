@@ -493,7 +493,7 @@ function qualityChipsHtml(q){
   const out = [];
   if(q.factory){
     out.push(chip('cal', 'cal', 'factory model', true,
-      'No room calibration — every torque number leans on the factory reference.'));
+      'There is no ruler of your own here: this run is compared with the factory reference, not with how YOUR wheel behaves in YOUR room. Calibrate the wheel in this room to fix that.'));
   } else {
     const parts = [q.ageDays != null ? q.ageDays + 'd old' : '—'];
     if(q.dT != null) parts.push('ΔT ' + (q.dT > 0 ? '+' : '') + q.dT + '°C');
@@ -501,7 +501,7 @@ function qualityChipsHtml(q){
     const warn = (q.ageDays != null && q.ageDays > store.CAL_STALE_DAYS)
       || (q.dT != null && Math.abs(q.dT) > 3) || (q.dRh != null && Math.abs(q.dRh) > 15);
     out.push(chip('cal', 'cal match', parts.join(' · '), warn,
-      'Calibration age and the temperature/humidity difference vs the calibration. Rooms drift — a stale or mismatched calibration widens what "normal" looks like.'));
+      'Is the ruler fresh? Every chart compares this run with how the wheel slowed down on its own when you calibrated it. This shows how old that calibration is, and how different the room was (temperature, humidity). A stale calibration, or one made in a different-feeling room, shifts what "normal slowing" looks like — and fakes differences that are not there.'));
     const c = q.coef || {};
     const spread = c.quality_pct != null ? 100 - c.quality_pct : null;
     const val = (c.sigma_rel != null ? 'σ ±' + Math.round(c.sigma_rel * 100) + '%' : 'σ —')
@@ -509,14 +509,14 @@ function qualityChipsHtml(q){
         ? ' · spread ' + (c.quality_spread_s < 0.1 ? '<0.1' : c.quality_spread_s) + 's'
         : (spread != null ? ' · spread ' + spread + '%' : ''));
     out.push(chip('ref', 'reference', val, spread != null && spread > 20,
-      'Model fit on the calibration\'s own spins (σ) and the three-spin repeatability (spread). A wide reference hides small effects.'));
+      'How precise is the ruler? When you calibrated, the wheel\'s own slow-down repeated within ±' + (q.coef && q.coef.sigma_rel != null ? Math.round(q.coef.sigma_rel * 100) : '—') + '%. Any difference SMALLER than that means nothing — the wheel wobbles this much on its own. This is the grey band on every chart below.'));
   }
   out.push(chip('speed', 'speed', q.speedPct != null ? q.speedPct + '% ≤ ' + q.wmax + ' rpm' : '—',
     q.speedPct != null && q.speedPct < 70,
-    'Share of moving samples inside the calibration\'s fitted range — above it the baseline model is extrapolated.'));
+    'Did the run stay inside the ruler\'s range? The calibration only measured this wheel up to ' + q.wmax + ' rpm. This is the share of the moving time spent below that. Above it, the "normal slowing" curve is a formula stretched past anything that was measured — the raw rpm stays true, but "differs from normal" readings up there stand on weaker ground.'));
   out.push(chip('data', 'data', q.uptimePct != null ? q.uptimePct + '% uptime' : '—',
     q.uptimePct != null && q.uptimePct < 90,
-    'Gap-free share of the radio stream. Dropouts blank the affected torque estimates.'));
+    'Did every reading arrive? The wheel sends a reading by radio about every 0.7 s; this is the share that arrived without a gap. Where readings were lost, the charts go blank rather than guess.'));
   const cap = qchipOpen && caps[qchipOpen] ? `<div class="rs-qcap">${esc(caps[qchipOpen])}</div>` : '';
   return `<div class="rs-qwrap"><div class="rs-qchips">${out.join('')}</div>${cap}</div>`;
 }
@@ -1846,6 +1846,8 @@ function mountExperiments(host, a){
           <span>${esc(wheel ? wheel.serial : '?')}</span>
           ${m.subject ? `<span>subject: ${avatarHtml(m.subject.avatarUrl || (sel.subject && sel.subject.avatarUrl), m.subject.name)} <b>${esc(m.subject.name)}</b></span>` : ''}
           <span>${built.summary.duration_s}s · peak <b>${built.summary.peak_rpm} rpm</b> · ${built.summary.revolutions} rev</span>
+          ${built.summary.metrics && built.summary.metrics.energy_in_uj != null
+            ? `<span title="All the energy the wheel received during this run — from the hand, the air, anything. The instrument cannot tell where it came from — only that it went in.">energy in, total <b>${built.summary.metrics.energy_in_uj} µJ</b> ± ${built.summary.metrics.energy_in_sigma_uj}</span>` : ''}
           <span>${res.id ? '<b style="color:#0f8a52">DB ✓</b>' : '<b style="color:#c2415b">DB failed</b>'}</span>
         </div>
         <div id="rseSumLabels"></div>
@@ -2276,6 +2278,7 @@ function mountRunDetail(el, runId){
           <span>${row.temp_c != null ? row.temp_c + '°C' : '—'} · ${row.rh_pct != null ? row.rh_pct + '%' : '—'}</span>
           ${subject ? `<span>subject: ${avatarHtml(subject.avatar_url, subject.display_name)} <b>${esc(subject.display_name)}</b></span>` : ''}
           <span>${s.duration_s || 0}s · peak <b>${s.peak_rpm ?? '—'} rpm</b> · mean ${s.mean_rpm ?? '—'} rpm · ${s.revolutions ?? '—'} rev · ${s.coast_count || 0} coast${(s.coast_count || 0) === 1 ? '' : 's'}</span>
+          <span id="rsdEnergy"></span>
           ${isOwner ? '' : `<span>${(row.labels || []).map(l => '#' + esc(l)).join(' ')}</span>`}
         </div>
         ${isOwner ? '<div id="rsdLabels"></div>' : ''}
@@ -2309,6 +2312,24 @@ function mountRunDetail(el, runId){
     const samples = (row.rpm_samples || []).map(p => ({ t: p[0] / 1000, rpm: p[1] }));
     const markers = (row.markers || []).filter(m => ['mark', 'note', 'direction'].includes(m.type));
     const coasts = (s.coasts || []);
+
+    // "Energy in, total" — the one number the owner asked for in the header:
+    // all the energy the wheel received over this run (hand, air, anything),
+    // computed with the calibrated drag. Recomputed live so old runs get it too.
+    {
+      const eEl = el.querySelector('#rsdEnergy');
+      if(eEl && samples.length >= 2){
+        try {
+          const m = computeRunMetrics(samples, coef, store.noiseFloorNNm(factory ? null : coef).tau, coasts);
+          if(m.energy_in_uj != null){
+            eEl.innerHTML = `energy in, total <b>${m.energy_in_uj} µJ</b> ± ${m.energy_in_sigma_uj}`;
+            eEl.title = 'All the energy the wheel received during this run — from the hand, the air, anything. '
+              + 'What its motion gained plus what friction and air took while it turned, using the calibrated drag. '
+              + 'The instrument cannot tell WHERE it came from — only that it went in.';
+          }
+        } catch {}
+      }
+    }
 
     // quality header — same 4 chips the live screen shows, frozen at the run's data
     {
