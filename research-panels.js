@@ -434,9 +434,10 @@ export function createPanelStack(host, opts){
 
   const PANELS = {
     timeline: {
-      title: 'Speed timeline + ghost', h: 300, cat: 'motion',
-      formula: 'ω = 6000 / counter [rpm]    ·    ghost: dω̂/dt = −(A + B·ω̂ + K·ω̂^1.5)',
-      explain: 'WHAT: the wheel\'s speed over time — the main chart. LOOK AT: the dashed grey "ghost" line — it shows what the wheel would do all by itself in this room. MEANS: if the real line stays above the ghost, something kept the wheel going beyond plain physics; below it, something extra slowed it down.',
+      title: 'Wheel speed, second by second', h: 300, cat: 'motion',
+      lede: 'Here you see how fast the wheel is turning at every moment, next to the slow-down the calibration predicts.',
+      formula: 'Speed timeline + ghost    ·    ω = 6000 / counter [rpm]    ·    ghost: dω̂/dt = −(A + B·ω̂ + K·ω̂^1.5)',
+      explain: 'The solid dark line is the measured speed, with a violet dot for each fresh reading (the dots hide when they crowd). Each dashed grey line is a ghost — the calibration played forward from the start of one hands-off slow-down, so a run shows one per slow-down; the faint caption marks where the most recent one reaches zero. Rules on the left are rpm; the dashed rule at 24 rpm is where the wheel\'s own display stops counting. Violet triangles along the top are your markers. While a ghost is running and the newest reading is on screen, the bold figure top-left gives the current distance between the two lines in rpm. Pale red blocks are radio dropouts and the line breaks across them; the labels along the bottom are m:ss of the run.',
       draw(ctx, W, H){
         const { xOf } = timeAxis(W);
         const { yOf, max } = rpmScale(H);
@@ -488,9 +489,10 @@ export function createPanelStack(host, opts){
     },
 
     torque: {
-      title: 'Drive-torque instrument', h: 280, cat: 'forces',
-      formula: 'τ_drive = I·(α_meas − α_base(ω))    ·    I = 1.7×10⁻⁷ kg·m²',
-      explain: 'WHAT: the push or drag acting on the wheel right now, beyond normal friction and air. LOOK AT: the bar — purple to the right = something is driving the wheel; amber to the left = something is braking it. MEANS: while the reading sits inside the grey band, it is too small to tell apart from the calibration\'s own variability — only readings outside the band count. The band B(ω) changes with speed: it is the largest of the room\'s noise floor, the three-spin calibration scatter and the model uncertainty.',
+      title: 'Push or drag on the wheel', h: 280, cat: 'forces',
+      lede: 'Here you see how hard something is pushing or dragging the wheel beyond the friction and air in the calibration.',
+      formula: 'Drive-torque instrument    ·    τ_drive = I·(α_meas − α_base(ω))    ·    I = 1.7×10⁻⁷ kg·m²',
+      explain: 'The top half is a live meter: a pale track, a dark zero line down the middle, a grey block for the reference band at the current speed, and one bar out of the middle — violet right for a push, amber left for a drag, grey while it stays inside the band. The scale is deliberately squashed, small readings getting most of the room, so read the bar against the grey band rather than measuring its length. When the newest usable reading is 20 seconds old or more, no bar is drawn at all and the number falls back to a dash. The bottom half is the same reading against the clock: dark line, grey ribbon for the reference band (its height follows the speed), a thin flat line at zero. Pale red stripes are dropouts, and the line breaks wherever a reading could not be worked out.',
       draw(ctx, W, H){
         const p = ensurePipe();
         const gaugeH = 84;
@@ -525,7 +527,7 @@ export function createPanelStack(host, opts){
         ctx.fillStyle = live ? INK : FAINT; ctx.textAlign = 'center'; ctx.font = '700 15px Inter, sans-serif';
         ctx.fillText(live ? ((lastTau >= 0 ? '+' : '') + fmtSig2(lastTau) + ' nN·m') : '—', gxm, 52);
         ctx.font = '9.5px Inter, sans-serif'; ctx.fillStyle = FAINT;
-        ctx.fillText('grey band = reference band B(ω) ±' + fmtSig2(bNow) + ' nN·m at this speed (' + (floor.factory ? 'factory floor' : 'detection floor') + ' / spin scatter / model σ — largest)', gxm, 70);
+        ctx.fillText('grey band = the reference band at this speed, ±' + fmtSig2(bNow) + ' nN·m — a reading inside it is too small to tell apart from the calibration', gxm, 70);
 
         // --- strip vs shared time axis ---
         const { xOf } = timeAxis(W);
@@ -576,9 +578,10 @@ export function createPanelStack(host, opts){
     },
 
     impulse: {
-      title: 'Drive impulse J(t)', h: 220, cat: 'forces',
-      formula: 'J(t) = ∫ τ_drive dt  [nN·m·s]    ·    J_out = ∫ sign(τ)·max(|τ|−B(ω), 0) dt',
-      explain: 'WHAT: all the extra push (or extra brake) added up over time, regardless of how fast the wheel was turning — the slow-wheel-friendly cousin of the work ledger, which weights by speed. LOOK AT: whether the line climbs steadily out of the grey ribbon, or just wanders inside it; the caption counts how long the reading sat OUTSIDE the reference band. MEANS: a steady climb past the ribbon = a persistent influence kept accumulating; wandering inside it = indistinguishable from the calibration\'s own uncertainty. (A hand spin is itself a huge outside-band torque and counts in these totals — judge the hands-off stretches; drag-select gives per-stretch numbers.)',
+      title: 'Push or drag, added up', h: 220, cat: 'forces',
+      lede: 'Here you see that same push or drag added up second by second — the running total since the run began.',
+      formula: 'Drive impulse J(t)    ·    J(t) = ∫ τ_drive dt  [nN·m·s]    ·    J_out = ∫ sign(τ)·max(|τ|−B(ω), 0) dt',
+      explain: 'The violet line is the running total counted from the start of the run: it climbs while there is a push, sinks while there is a drag, holds level where a reading could not be worked out, and breaks across a dropout. Only in the full-run view does it start from zero at the left edge — in a zoomed or live window it enters at whatever total it had already reached. The grey band around it is how far this total can drift on the calibration alone, and it only ever widens. The text along the top counts how many seconds the reading spent outside the reference band, out of how many seconds could be measured at all; then the longest single stretch, how many separate stretches, and what those stretches add up to once the width of the band is subtracted from every reading.',
       draw(ctx, W, H){
         const p = ensurePipe();
         const { xOf } = timeAxis(W);
@@ -615,11 +618,11 @@ export function createPanelStack(host, opts){
         const o = p.outside;
         ctx.fillStyle = GREY; ctx.font = '700 9.5px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
         const pct = o.certified_s > 0 ? Math.round(o.s / o.certified_s * 100) : 0;
-        ctx.fillText('outside B(ω): ' + fmtSig2(o.s) + ' s of ' + fmtSig2(o.certified_s) + ' s certified (' + pct + '%) · longest '
-          + fmtSig2(o.longest_s) + ' s · ' + o.count + ' excursion' + (o.count === 1 ? '' : 's')
-          + ' · J_out ' + (o.jout >= 0 ? '+' : '') + fmtSig2(o.jout) + ' nN·m·s', PAD_L + 4, PAD_T);
+        ctx.fillText('outside the reference band: ' + fmtSig2(o.s) + ' s of the ' + fmtSig2(o.certified_s) + ' s that could be measured (' + pct + '%) · longest stretch '
+          + fmtSig2(o.longest_s) + ' s · ' + o.count + ' stretch' + (o.count === 1 ? '' : 'es')
+          + ' · ' + (o.jout >= 0 ? '+' : '') + fmtSig2(o.jout) + ' nN·m·s once the band is subtracted', PAD_L + 4, PAD_T);
         ctx.fillStyle = FAINT; ctx.font = '9.5px Inter, sans-serif';
-        ctx.fillText('nN·m·s · ribbon = model uncertainty ±σ·∫|τ_base|dt', PAD_L + 4, PAD_T + 13);
+        ctx.fillText('nN·m·s · grey band = how far this total could drift on the calibration alone', PAD_L + 4, PAD_T + 13);
       },
       readout(){
         const p = ensurePipe();
@@ -631,9 +634,10 @@ export function createPanelStack(host, opts){
     },
 
     logspeed: {
-      title: 'Log-scale speed', h: 260, cat: 'motion',
-      formula: 'y = log ω    ·    ω = 6000 / counter [rpm]',
-      explain: 'WHAT: the same speed chart, stretched so the slow range is easy to see. LOOK AT: the shape of the slow-down below 10 rpm — on the normal chart this part is squashed flat. MEANS: small, steady differences in how the wheel dies down show up here first; the little squares at the bottom mean "near standstill".',
+      title: 'Speed, with the slow end stretched', h: 260, cat: 'motion',
+      lede: 'Here you see the same speed over time, redrawn so the wheel\'s last slow turns get as much room as the fast start.',
+      formula: 'Log-scale speed    ·    y = log ω    ·    ω = 6000 / counter [rpm]',
+      explain: 'The solid dark line and its violet dots are the same measured speed as the main chart, drawn only above 1.6 rpm. The dashed grey lines are the same ghosts — one per hands-off slow-down — each ending where it drops below 1.6 rpm, the bottom of this scale. The rungs on the left (2, 5, 10, 24, 50, 100, 200, 400 rpm) are spaced by multiplying rather than adding, so each step down is roughly half the speed; the dashed 24 rpm rung is the display limit. Small grey squares parked on the bottom edge are readings below 1.6 rpm, pale red blocks are dropouts, and the labels along the bottom are m:ss.',
       draw(ctx, W, H){
         const { xOf } = timeAxis(W);
         const yOf = logY(H);
@@ -669,21 +673,22 @@ export function createPanelStack(host, opts){
         ctx.fillStyle = FAINT; ctx.font = '9.5px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
         ctx.fillText('log scale — squares at the floor = below 1.6 rpm (near standstill)', PAD_L + 4, PAD_T);
       },
-      readout(){ const s = samples[samples.length - 1]; return s ? 'ω ' + fmtSig2(s.rpm) + ' rpm' : '—'; },
+      readout(){ const s = samples[samples.length - 1]; return s ? fmtSig2(s.rpm) + ' rpm' : '—'; },
       value(t){ const s = nearest(t); return s ? fmtSig2(s.rpm) + ' rpm' : '—'; },
     },
 
     deviation: {
-      title: 'Ghost deviation strip', h: 190, cat: 'motion',
-      formula: 'Δ = 100 · (ω / ω̂ − 1) [%]',
-      explain: 'WHAT: a magnifying glass — how far the wheel is from its predicted slow-down, in percent. LOOK AT: where the line sits versus the 0% middle line. MEANS: 0% = exactly as predicted; a steady climb above 0% means the wheel keeps doing a little better than physics predicts. The strip only speaks during FREE COASTS — between them (hand-driven or standstill stretches) there is nothing to predict, so it stays blank by design.',
+      title: 'Faster or slower than the calibration', h: 190, cat: 'motion',
+      lede: 'Here you see how much faster or slower the wheel turns than the calibration says, in percent, during a hands-off slow-down.',
+      formula: 'Ghost deviation strip    ·    Δ = 100 · (ω / ω̂ − 1) [%]',
+      explain: 'The dashed line across the middle is 0%: the wheel turning exactly at the calibrated speed. The band around it is the reference band — twice the calibration\'s repeatability figure, never narrower than ±5% — and the caption top-left gives its width and whether it comes from this room\'s calibration or from the factory model. The violet line is the running difference, above the middle for faster and below for slower, and it is drawn only while a hands-off slow-down is under way, so it stops and restarts between slow-downs and across dropouts. The numbers on the left are percent, and a reading past the top or bottom is pinned to the edge rather than dropped. Before any hands-off slow-down exists there is no line at all, only a grey note saying so.',
       draw(ctx, W, H){
         const p = ensurePipe();
         const { xOf } = timeAxis(W);
         drawTimeGrid(ctx, W, H, xOf);
         if(!p.ghosts.length){
           ctx.fillStyle = FAINT; ctx.font = '11px Inter, sans-serif'; ctx.textAlign = 'center';
-          ctx.fillText('ghost not armed — needs a hands-off coast', W / 2, H / 2);
+          ctx.fillText('nothing to compare yet — spin the wheel above 24 rpm and let go', W / 2, H / 2);
           return;
         }
         const band = Math.max(5, (coef.sigma_rel || SIGMA_DEFAULT) * 200);   // ±2σ in %
@@ -707,14 +712,14 @@ export function createPanelStack(host, opts){
         }
         ctx.stroke();
         ctx.fillStyle = FAINT; ctx.font = '9.5px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-        ctx.fillText('band = ±' + Math.round(band) + '% (' + (floor.factory ? 'factory' : 'this room\'s') + ' calibration repeatability) · speaks during free coasts, down to 2 rpm', PAD_L + 4, PAD_T);
+        ctx.fillText('band = ±' + Math.round(band) + '% — how closely the ' + (floor.factory ? 'factory' : 'room') + ' calibration repeats itself · drawn only during a hands-off slow-down, down to 2 rpm', PAD_L + 4, PAD_T);
       },
       readout(){
         const p = ensurePipe();
         const s = samples[samples.length - 1];
-        if(!p.ghosts.length || !s) return '— no ghost';
+        if(!p.ghosts.length || !s) return 'no slow-down yet';
         const g = ghostSegAt(p, s.t);
-        if(g == null || g < 2) return '— between coasts';
+        if(g == null || g < 2) return '— only during a slow-down';
         const d = (s.rpm / g - 1) * 100;
         return (d >= 0 ? '+' : '') + fmtSig2(d) + ' %';
       },
@@ -727,9 +732,10 @@ export function createPanelStack(host, opts){
     },
 
     phase: {
-      title: 'Deceleration–speed phase map', h: 260, cat: 'forces',
-      formula: '−dω/dt vs ω    ·    baseline: A + B·ω + K·ω^1.5 [rpm/s]',
-      explain: 'WHAT: each dot = one moment; how strongly the wheel was slowing (up-down) at a given speed (left-right). LOOK AT: where the dots fall versus the dashed curve. MEANS: dots ON the curve = normal coasting; dots BELOW it = less braking than physics expects; dots below the zero line = the wheel was actually speeding up.',
+      title: 'Slow-down at each speed', h: 260, cat: 'forces',
+      lede: 'Here you see one dot per reading: how fast the wheel was losing speed at the speed it was turning.',
+      formula: 'Deceleration–speed phase map    ·    −dω/dt vs ω    ·    baseline: A + B·ω + K·ω^1.5 [rpm/s]',
+      explain: 'Left to right is the wheel\'s speed in rpm; bottom to top is how fast it was losing speed, in rpm per second, and the darker line labelled "holding speed" is where it would neither slow nor gain. The dashed dark curve is the calibration — the slowing this wheel did on its own at each speed. It was fitted up to 24 rpm, so to the right of that mark it is the same formula carried on past where it was ever measured. Each dot is one reading, placed at the speed it was turning: violet when it slowed clearly less than the curve, amber when clearly more, grey when close to it; older dots are faint, newer solid, and the last one wears a ring. The vertical scale is fixed from −2 to +4 rpm per second and readings beyond either end are pinned to the edge. This picture has no clock — the time window and the zoom above do not change it.',
       draw(ctx, W, H){
         const p = ensurePipe();
         const RPM_MAX = Math.max(30, ...samples.filter((s, i) => p.decel[i] != null).map(s => s.rpm)) * 1.05;
@@ -786,9 +792,10 @@ export function createPanelStack(host, opts){
     },
 
     byspeed: {
-      title: 'Drive by speed band', h: 240, cat: 'forces',
-      formula: 'mean τ_drive per ω-band ± sd    ·    faded = outside the calibration\'s fitted range (extrapolated)',
-      explain: 'WHAT: WHERE in the speed range the extra push or brake showed up — each bar is the average influence torque while the wheel was in that speed band. LOOK AT: bars that clear the grey band, and whether they stand in the faded zone. MEANS: a deviation only in the faded bands rests on model extrapolation (the calibration never measured there) — treat it with suspicion; same-direction bars across several measured bands = a speed-independent influence; a single odd band = model mismatch there, or a speed-specific effect.',
+      title: 'Push or drag, sorted by speed', h: 240, cat: 'forces',
+      lede: 'Here you see the same push or drag sorted into speed bands, averaged over every reading of the whole recording.',
+      formula: 'Drive by speed band    ·    mean τ_drive per ω-band ± sd    ·    faded = outside the calibration\'s fitted range',
+      explain: 'The picture is cut into eight speed bands, labelled in rpm along the bottom; up and down is the average push or drag inside that band, with zero as the flat line across the middle. A band holding at least three readings gets a bar — violet up for push, amber down for drag — a grey block behind it for the average reference band there, a thin upright line for how much its readings scattered, and an "n=" count on top; a thinner band prints its count instead of a bar, so it never looks like a zero result. The fastest bands sit on a tinted background and are drawn half-faded because the calibration was never measured up there, and the caption says where its fitted range ends. The bars cover the whole recording — this picture has no clock either.',
       draw(ctx, W, H){
         const p = ensurePipe();
         const BINS = [[0, 2], [2, 5], [5, 10], [10, 17], [17, 24], [24, 48], [48, 96], [96, Infinity]];
@@ -844,7 +851,7 @@ export function createPanelStack(host, opts){
           ctx.fillText(isFinite(BINS[b][1]) ? BINS[b][0] + '–' + BINS[b][1] : BINS[b][0] + '+', xC(b), H - PAD_B + 5);
         }
         ctx.fillStyle = FAINT; ctx.font = '9.5px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-        ctx.fillText('nN·m by rpm band · grey = mean B(ω) · faded = extrapolated (fitted range ends at ' + fmtSig2(Math.min(24, wmax)) + ' rpm)', PAD_L + 4, H - PAD_B - 14);
+        ctx.fillText('nN·m per rpm band · grey = the reference band there · faded = the calibration never measured above ' + fmtSig2(Math.min(24, wmax)) + ' rpm', PAD_L + 4, H - PAD_B - 14);
       },
       readout(){
         const p = ensurePipe();
@@ -868,9 +875,10 @@ export function createPanelStack(host, opts){
     },
 
     revs: {
-      title: 'Revolutions integral N(t)', h: 220, cat: 'motion',
-      formula: 'N(t) = ∫ ω/60 dt  [rev]',
-      explain: 'WHAT: the total number of turns the wheel has made since the start. LOOK AT: the steepness — steeper = spinning faster, flat = stopped. MEANS: the dashed line is how many turns coasting alone would give; any gap the solid line opens above it is "extra" turns that plain coasting cannot explain.',
+      title: 'Turns counted since the start', h: 220, cat: 'motion',
+      lede: 'Here you see a running count of the turns the wheel has been measured making; it only ever goes up.',
+      formula: 'Revolutions integral N(t)    ·    N(t) = ∫ ω/60 dt  [rev]',
+      explain: 'The solid dark line is the running total of turns: steep while the wheel spins fast, flat while it stands still. The dashed grey line picks up that total at the moment the last hands-off slow-down began and carries it on the way the calibration would coast the wheel down, so the two counts can be read side by side. The numbers on the left are turns. Pale red blocks are dropouts, and the total holds level across them, because turns nobody measured are not counted; the labels along the bottom are m:ss.',
       draw(ctx, W, H){
         const p = ensurePipe();
         const { xOf } = timeAxis(W);
@@ -909,9 +917,10 @@ export function createPanelStack(host, opts){
     },
 
     energy: {
-      title: 'Kinetic energy E(t)', h: 220, cat: 'energy',
-      formula: 'E = ½ · I · ω²    ·    0.54 µJ at 24 rpm',
-      explain: 'WHAT: how much energy of motion the wheel holds, moment by moment (in millionths of a joule — the wheel is feather-light). LOOK AT: the rises — every rise means energy flowed INTO the wheel from somewhere. MEANS: drag the mouse across a stretch to read off exactly how much energy the wheel gained or lost there.',
+      title: 'Energy stored in the spinning wheel', h: 220, cat: 'energy',
+      lede: 'Here you see how much energy of motion the wheel carries at each moment, in millionths of a joule.',
+      formula: 'Kinetic energy E(t)    ·    E = ½ · I · ω²    ·    0.54 µJ at 24 rpm',
+      explain: 'The line is the wheel\'s energy at every reading: it climbs whenever the wheel speeds up and falls as it slows. The faint dashed horizontal line, captioned "0.54 µJ = 24 rpm", marks the energy the wheel holds at the top of the device\'s own dial. Numbers down the left are millionths of a joule. Time runs left to right with m:ss along the bottom; pale red stripes mark dropouts, and the line is drawn straight through them here. Drag across any stretch to read how much energy the wheel gained or lost there.',
       draw(ctx, W, H){
         const p = ensurePipe();
         const { xOf } = timeAxis(W);
@@ -940,9 +949,10 @@ export function createPanelStack(host, opts){
     },
 
     work: {
-      title: 'Work ledger W(t)', h: 220, cat: 'energy',
-      formula: 'W(t) = ΔE(t) + ∫ τ_base(ω)·ω dt    ·    flat at 0 = only ordinary physics',
-      explain: 'WHAT: the bottom line of the whole experiment — the running total of energy that reached the wheel BEYOND normal friction and air. LOOK AT: whether the line leaves the grey ribbon around zero. MEANS: flat at zero = only ordinary physics happened; a climb outside the ribbon = energy arrived that the calibration cannot account for. (Note: spinning the wheel by hand also counts as energy in — judge the hands-off stretches.)',
+      title: 'Energy in or out, beyond the calibration', h: 220, cat: 'energy',
+      lede: 'Here you see the energy the wheel gained or lost beyond the drag the calibration expects, added up over the run.',
+      formula: 'Work ledger W(t)    ·    W(t) = ΔE(t) + ∫ τ_base(ω)·ω dt    ·    [µJ]',
+      explain: 'The line is the running total in millionths of a joule, and it breaks wherever the radio dropped out. The thin horizontal line across the middle is zero, with plus and minus on the scale at the left. The grey band is drawn around the line itself, not around zero: it shows how far the calibration\'s own repeatability could shift the total, and it widens the longer the wheel has been turning. The caption top-left states the percentage used. Pale red stripes mark the dropouts. Spinning the wheel by hand enters this total as energy in, like anything else that moves it.',
       draw(ctx, W, H){
         const p = ensurePipe();
         const { xOf } = timeAxis(W);
@@ -977,7 +987,7 @@ export function createPanelStack(host, opts){
         }
         ctx.stroke();
         ctx.fillStyle = FAINT; ctx.font = '9.5px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-        ctx.fillText('µJ · ribbon = calibration repeatability ±' + Math.round(sig * 100) + '% of dissipated energy', PAD_L + 4, PAD_T);
+        ctx.fillText('µJ · grey band = how far the calibration\'s own repeatability (±' + Math.round(sig * 100) + '%) could shift this total', PAD_L + 4, PAD_T);
       },
       readout(){
         const p = ensurePipe();
@@ -990,9 +1000,10 @@ export function createPanelStack(host, opts){
     },
 
     coasts: {
-      title: 'Coast comparator', h: 0, dom: true, cat: 'compare',
-      formula: 'R = T_meas(24→5) / T_cal(24→5)    ·    T_cal = ' + '—',
-      explain: 'WHAT: every time the wheel freely slowed down, it got timed like a stopwatch lap and compared with your calibration. LOOK AT: the ratio at the end of each row, and the Δseconds per speed gate on the second line. MEANS: ×1.00 = the wheel slowed exactly as calibrated; ×1.20 = it kept spinning 20% longer than it should; "12→6 +2.4s" = crossing that gate took 2.4 s longer than the calibration predicts — the simplest numbers to quote from a session.',
+      title: 'Hands-off slow-downs, timed', h: 0, dom: true, cat: 'compare',
+      lede: 'Here you see every hands-off slow-down timed like a stopwatch lap, next to the time the calibration predicts.',
+      formula: 'Coast comparator    ·    R = T_meas(24→5) / T_cal(24→5)    ·    T_cal = ' + '—',
+      explain: 'One card per hands-off slow-down, newest on top, headed by its number, the stretch of the run it covered as m:ss, and the fastest the wheel got. Inside are two small bars, 24→10 and 24→5: the violet fill is how long the wheel really took and the dark tick on the track is where the reference time falls, with the seconds printed beside each. The big × on the right is the measured 24→5 time divided by the reference one. The dim line below lists four speed gates (24→10, 24→5, 12→6, 6→3) with their measured seconds and the difference against the reference — violet when longer, amber when shorter. A faded, struck-through card marked "interrupted" is one where the recording was stopped before the slow-down had played out, so its gate times are incomplete. The final grey line spells out the reference times for all four gates and names the reference it used: this room\'s calibration, or the factory model if the room has not been calibrated.',
       renderDom(el){
         if(!coasts.length){ el.innerHTML = '<div class="rsp-empty">no hands-off coast yet — spin the wheel above 24 rpm and let go</div>'; return; }
         const rows = coasts.map(s => {
@@ -1037,20 +1048,21 @@ export function createPanelStack(host, opts){
           </div>`;
         });
         el.innerHTML = rows.reverse().join('') +
-          `<div class="rsp-dim" style="padding:4px 2px">calibrated: 24→10 ${T_CAL.t24_10 ? T_CAL.t24_10.toFixed(1) : '—'} s · 24→5 ${T_CAL.t24_5 ? T_CAL.t24_5.toFixed(1) : '—'} s · 12→6 ${T_CAL.t12_6 != null ? T_CAL.t12_6.toFixed(1) : '—'} s · 6→3 ${T_CAL.t6_3 != null ? T_CAL.t6_3.toFixed(1) : '—'} s (${esc(calNote)}) · tick = calibrated time</div>`;
+          `<div class="rsp-dim" style="padding:4px 2px">reference times, from the ${esc(calNote)}: 24→10 ${T_CAL.t24_10 ? T_CAL.t24_10.toFixed(1) : '—'} s · 24→5 ${T_CAL.t24_5 ? T_CAL.t24_5.toFixed(1) : '—'} s · 12→6 ${T_CAL.t12_6 != null ? T_CAL.t12_6.toFixed(1) : '—'} s · 6→3 ${T_CAL.t6_3 != null ? T_CAL.t6_3.toFixed(1) : '—'} s · the tick on each bar marks the reference time</div>`;
       },
       readout(){
-        if(!coasts.length) return 'no coast yet';
+        if(!coasts.length) return 'none yet';
         const s = coasts[coasts.length - 1];
-        return s.T24_5 != null && T_CAL.t24_5 ? 'last coast ×' + (s.T24_5 / T_CAL.t24_5).toFixed(2) : 'last coast —';
+        return s.T24_5 != null && T_CAL.t24_5 ? 'latest ×' + (s.T24_5 / T_CAL.t24_5).toFixed(2) + ' vs reference' : 'latest —';
       },
       value(){ return ''; },
     },
 
     quality: {
-      title: 'Data quality / sample cadence', h: 180, cat: 'quality',
-      formula: 'Δt = t_i − t_{i−1}    ·    expected ≈ 0.7 s (the device refreshes ~1.4× per second at any speed)',
-      explain: 'WHAT: a health check of the measurement itself — how often a genuinely new reading arrived, plus the analysis-window cross-check. LOOK AT: the dots should sit close to the dashed 0.7 s line; red stripes are radio dropouts and they explain any missing pieces in the charts above. MEANS: only the red stripes are actual data loss. The bottom line reruns the torque estimator with shorter and longer smoothing windows — a feature that survives all three windows is real structure in the data; one that does not is a numerical artifact.',
+      title: 'How steadily the readings arrived', h: 180, cat: 'quality',
+      lede: 'Here you see how long the app waited between readings from the wheel, which normally arrive about every 0.7 s.',
+      formula: 'Data quality / sample cadence    ·    Δt = t_i − t_{i−1}    ·    expected ≈ 0.7 s at any wheel speed',
+      explain: 'Each dot is one reading, placed by how many seconds passed since the reading before it, on a squeezed scale marked 0.7 s, 2 s, 5 s and 15 s down the left. The dashed line labelled "expected ~0.7 s" is the pace the device keeps at any wheel speed, so dots normally sit on or near it; below about 2 rpm the readings often repeat the same counter, so they drift above the line with nothing being wrong. Dots turn red where the app counted a dropout, and those same stretches appear as the pale red stripes on the other charts that run on this clock. Along the bottom, the app re-runs the same push-or-drag estimate with a shorter and a longer smoothing window (3, 5 and 8 readings) and reports what share of the readings come out the same either way. That line describes the smoothing arithmetic, not the wheel.',
       draw(ctx, W, H){
         const p = ensurePipe();
         const { xOf } = timeAxis(W);
@@ -1081,11 +1093,11 @@ export function createPanelStack(host, opts){
         // 0.7 s cadence the SAMPLE COUNT binds, so the honest label is by
         // samples (3/5/8), not the seconds-caps.
         if(p.stab){
-          const cls = p.stab.pct >= 85 ? 'stable across analysis windows'
-            : p.stab.pct >= 60 ? 'magnitude depends on smoothing'
-            : 'not robust across analysis windows';
+          const cls = p.stab.pct >= 85 ? 'comes out the same either way'
+            : p.stab.pct >= 60 ? 'its size depends on the smoothing'
+            : 'it changes with the smoothing';
           ctx.fillStyle = GREY; ctx.font = '700 10px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
-          ctx.fillText('analysis windows (3 / 5 / 8 samples): ' + cls + ' — ' + p.stab.pct + '% agreement', PAD_L + 4, H - PAD_B - 4);
+          ctx.fillText('push-or-drag re-run with 3 / 5 / 8-reading smoothing: ' + cls + ' — ' + p.stab.pct + '% agree', PAD_L + 4, H - PAD_B - 4);
         }
       },
       readout(){
@@ -1148,12 +1160,14 @@ export function createPanelStack(host, opts){
       return `
       <div class="rsp-card" data-panel="${id}">
         <div class="rsp-head" data-toggle="${id}">
-          <span class="rsp-grip" aria-hidden="true">⋮⋮</span>
           <span class="rsp-updown">
             <button type="button" data-move="up" title="Move up">▲</button>
             <button type="button" data-move="down" title="Move down">▼</button>
           </span>
-          <span class="rsp-title">${esc(P.title)}</span>
+          <span class="rsp-idblock">
+            <span class="rsp-title">${esc(P.title)}</span>
+            <span class="rsp-lede">${esc(P.lede)}</span>
+          </span>
           <span class="rsp-mini" data-mini="${id}">—</span>
           ${P.dom ? '' : `<button type="button" class="rsp-png" data-png="${id}" title="Export this chart as PNG (window, calibration and gap stamps included)">⤓</button>`}
           <span class="rsp-chev">${open ? '▾' : '▸'}</span>
@@ -1164,8 +1178,10 @@ export function createPanelStack(host, opts){
             <canvas class="rsp-canvas" data-canvas="${id}"></canvas>
             <canvas class="rsp-overlay" data-overlay="${id}"></canvas>
           </div>`}
-          <div class="rsp-formula">${esc(P.formula)}</div>
-          <p class="rsp-explain">${esc(P.explain).replace(/(WHAT:|LOOK AT:|MEANS:)/g, '<b>$1</b>')}</p>
+          <p class="rsp-explain"><b>What you see:</b> ${esc(P.explain)}</p>
+          <details class="rsp-fdet"><summary>Exact definition</summary>
+            <div class="rsp-formula">${esc(P.formula)}</div>
+          </details>
         </div>
       </div>`;
     }).join('');
@@ -1393,8 +1409,8 @@ export function createPanelStack(host, opts){
       <div>${st.tauMean != null
         ? 'mean τ = <b>' + (st.tauMean >= 0 ? '+' : '') + fmtSig2(st.tauMean) + ' ± ' + fmtSig2(st.tauSd) + ' nN·m</b> (n=' + st.tauN + ')'
           + ' · ΔJ = <b>' + (st.dJ >= 0 ? '+' : '') + fmtSig2(st.dJ) + ' nN·m·s</b>'
-        : '<span class="rsp-dim">insufficient torque data (' + st.tauN + ' of ' + st.tauTotal + ' certified)</span>'}</div>
-      ${st.tauStab ? `<div class="${st.tauStab.ok ? '' : 'rsp-dim'}">window check: <b>${st.tauStab.ok ? 'stable' : 'depends on smoothing'}</b> (Δ ${fmtSig2(st.tauStab.maxDiff)} nN·m across 3/5/8-sample windows)</div>` : ''}`;
+        : '<span class="rsp-dim">not enough readings the estimator could use (' + st.tauN + ' of ' + st.tauTotal + ')</span>'}</div>
+      ${st.tauStab ? `<div class="${st.tauStab.ok ? '' : 'rsp-dim'}">smoothing check: <b>${st.tauStab.ok ? 'the same either way' : 'depends on the smoothing'}</b> (Δ ${fmtSig2(st.tauStab.maxDiff)} nN·m across 3/5/8-reading windows)</div>` : ''}`;
     selPopover.innerHTML = body + `<div class="rsp-pop-actions">
       <button type="button" data-copy>Copy</button><button type="button" data-close>✕</button></div>`;
     stackEl.prepend(selPopover);
@@ -1469,17 +1485,21 @@ export function createPanelStack(host, opts){
   function exportPng(id){
     const P = PANELS[id];
     if(!P || P.dom) return;
-    const W = 1100, H = P.h + 92;
+    // A shared PNG has to explain itself away from the app: name + the one-line
+    // "what this is" travel with the picture, the equation stays underneath.
+    const W = 1100, H = P.h + 110;
     const cv = document.createElement('canvas');
     cv.width = W * 2; cv.height = H * 2;
     const ctx = cv.getContext('2d');
     ctx.scale(2, 2);
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = INK; ctx.font = '700 14px Inter, sans-serif'; ctx.textBaseline = 'top';
+    ctx.fillStyle = INK; ctx.font = '700 15px Inter, sans-serif'; ctx.textBaseline = 'top';
     ctx.fillText(P.title, 12, 10);
-    ctx.fillStyle = GREY; ctx.font = '11px ui-monospace, Consolas, monospace';
-    ctx.fillText(P.formula, 12, 30);
-    ctx.save(); ctx.translate(0, 48);
+    ctx.fillStyle = GREY; ctx.font = '12px Inter, sans-serif';
+    ctx.fillText(P.lede, 12, 31);
+    ctx.fillStyle = FAINT; ctx.font = '11px ui-monospace, Consolas, monospace';
+    ctx.fillText(P.formula, 12, 50);
+    ctx.save(); ctx.translate(0, 68);
     P.draw(ctx, W, P.h);
     ctx.restore();
     ctx.fillStyle = FAINT; ctx.font = '10px Inter, sans-serif';
@@ -1632,15 +1652,21 @@ function styles(){
   .rsp-stack{display:flex;flex-direction:column;gap:12px}
   .rsp-card{background:#fff;border:1px solid #dfe3e6;border-radius:16px;overflow:hidden;
     box-shadow:0 6px 18px rgba(1,22,36,.05)}
-  .rsp-head{display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;user-select:none;min-height:28px}
+  /* The header carries the panel's IDENTITY, not just a label: a plain-English
+     name plus one sentence saying what the chart is. It has to be readable with
+     the card COLLAPSED, because most of the stack is collapsed most of the time
+     — that is the whole point. The live number is demoted beside it. */
+  .rsp-head{display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;user-select:none;min-height:28px}
   .rsp-head:hover{background:#fafbfc}
-  .rsp-grip{color:#c9ced2;font-size:11px;letter-spacing:-1px;cursor:default}
-  .rsp-updown{display:flex;flex-direction:column;gap:1px}
+  .rsp-updown{display:flex;flex-direction:column;gap:1px;flex-shrink:0}
   .rsp-updown button{border:none;background:none;color:#99a2a7;font-size:8px;line-height:1;cursor:pointer;padding:2px 4px;border-radius:4px}
   .rsp-updown button:hover{color:#5230da;background:#f2f0fd}
-  .rsp-title{font-family:'Montserrat',sans-serif;font-weight:700;font-size:12px;letter-spacing:.08em;
-    text-transform:uppercase;color:#27384e}
-  .rsp-mini{margin-left:auto;font-size:12.5px;color:#011624;font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
+  .rsp-idblock{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+  .rsp-title{font-family:'Montserrat',sans-serif;font-weight:700;font-size:13.5px;letter-spacing:-.01em;
+    color:#011624}
+  .rsp-lede{font-size:12px;line-height:1.45;color:#67737c}
+  .rsp-mini{font-size:12.5px;color:#011624;font-variant-numeric:tabular-nums;font-weight:600;
+    white-space:nowrap;flex-shrink:0;align-self:flex-start}
   .rsp-chev{color:#99a2a7;font-size:12px;width:14px;text-align:center}
   .rsp-png{border:none;background:none;color:#99a2a7;font-size:14px;cursor:pointer;padding:2px 6px;border-radius:6px}
   .rsp-png:hover{color:#5230da;background:#f2f0fd}
@@ -1648,10 +1674,21 @@ function styles(){
   .rsp-canvwrap{position:relative;width:100%}
   .rsp-canvas,.rsp-overlay{position:absolute;inset:0;width:100%;height:100%;display:block}
   .rsp-overlay{z-index:2}
-  .rsp-formula{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;color:#401d91;
-    background:#f7f6fd;border-radius:8px;padding:6px 10px;margin-top:8px;overflow-x:auto;white-space:nowrap}
-  .rsp-explain{color:#67737c;font-size:12.5px;line-height:1.55;margin:8px 0 0}
-  .rsp-explain b{color:#27384e;font-size:10.5px;letter-spacing:.05em}
+  /* Under the chart: what the marks MEAN visually (the reader's text), then the
+     formula folded away. The equation used to be the loudest thing on the card
+     and the words the quietest — that hierarchy is now the other way round. */
+  .rsp-explain{color:#4d5a66;font-size:12.5px;line-height:1.62;margin:10px 0 0}
+  .rsp-explain b{color:#011624;font-weight:700}
+  .rsp-fdet{margin-top:8px}
+  .rsp-fdet>summary{cursor:pointer;list-style:none;font-size:11px;font-weight:700;letter-spacing:.05em;
+    text-transform:uppercase;color:#b0b8bd;padding:2px 0;width:max-content}
+  .rsp-fdet>summary::-webkit-details-marker{display:none}
+  .rsp-fdet>summary::after{content:' ▸'}
+  .rsp-fdet[open]>summary::after{content:' ▾'}
+  .rsp-fdet>summary:hover{color:#5230da}
+  .rsp-formula{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;color:#67737c;
+    background:#f7f8f8;border:1px solid #eef1f3;border-radius:8px;padding:6px 10px;margin-top:6px;
+    overflow-x:auto;white-space:nowrap}
   .rsp-empty,.rsp-dim{color:#99a2a7;font-size:12.5px}
   .rsp-coast{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;background:#f7f8f8;border:1px solid #dfe3e6;
     border-radius:10px;padding:8px 12px;margin-bottom:6px;font-size:12.5px;color:#27384e;font-variant-numeric:tabular-nums}
@@ -1669,6 +1706,18 @@ function styles(){
   .rsp-pop-actions button{font-family:'Inter',sans-serif;font-size:12px;font-weight:700;padding:5px 12px;border-radius:999px;
     cursor:pointer;background:#fff;border:1px solid #dfe3e6;color:#401d91}
   .rsp-pop-actions button:hover{border-color:#5230da}
+  /* Narrow screens: let the name+sentence take the full width and drop the live
+     number onto its own line, so the header can never push the ⤓ and the
+     open/close chevron out through the card's overflow:hidden. */
+  @media (max-width:640px){
+    .rsp-card{border-radius:12px}
+    .rsp-head{flex-wrap:wrap;align-items:flex-start;padding:10px 12px;gap:8px}
+    .rsp-idblock{flex-basis:calc(100% - 76px)}
+    .rsp-mini{order:3;flex-basis:100%;margin-left:26px;font-size:12px;color:#67737c}
+    .rsp-lede{font-size:11.5px}
+    .rsp-body{padding:4px 12px 12px}
+    .rsp-coast{gap:4px 10px;font-size:12px}
+  }
   `;
   document.head.appendChild(el);
 }

@@ -20,6 +20,12 @@
       "port": 8899
     },
     {
+      "name": "nocache-8907",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["C:/Users/User/AppData/Local/Temp/claude/C--Users-User-Documents-GitHub-egely-wheel-race/87a85597-33fe-426e-945d-a3271712a01e/scratchpad/nocache-server.js"],
+      "port": 8907
+    },
+    {
       "name": "ewrexp-test",
       "runtimeExecutable": "node",
       "runtimeArgs": ["C:/Users/User/AppData/Local/Temp/claude/C--Users-User-Documents-GitHub-egely-wheel-race/01d12725-ab13-47f6-a1e7-9d865aa2a659/scratchpad/ewrexp-test/server.js"],
