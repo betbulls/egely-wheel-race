@@ -139,6 +139,24 @@ function styles(){
   .rs-verdict{display:inline-block;font-size:12px;font-weight:800;border-radius:999px;padding:4px 14px;color:#fff}
   .rs-vg{background:#0f8a52}.rs-vy{background:#d97706}.rs-vr{background:#c2415b}.rs-vn{background:#99a2a7}
   .rs-meta{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:#27384e;margin:0 0 12px}
+  /* Run-detail stat band — the numbers that matter, promoted from a cramped
+     text line to proper tiles (same family as the live hero tiles). The
+     energy tile leads and carries the violet accent: it is the one number
+     the owner asked to see first. */
+  .rs-statband{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:2px 0 16px}
+  .rs-stat{background:#fafbfc;border:1px solid #eef1f3;border-radius:12px;padding:11px 14px;min-width:0}
+  .rs-stat .v{font-family:'Montserrat',sans-serif;font-weight:700;font-size:25px;line-height:1.05;color:#011624;
+    font-variant-numeric:tabular-nums;white-space:nowrap}
+  .rs-stat .v small{font-size:12.5px;font-weight:700;color:#67737c;margin-left:3px}
+  .rs-stat .l{font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#99a2a7;margin-top:3px}
+  .rs-stat .f{font-size:11.5px;color:#67737c;margin-top:3px;line-height:1.4}
+  .rs-stat.hi{background:#f7f6fd;border-color:rgba(82,48,218,.25);border-left:3px solid #5230da}
+  .rs-stat.hi .v{color:#401d91}
+  @media (max-width:640px){
+    .rs-statband{grid-template-columns:1fr 1fr}
+    .rs-stat .v{font-size:21px}
+    .rs-stat{padding:9px 12px}
+  }
   .rs-meta b{color:#011624}
   .rs-hash{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:#67737c;word-break:break-all;
     background:#f7f8f8;border:1px solid #dfe3e6;border-radius:8px;padding:6px 9px;margin-top:8px}
@@ -2277,9 +2295,29 @@ function mountRunDetail(el, runId){
           <span>calibration: <b>${cal ? esc((cal.location || 'room') + ' · ' + new Date(cal.created_at).toLocaleDateString('en-GB')) : 'factory model'}</b></span>
           <span>${row.temp_c != null ? row.temp_c + '°C' : '—'} · ${row.rh_pct != null ? row.rh_pct + '%' : '—'}</span>
           ${subject ? `<span>subject: ${avatarHtml(subject.avatar_url, subject.display_name)} <b>${esc(subject.display_name)}</b></span>` : ''}
-          <span>${s.duration_s || 0}s · peak <b>${s.peak_rpm ?? '—'} rpm</b> · mean ${s.mean_rpm ?? '—'} rpm · ${s.revolutions ?? '—'} rev · ${s.coast_count || 0} coast${(s.coast_count || 0) === 1 ? '' : 's'}</span>
-          <span id="rsdEnergy"></span>
           ${isOwner ? '' : `<span>${(row.labels || []).map(l => '#' + esc(l)).join(' ')}</span>`}
+        </div>
+        <div class="rs-statband">
+          <div class="rs-stat hi" title="All the energy the wheel received during this run — from the hand, the air, anything. What its motion gained plus what friction and air took while it turned, using the calibrated drag. The instrument cannot tell WHERE it came from — only that it went in.">
+            <div class="v" id="rsdEnergyV">—</div>
+            <div class="l">Energy in, total</div>
+            <div class="f" id="rsdEnergyF">from all sources combined</div>
+          </div>
+          <div class="rs-stat">
+            <div class="v">${s.peak_rpm ?? '—'}<small>rpm</small></div>
+            <div class="l">Peak speed</div>
+            <div class="f">mean ${s.mean_rpm ?? '—'} rpm</div>
+          </div>
+          <div class="rs-stat">
+            <div class="v">${s.revolutions ?? '—'}</div>
+            <div class="l">Turns</div>
+            <div class="f">counted from measured motion</div>
+          </div>
+          <div class="rs-stat">
+            <div class="v">${Math.floor((s.duration_s || 0) / 60)}:${String((s.duration_s || 0) % 60).padStart(2, '0')}</div>
+            <div class="l">Length</div>
+            <div class="f">${s.coast_count || 0} hands-off slow-down${(s.coast_count || 0) === 1 ? '' : 's'}</div>
+          </div>
         </div>
         ${isOwner ? '<div id="rsdLabels"></div>' : ''}
         ${row.notes ? `<p class="rs-note">${esc(row.notes)}</p>` : ''}
@@ -2313,19 +2351,17 @@ function mountRunDetail(el, runId){
     const markers = (row.markers || []).filter(m => ['mark', 'note', 'direction'].includes(m.type));
     const coasts = (s.coasts || []);
 
-    // "Energy in, total" — the one number the owner asked for in the header:
-    // all the energy the wheel received over this run (hand, air, anything),
-    // computed with the calibrated drag. Recomputed live so old runs get it too.
+    // "Energy in, total" — the hero stat of the header: all the energy the
+    // wheel received over this run (hand, air, anything), computed with the
+    // calibrated drag. Recomputed live so old runs get it too.
     {
-      const eEl = el.querySelector('#rsdEnergy');
-      if(eEl && samples.length >= 2){
+      const vEl = el.querySelector('#rsdEnergyV'), fEl = el.querySelector('#rsdEnergyF');
+      if(vEl && samples.length >= 2){
         try {
           const m = computeRunMetrics(samples, coef, store.noiseFloorNNm(factory ? null : coef).tau, coasts);
           if(m.energy_in_uj != null){
-            eEl.innerHTML = `energy in, total <b>${m.energy_in_uj} µJ</b> ± ${m.energy_in_sigma_uj}`;
-            eEl.title = 'All the energy the wheel received during this run — from the hand, the air, anything. '
-              + 'What its motion gained plus what friction and air took while it turned, using the calibrated drag. '
-              + 'The instrument cannot tell WHERE it came from — only that it went in.';
+            vEl.innerHTML = `${m.energy_in_uj}<small>µJ</small>`;
+            if(fEl) fEl.textContent = `± ${m.energy_in_sigma_uj} µJ · hand, air, anything`;
           }
         } catch {}
       }
