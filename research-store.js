@@ -16,9 +16,10 @@ import {
 export const RUN_MAX_MS = 10 * 60 * 1000;        // owner decision: 10-minute experiments
 export const CHUNK_LINES = 1000;                 // ~71 s of stream per chunk (~9/run)
 export const CAL_STALE_DAYS = 30;                // amber "stale calibration" threshold
-// v1.2: standstill 0-rpm samples included in rpm_samples (counter 0 reported
-// at the device's ~0.7 s cadence); v1.1: 3-spin calibration + derived meta rows
-export const RUN_FORMAT = 'ewr-research v1.2; ' + FORMAT;
+// v1.3: tail observed from CONFIRMED standstill (not from "below 5 rpm") +
+// derived run metrics in meta; v1.2: standstill 0-rpm samples in rpm_samples;
+// v1.1: 3-spin calibration + derived meta rows
+export const RUN_FORMAT = 'ewr-research v1.3; ' + FORMAT;
 
 // ---- calibration v3 protocol constants --------------------------------------
 export const CAL_SPINS_TARGET = 3;   // a calibration = three ACCEPTED spins (owner decision, 2026-08-15)
@@ -31,7 +32,7 @@ export const CAL_OUTLIER_PCT = 20;
 export const CAL_BAND_BINS = [[2, 5], [5, 10], [10, 17], [17, 24]];
 // Analysis-algorithm fingerprint — travels in coef.algo + the meta CSV so every
 // number can be traced to the code that made it. Bump on ANY fit/band/loo change.
-export const CAL_ALGO = 'cal-v3.1: equal-weight lsq (A+K*w^1.5, 2-24 rpm, d<15); loo gate-times; observed-band 4 bins; outlier advisory ' + CAL_OUTLIER_PCT + '%; no min-point spin gate';
+export const CAL_ALGO = 'cal-v3.2: equal-weight lsq (A+K*w^1.5, 2-24 rpm, d<15); loo gate-times; observed-band 4 bins; outlier advisory ' + CAL_OUTLIER_PCT + '%; no min-point spin gate; tail-from-stillness';
 
 // Explicit column lists — NEVER select * on tables that carry jsonb frames
 // (one careless list query would pull megabytes into a phone).
@@ -152,13 +153,15 @@ export function fitCalibration(spins, curves){
     if(m > 4 && uSum > 0) sigma_rel = Math.round(Math.sqrt(ss / uSum) * 1000) / 1000;
   }
 
-  // spin-to-spin consistency: spread of T24->5 relative to the median.
-  // One spin -> no quality claim. (Alive again under the 3-spin protocol.)
-  let quality_pct = null;
+  // spin-to-spin consistency: spread of T24->5 relative to the median, PLUS
+  // the absolute spread in seconds — "0%" would overclaim precision next to a
+  // 0.7 s sampling cadence, "<0.1 s" says what was actually observed.
+  let quality_pct = null, quality_spread_s = null;
   if(t245s.length >= 2){
     const med = medianOf(t245s);
-    const spread = (t245s[t245s.length - 1] - t245s[0]) / med;
-    quality_pct = Math.max(0, Math.round(100 * (1 - spread)));
+    const spreadAbs = t245s[t245s.length - 1] - t245s[0];
+    quality_spread_s = Math.round(spreadAbs * 10) / 10;
+    quality_pct = Math.max(0, Math.round(100 * (1 - spreadAbs / med)));
   }
 
   // per-spin record: own fit + gate times — repeatability made visible
@@ -253,7 +256,7 @@ export function fitCalibration(spins, curves){
     T24_5: best != null ? Math.round(best * 10) / 10 : null,
     score: sc.score, grade: sc.grade,
     score_basis: clean.length ? 'best of ' + clean.length + ' calibration spin' + (clean.length === 1 ? '' : 's') : null,
-    sigma_rel, quality_pct, fit,
+    sigma_rel, quality_pct, quality_spread_s, fit,
     spin_count: clean.length,
     per_spin, loo, band_pts, w_fit_min, w_fit_max,
     algo: CAL_ALGO,
@@ -439,6 +442,22 @@ export function buildMetaCsv(rec, meta){
     ['calibration_observed_band_nnm', meta.coef && meta.coef.band_pts ? meta.coef.band_pts.map(b => b[0] + 'rpm:' + b[1]).join('|') : ''],
     ['calibration_fitted_range_rpm', meta.coef && meta.coef.w_fit_min != null ? meta.coef.w_fit_min + '-' + meta.coef.w_fit_max : ''],
     ['calibration_algo', meta.coef && meta.coef.algo ? meta.coef.algo : ''],
+    // v1.2+: save-time derived metrics — same pipeline as the on-screen panels
+    ['metric_drive_impulse_nnms', meta.metrics ? meta.metrics.impulse_nnms : ''],
+    ['metric_drive_impulse_sigma_nnms', meta.metrics ? meta.metrics.impulse_sigma_nnms : ''],
+    ['metric_time_outside_band_s', meta.metrics ? meta.metrics.outside_band_s : ''],
+    ['metric_certified_s', meta.metrics ? meta.metrics.certified_s : ''],
+    ['metric_time_outside_band_pct', meta.metrics && meta.metrics.outside_band_pct != null ? meta.metrics.outside_band_pct : ''],
+    ['metric_longest_excursion_s', meta.metrics ? meta.metrics.outside_longest_s : ''],
+    ['metric_excursion_count', meta.metrics ? meta.metrics.outside_count : ''],
+    ['metric_outside_band_impulse_nnms', meta.metrics ? meta.metrics.outside_impulse_nnms : ''],
+    ['metric_analysis_stability_pct', meta.metrics && meta.metrics.stability_pct != null ? meta.metrics.stability_pct : ''],
+    ['metric_coast_gates', meta.metrics && meta.metrics.coast_gates
+      ? meta.metrics.coast_gates.map(g => 'n' + g.n
+          + (g.t24_5 != null ? ' 24-5 ' + g.t24_5 + 's(' + (g.d24_5 >= 0 ? '+' : '') + g.d24_5 + ')' : '')
+          + (g.d12_6 != null ? ' 12-6(' + (g.d12_6 >= 0 ? '+' : '') + g.d12_6 + ')' : '')
+          + (g.d6_3 != null ? ' 6-3(' + (g.d6_3 >= 0 ? '+' : '') + g.d6_3 + ')' : '')).join('; ')
+      : ''],
     ['moment_of_inertia_kgm2', '1.7e-7 (+-10%)'],
     ['counter_semantics', 'counter = revolution period in ~10 ms units; rpm_true = 6000/counter; 0 = standstill; led 0-24 device-railed at 24'],
     ['disclaimer', 'This software cannot distinguish air currents, static or vibration from any other influence; shielding and controls are the researcher\'s responsibility.'],

@@ -17,6 +17,9 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp
 
 const INK = '#011624', GREY = '#67737c', FAINT = '#99a2a7', VIOLET = '#5230da', AMBER = '#b8860b', RED = '#c2415b', GREEN = '#0f8a52';
 const LS_KEY = 'ewr.research.panels.v1';
+// One shared fallback when a calibration carries no sigma_rel (factory model /
+// pre-v3 rows) — the deviation band and the work ribbon must not disagree.
+const SIGMA_DEFAULT = 0.08;
 
 // ---- small math helpers -----------------------------------------------------
 // Monotone-cubic (Fritsch–Carlson) tangents — the interpolant cannot overshoot
@@ -59,33 +62,25 @@ const fmtSig2 = v => {
 // ---- derived-data pipeline --------------------------------------------------
 // Recomputed incrementally (cache keyed on sample count) from the fresh-sample
 // series. All series share indices with `samples`.
-function buildPipeline(samples, coef, floorTau){
+// One tau/decel estimator pass over the samples with a given window setting.
+// Split out of buildPipeline so the analysis-stability check can rerun it with
+// alternate windows and prove a feature is not a smoothing artifact.
+function estimateTau(samples, coef, gap, spanS, maxN){
   const n = samples.length;
   const alphaBase = w => -decelOf(coef, w) * Math.PI / 30;   // rad/s^2 (negative = braking)
   const tau = new Array(n).fill(null);      // nN*m, null = blank (uncertified)
   const decel = new Array(n).fill(null);    // -d(rpm)/dt in rpm/s (measured, certified only)
-  const gap = new Array(n).fill(false);     // sample follows a data gap
   for(let i = 0; i < n; i++){
     const s = samples[i];
-    if(i > 0){
-      const dt = s.t - samples[i - 1].t;
-      // Measured on the batch-1 raw data (2026-08-14): a FRESH counter arrives
-      // every ~0.7 s at ANY speed (the 72 teeth keep the sensor fed even at
-      // 2 rpm — NOT one update per revolution). Below ~2 rpm consecutive
-      // readings often repeat the same counter, so allow extra slack there.
-      const expected = s.rpm >= 2 ? 0.7 : 1.5;
-      if(dt > 2.5 * expected + 2) gap[i] = true;
-      // jump rule (re-flick / touch): blank the estimator through the jump
-    }
-    // estimator window: fewest recent samples (min 2) spanning <= 15 s,
+    // estimator window: fewest recent samples (min 2) spanning <= spanS s,
     // not crossing a gap or a jump
     const win = [s];
     for(let j = i - 1; j >= 0; j--){
-      if(s.t - samples[j].t > 15) break;
+      if(s.t - samples[j].t > spanS) break;
       if(gap[j + 1]) break;
       if(samples[j + 1].rpm > samples[j].rpm * 1.3 && samples[j + 1].rpm > 3) break;   // jump into window
       win.push(samples[j]);
-      if(win.length >= 5) break;
+      if(win.length >= maxN) break;
     }
     if(win.length >= 2){
       // LSQ slope of omega(t) over the window
@@ -105,6 +100,74 @@ function buildPipeline(samples, coef, floorTau){
         decel[i] = -slope * 30 / Math.PI;                         // rpm/s
       }
     }
+  }
+  return { tau, decel };
+}
+
+// Reference band B(ω) [nN*m]: the LARGEST of (a) the room noise floor from the
+// calibration tail, (b) the model uncertainty at this speed (σ_rel × baseline
+// torque), (c) the observed calibration range (three-spin scatter, linearly
+// interpolated between its speed bins). A τ reading inside B(ω) is
+// indistinguishable from the calibration's own variability.
+function bandOfFactory(coef, floorTau){
+  const sig = coef.sigma_rel || SIGMA_DEFAULT;
+  const bp = (coef.band_pts && coef.band_pts.length) ? coef.band_pts : null;
+  return w => {
+    const sigTau = sig * INERTIA * decelOf(coef, Math.max(0.3, w)) * Math.PI / 30 * 1e9;
+    let obs = 0;
+    if(bp){
+      if(w <= bp[0][0]) obs = bp[0][1];
+      else if(w >= bp[bp.length - 1][0]) obs = bp[bp.length - 1][1];
+      else for(let i = 1; i < bp.length; i++){
+        if(bp[i][0] >= w){
+          const f = (w - bp[i - 1][0]) / Math.max(1e-9, bp[i][0] - bp[i - 1][0]);
+          obs = bp[i - 1][1] + f * (bp[i][1] - bp[i - 1][1]);
+          break;
+        }
+      }
+    }
+    return Math.max(floorTau, sigTau, obs);
+  };
+}
+// Alternate estimator windows for the stability check: [spanS, maxN]. At the
+// ~0.7 s cadence the SAMPLE COUNT binds (3/5/8 samples ≈ 1.4/2.8/4.9 s); the
+// spanS caps only matter at the sparse sub-2-rpm cadence. UI labels say
+// "3 / 5 / 8 samples" for exactly this reason.
+const WIN_VARIANTS = [[8, 3], [25, 8]];
+
+function buildPipeline(samples, coef, floorTau){
+  const n = samples.length;
+  const gap = new Array(n).fill(false);     // sample follows a data gap
+  for(let i = 1; i < n; i++){
+    const dt = samples[i].t - samples[i - 1].t;
+    // Measured on the batch-1 raw data (2026-08-14): a FRESH counter arrives
+    // every ~0.7 s at ANY speed (the 72 teeth keep the sensor fed even at
+    // 2 rpm — NOT one update per revolution). Below ~2 rpm consecutive
+    // readings often repeat the same counter, so allow extra slack there.
+    const expected = samples[i].rpm >= 2 ? 0.7 : 1.5;
+    if(dt > 2.5 * expected + 2) gap[i] = true;
+  }
+  const bandOf = bandOfFactory(coef, floorTau);
+  const band = samples.map(s => bandOf(s.rpm));
+  const est = estimateTau(samples, coef, gap, 15, 5);        // the certified series
+  const tau = est.tau, decel = est.decel;
+  const tauVar = WIN_VARIANTS.map(([s2, n2]) => estimateTau(samples, coef, gap, s2, n2).tau);
+  // Analysis stability: does the default-window τ agree with both alternates?
+  // Agreement = within max(B/2, 3 nN·m). A feature that only exists at one
+  // smoothing setting is a numerical artifact, not physics.
+  let stab = null;
+  { let agree = 0, m = 0;
+    for(let i = 0; i < n; i++){
+      if(tau[i] == null) continue;
+      let ok = 0, have = 0;
+      for(const tv of tauVar){
+        if(tv[i] == null) continue;
+        have++;
+        if(Math.abs(tv[i] - tau[i]) <= Math.max(band[i] * 0.5, 3)) ok++;
+      }
+      if(have){ m++; if(ok === have) agree++; }
+    }
+    if(m >= 10) stab = { pct: Math.round(agree / m * 100) };
   }
   // ghost: auto-armed on 2 consecutive decelerating samples above 8 rpm,
   // killed by the jump rule (re-driven wheel). Only the LAST surviving arming
@@ -136,6 +199,14 @@ function buildPipeline(samples, coef, floorTau){
   const energy = samples.map(s => 0.5 * INERTIA * Math.pow(s.rpm * Math.PI / 30, 2) * 1e6);  // µJ
   const work = new Array(n).fill(0);      // µJ, telescoped: ΔE + ∫τ_base·ω dt
   const dissip = new Array(n).fill(0);    // ∫τ_base·ω dt (µJ) — for the ribbon
+  // cumulative drive impulse J(t) [nN·m·s] + its model-uncertainty envelope,
+  // and the outside-band ledger (time / longest excursion / count / clipped
+  // impulse) — the honest aggregate of "how long and how far past B(ω)"
+  const imp = new Array(n).fill(0);
+  const impSig = new Array(n).fill(0);
+  const sig = coef.sigma_rel || SIGMA_DEFAULT;
+  const outside = { s: 0, certified_s: 0, longest_s: 0, count: 0, jout: 0 };
+  let excurLen = 0;
   for(let i = 1; i < n; i++){
     const dt = samples[i].t - samples[i - 1].t;
     const ok = dt > 0 && dt < 30 && !gap[i];
@@ -145,8 +216,27 @@ function buildPipeline(samples, coef, floorTau){
     const p = tauBase * wMean * Math.PI / 30;                               // W
     dissip[i] = dissip[i - 1] + (ok ? p * dt * 1e6 : 0);                    // µJ
     work[i] = (energy[i] - energy[0]) + dissip[i];
+    // impulse: trapezoid over CERTIFIED τ pairs only (a gap contributes zero
+    // and the line holds flat — same discipline as the other integrals)
+    const okT = ok && tau[i] != null && tau[i - 1] != null;
+    imp[i] = imp[i - 1] + (okT ? (tau[i] + tau[i - 1]) / 2 * dt : 0);
+    const tauBaseN = wMean < 0.2 ? 0 : Math.abs(tauBase) * 1e9;             // nN·m (0 at rest, like the τ baseline)
+    impSig[i] = impSig[i - 1] + (okT ? sig * tauBaseN * dt : 0);
+    if(okT){
+      outside.certified_s += dt;
+      const B = (band[i] + band[i - 1]) / 2;
+      const tm = (tau[i] + tau[i - 1]) / 2;
+      if(Math.abs(tm) > B){
+        outside.s += dt;
+        excurLen += dt;
+        if(excurLen === dt) outside.count++;                                // a new excursion just began
+        if(excurLen > outside.longest_s) outside.longest_s = excurLen;
+        outside.jout += Math.sign(tm) * (Math.abs(tm) - B) * dt;
+      } else excurLen = 0;
+    } else excurLen = 0;
   }
-  return { samples, tau, decel, gap, ghost, revs, energy, work, dissip, floorTau };
+  return { samples, tau, decel, gap, ghost, revs, energy, work, dissip, floorTau,
+           band, bandOf, tauVar, stab, imp, impSig, outside };
 }
 const ghostAt = (ghost, t) => {
   if(!ghost || t < ghost.t0) return null;
@@ -177,7 +267,14 @@ export function createPanelStack(host, opts){
   const nowT = () => samples.length ? samples[samples.length - 1].t : 0;
   const modelCurve = integrateModel(coef);
   const calT = rpm => crossTime(modelCurve.pts, rpm);          // anchored at 24-crossing
-  const T_CAL = { t24_10: calT(10), t24_5: calT(5) };
+  const T_CAL = {
+    t24_10: calT(10), t24_5: calT(5),
+    // gate times for the laik-friendly Δseconds readout (3→1 deliberately
+    // dropped: below 1.6 rpm the chart curves are clamped and the ~1.5 s
+    // sub-2-rpm cadence would drown the gate in quantization)
+    t12_6: (calT(6) != null && calT(12) != null) ? calT(6) - calT(12) : null,
+    t6_3: (calT(3) != null && calT(6) != null) ? calT(3) - calT(6) : null,
+  };
 
   function ensurePipe(){
     if(samples.length !== pipeN){ pipe = buildPipeline(samples, coef, floor.tau); pipeN = samples.length; }
@@ -185,14 +282,18 @@ export function createPanelStack(host, opts){
   }
 
   // ---- persistence ----------------------------------------------------------
-  const DEFAULT_ORDER = ['timeline', 'torque', 'logspeed', 'deviation', 'phase', 'revs', 'energy', 'work', 'coasts', 'quality'];
+  const DEFAULT_ORDER = ['timeline', 'torque', 'impulse', 'logspeed', 'deviation', 'phase', 'byspeed', 'revs', 'energy', 'work', 'coasts', 'quality'];
   const DEFAULT_OPEN = { timeline: true, torque: true };
   let layout = { order: DEFAULT_ORDER.slice(), open: { ...DEFAULT_OPEN }, prefs: {} };
   try {
     const saved = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
     if(saved && Array.isArray(saved.order)){
       layout.order = saved.order.filter(id => DEFAULT_ORDER.includes(id));
-      for(const id of DEFAULT_ORDER) if(!layout.order.includes(id)) layout.order.push(id);
+      // panels added in later versions slot into their DEFAULT position
+      // instead of dangling at the end of a user's saved order
+      DEFAULT_ORDER.forEach((id, di) => {
+        if(!layout.order.includes(id)) layout.order.splice(Math.min(di, layout.order.length), 0, id);
+      });
       layout.open = { ...DEFAULT_OPEN, ...(saved.open || {}) };
       layout.prefs = saved.prefs || {};
     }
@@ -353,10 +454,11 @@ export function createPanelStack(host, opts){
     torque: {
       title: 'Drive-torque instrument', h: 280,
       formula: 'τ_drive = I·(α_meas − α_base(ω))    ·    I = 1.7×10⁻⁷ kg·m²',
-      explain: 'WHAT: the push or drag acting on the wheel right now, beyond normal friction and air. LOOK AT: the bar — purple to the right = something is driving the wheel; amber to the left = something is braking it. MEANS: while the reading sits inside the grey band, it is too small to tell apart from the room\'s own air — only readings outside the band count.',
+      explain: 'WHAT: the push or drag acting on the wheel right now, beyond normal friction and air. LOOK AT: the bar — purple to the right = something is driving the wheel; amber to the left = something is braking it. MEANS: while the reading sits inside the grey band, it is too small to tell apart from the calibration\'s own variability — only readings outside the band count. The band B(ω) changes with speed: it is the largest of the room\'s noise floor, the three-spin calibration scatter and the model uncertainty.',
       draw(ctx, W, H){
         const p = ensurePipe();
         const gaugeH = 84;
+        const bNow = samples.length ? p.band[samples.length - 1] : floor.tau;   // B(ω) at the current speed
         // --- gauge (horizontal bipolar symlog bar) ---
         const L = Math.max(20, floor.tau * 2);      // linear zone bound [nN*m]
         const MAXT = 1000;
@@ -367,15 +469,15 @@ export function createPanelStack(host, opts){
           return gxm + Math.sign(tau) * Math.min(1, u) * (gx1 - gx0) / 2;
         };
         ctx.fillStyle = '#f7f8f8'; ctx.fillRect(gx0, 14, gx1 - gx0, 30);
-        // noise floor band
+        // reference band at the CURRENT speed
         ctx.fillStyle = 'rgba(103,115,124,0.22)';
-        ctx.fillRect(symX(-floor.tau), 14, symX(floor.tau) - symX(-floor.tau), 30);
+        ctx.fillRect(symX(-bNow), 14, symX(bNow) - symX(-bNow), 30);
         ctx.strokeStyle = INK; ctx.beginPath(); ctx.moveTo(gxm, 10); ctx.lineTo(gxm, 48); ctx.stroke();
         const lc = lastCertified(p.tau);
         const lastTau = lc ? lc.v : null;
         const live = lc != null && samples.length && (samples[samples.length - 1].t - samples[lc.i].t) < 20;
         if(live){
-          const inBand = Math.abs(lastTau) <= floor.tau;
+          const inBand = Math.abs(lastTau) <= (p.band[lc.i] != null ? p.band[lc.i] : bNow);
           ctx.fillStyle = inBand ? 'rgba(103,115,124,0.55)' : (lastTau >= 0 ? VIOLET : AMBER);
           const x = symX(lastTau);
           if(lastTau >= 0) ctx.fillRect(gxm, 18, Math.max(2, x - gxm), 22);
@@ -387,7 +489,7 @@ export function createPanelStack(host, opts){
         ctx.fillStyle = live ? INK : FAINT; ctx.textAlign = 'center'; ctx.font = '700 15px Inter, sans-serif';
         ctx.fillText(live ? ((lastTau >= 0 ? '+' : '') + fmtSig2(lastTau) + ' nN·m') : '—', gxm, 52);
         ctx.font = '9.5px Inter, sans-serif'; ctx.fillStyle = FAINT;
-        ctx.fillText('grey band = ' + (floor.factory ? 'factory floor' : 'this room\'s noise floor') + ' ±' + fmtSig2(floor.tau) + ' nN·m', gxm, 70);
+        ctx.fillText('grey band = reference band B(ω) ±' + fmtSig2(bNow) + ' nN·m at this speed (' + (floor.factory ? 'factory floor' : 'detection floor') + ' / spin scatter / model σ — largest)', gxm, 70);
 
         // --- strip vs shared time axis ---
         const { xOf } = timeAxis(W);
@@ -398,8 +500,20 @@ export function createPanelStack(host, opts){
           return (top + bot) / 2 - Math.sign(tau) * Math.min(1, u) * (bot - top) / 2;
         };
         drawGaps(ctx, W, H, xOf);
+        // variable-width reference band ±B(ω_i) along the strip
         ctx.fillStyle = 'rgba(103,115,124,0.14)';
-        ctx.fillRect(PAD_L, yOf(floor.tau), W - PAD_L - PAD_R, yOf(-floor.tau) - yOf(floor.tau));
+        ctx.beginPath();
+        let bandPen = false;
+        for(let i = 0; i < samples.length; i++){
+          const t = samples[i].t; if(t < view.t0 || t > view.t1) continue;
+          const y = yOf(Math.min(TMAX, p.band[i]));
+          bandPen ? ctx.lineTo(xOf(t), y) : ctx.moveTo(xOf(t), y); bandPen = true;
+        }
+        for(let i = samples.length - 1; i >= 0; i--){
+          const t = samples[i].t; if(t < view.t0 || t > view.t1) continue;
+          ctx.lineTo(xOf(t), yOf(Math.max(-TMAX, -p.band[i])));
+        }
+        if(bandPen){ ctx.closePath(); ctx.fill(); }
         ctx.strokeStyle = 'rgba(1,22,36,0.3)';
         ctx.beginPath(); ctx.moveTo(PAD_L, yOf(0)); ctx.lineTo(W - PAD_R, yOf(0)); ctx.stroke();
         drawTimeGrid(ctx, W, H, xOf);
@@ -423,6 +537,61 @@ export function createPanelStack(host, opts){
         const p = ensurePipe(); const i = nearestIdx(t);
         return (i < 0 || p.tau[i] == null) ? '—' : (p.tau[i] >= 0 ? '+' : '') + fmtSig2(p.tau[i]) + ' nN·m';
       },
+    },
+
+    impulse: {
+      title: 'Drive impulse J(t)', h: 220,
+      formula: 'J(t) = ∫ τ_drive dt  [nN·m·s]    ·    J_out = ∫ sign(τ)·max(|τ|−B(ω), 0) dt',
+      explain: 'WHAT: all the extra push (or extra brake) added up over time, regardless of how fast the wheel was turning — the slow-wheel-friendly cousin of the work ledger, which weights by speed. LOOK AT: whether the line climbs steadily out of the grey ribbon, or just wanders inside it; the caption counts how long the reading sat OUTSIDE the reference band. MEANS: a steady climb past the ribbon = a persistent influence kept accumulating; wandering inside it = indistinguishable from the calibration\'s own uncertainty. (A hand spin is itself a huge outside-band torque and counts in these totals — judge the hands-off stretches; drag-select gives per-stretch numbers.)',
+      draw(ctx, W, H){
+        const p = ensurePipe();
+        const { xOf } = timeAxis(W);
+        drawTimeGrid(ctx, W, H, xOf); drawGaps(ctx, W, H, xOf);
+        const maxJ = Math.max(5, ...p.imp.map((v, i) => Math.abs(v) + p.impSig[i])) * 1.1;
+        const yOf = v => PAD_T + (H - PAD_T - PAD_B) * (0.5 - v / (2 * maxJ));
+        ctx.strokeStyle = 'rgba(1,22,36,0.3)';
+        ctx.beginPath(); ctx.moveTo(PAD_L, yOf(0)); ctx.lineTo(W - PAD_R, yOf(0)); ctx.stroke();
+        ctx.font = '10px Inter, sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+        for(const v of [-maxJ, 0, maxJ]){ ctx.fillStyle = GREY; ctx.fillText(fmtSig2(v), PAD_L - 6, yOf(v)); }
+        // model-uncertainty ribbon ±σ·∫|τ_base|dt (same convention as the work ledger)
+        ctx.fillStyle = 'rgba(103,115,124,0.13)';
+        ctx.beginPath(); let started = false;
+        for(let i = 0; i < samples.length; i++){
+          const t = samples[i].t; if(t < view.t0 || t > view.t1) continue;
+          const y = yOf(p.imp[i] + p.impSig[i]);
+          started ? ctx.lineTo(xOf(t), y) : ctx.moveTo(xOf(t), y); started = true;
+        }
+        for(let i = samples.length - 1; i >= 0; i--){
+          const t = samples[i].t; if(t < view.t0 || t > view.t1) continue;
+          ctx.lineTo(xOf(t), yOf(p.imp[i] - p.impSig[i]));
+        }
+        if(started){ ctx.closePath(); ctx.fill(); }
+        ctx.lineWidth = 2;
+        let pen = false; ctx.beginPath(); ctx.strokeStyle = VIOLET;
+        for(let i = 0; i < samples.length; i++){
+          const t = samples[i].t;
+          if(t < view.t0 || t > view.t1){ pen = false; continue; }
+          if(p.gap[i]) pen = false;
+          pen ? ctx.lineTo(xOf(t), yOf(p.imp[i])) : ctx.moveTo(xOf(t), yOf(p.imp[i])); pen = true;
+        }
+        ctx.stroke();
+        // outside-band ledger — the honest aggregate, stamped onto the chart
+        const o = p.outside;
+        ctx.fillStyle = GREY; ctx.font = '700 9.5px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+        const pct = o.certified_s > 0 ? Math.round(o.s / o.certified_s * 100) : 0;
+        ctx.fillText('outside B(ω): ' + fmtSig2(o.s) + ' s of ' + fmtSig2(o.certified_s) + ' s certified (' + pct + '%) · longest '
+          + fmtSig2(o.longest_s) + ' s · ' + o.count + ' excursion' + (o.count === 1 ? '' : 's')
+          + ' · J_out ' + (o.jout >= 0 ? '+' : '') + fmtSig2(o.jout) + ' nN·m·s', PAD_L + 4, PAD_T);
+        ctx.fillStyle = FAINT; ctx.font = '9.5px Inter, sans-serif';
+        ctx.fillText('nN·m·s · ribbon = model uncertainty ±σ·∫|τ_base|dt', PAD_L + 4, PAD_T + 13);
+      },
+      readout(){
+        const p = ensurePipe();
+        if(!p.imp.length) return '—';
+        const i = p.imp.length - 1;
+        return (p.imp[i] >= 0 ? '+' : '') + fmtSig2(p.imp[i]) + ' ± ' + fmtSig2(p.impSig[i]) + ' nN·m·s';
+      },
+      value(t){ const p = ensurePipe(); const i = nearestIdx(t); return i < 0 ? '—' : fmtSig2(p.imp[i]) + ' nN·m·s'; },
     },
 
     logspeed: {
@@ -481,7 +650,7 @@ export function createPanelStack(host, opts){
           ctx.fillText('ghost not armed — needs a hands-off coast', W / 2, H / 2);
           return;
         }
-        const band = Math.max(5, (coef.sigma_rel || 0.05) * 200);   // ±2σ in %
+        const band = Math.max(5, (coef.sigma_rel || SIGMA_DEFAULT) * 200);   // ±2σ in %
         const DEV = Math.max(15, band * 2);
         const yOf = d => PAD_T + (H - PAD_T - PAD_B) * (0.5 - Math.max(-DEV, Math.min(DEV, d)) / (2 * DEV));
         ctx.fillStyle = 'rgba(32,178,107,0.10)';
@@ -580,6 +749,88 @@ export function createPanelStack(host, opts){
       },
     },
 
+    byspeed: {
+      title: 'Drive by speed band', h: 240,
+      formula: 'mean τ_drive per ω-band ± sd    ·    faded = outside the calibration\'s fitted range (extrapolated)',
+      explain: 'WHAT: WHERE in the speed range the extra push or brake showed up — each bar is the average influence torque while the wheel was in that speed band. LOOK AT: bars that clear the grey band, and whether they stand in the faded zone. MEANS: a deviation only in the faded bands rests on model extrapolation (the calibration never measured there) — treat it with suspicion; same-direction bars across several measured bands = a speed-independent influence; a single odd band = model mismatch there, or a speed-specific effect.',
+      draw(ctx, W, H){
+        const p = ensurePipe();
+        const BINS = [[0, 2], [2, 5], [5, 10], [10, 17], [17, 24], [24, 48], [48, 96], [96, Infinity]];
+        const wmax = coef.w_fit_max != null ? coef.w_fit_max : 24;
+        const agg = BINS.map(() => ({ sum: 0, sum2: 0, n: 0, bsum: 0 }));
+        for(let i = 0; i < samples.length; i++){
+          if(p.tau[i] == null) continue;
+          const w = samples[i].rpm;
+          for(let b = 0; b < BINS.length; b++) if(w >= BINS[b][0] && w < BINS[b][1]){
+            const a = agg[b]; a.sum += p.tau[i]; a.sum2 += p.tau[i] * p.tau[i]; a.n++; a.bsum += p.band[i]; break;
+          }
+        }
+        const stats = agg.map((a, b) => {
+          if(a.n < 3) return { n: a.n };
+          const mean = a.sum / a.n;
+          return { n: a.n, mean, sd: Math.sqrt(Math.max(0, a.sum2 / a.n - mean * mean)), band: a.bsum / a.n,
+                   extra: BINS[b][0] >= Math.min(24, wmax) };
+        });
+        const binW = (W - PAD_L - PAD_R) / BINS.length;
+        const xC = b => PAD_L + binW * (b + 0.5);
+        const maxY = Math.max(10, ...stats.filter(s => s.mean != null).map(s => Math.max(Math.abs(s.mean) + s.sd, s.band))) * 1.15;
+        const yOf = v => PAD_T + (H - PAD_T - PAD_B) * (0.5 - Math.max(-maxY, Math.min(maxY, v)) / (2 * maxY));
+        ctx.strokeStyle = 'rgba(1,22,36,0.3)';
+        ctx.beginPath(); ctx.moveTo(PAD_L, yOf(0)); ctx.lineTo(W - PAD_R, yOf(0)); ctx.stroke();
+        ctx.font = '10px Inter, sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+        for(const v of [-maxY, 0, maxY]){ ctx.fillStyle = GREY; ctx.fillText(fmtSig2(v), PAD_L - 6, yOf(v)); }
+        for(let b = 0; b < BINS.length; b++){
+          const s = stats[b];
+          const x0 = PAD_L + binW * b + 3, x1 = PAD_L + binW * (b + 1) - 3;
+          const extra = BINS[b][0] >= Math.min(24, wmax);
+          if(extra){   // extrapolation zone tint (honesty: the model was never fitted here)
+            ctx.fillStyle = 'rgba(1,22,36,0.035)';
+            ctx.fillRect(x0 - 2, PAD_T, x1 - x0 + 4, H - PAD_T - PAD_B);
+          }
+          if(s.mean == null){
+            // empty bins must not read as "zero deviation"
+            ctx.fillStyle = FAINT; ctx.font = '9px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(s.n ? 'n=' + s.n : 'no data', xC(b), (PAD_T + H - PAD_B) / 2);
+          } else {
+            ctx.globalAlpha = extra ? 0.4 : 1;
+            ctx.fillStyle = 'rgba(103,115,124,0.16)';
+            ctx.fillRect(x0, yOf(s.band), x1 - x0, yOf(-s.band) - yOf(s.band));
+            ctx.fillStyle = s.mean >= 0 ? VIOLET : AMBER;
+            const y0 = yOf(0), y1 = yOf(s.mean);
+            ctx.fillRect(x0 + 4, Math.min(y0, y1), x1 - x0 - 8, Math.max(2, Math.abs(y1 - y0)));
+            ctx.strokeStyle = INK; ctx.lineWidth = 1.2;
+            ctx.beginPath(); ctx.moveTo(xC(b), yOf(s.mean - s.sd)); ctx.lineTo(xC(b), yOf(s.mean + s.sd)); ctx.stroke();
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = GREY; ctx.font = '9px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+            ctx.fillText('n=' + s.n, xC(b), PAD_T + 2);
+          }
+          ctx.fillStyle = FAINT; ctx.font = '9.5px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+          ctx.fillText(isFinite(BINS[b][1]) ? BINS[b][0] + '–' + BINS[b][1] : BINS[b][0] + '+', xC(b), H - PAD_B + 5);
+        }
+        ctx.fillStyle = FAINT; ctx.font = '9.5px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+        ctx.fillText('nN·m by rpm band · grey = mean B(ω) · faded = extrapolated (fitted range ends at ' + fmtSig2(Math.min(24, wmax)) + ' rpm)', PAD_L + 4, H - PAD_B - 14);
+      },
+      readout(){
+        const p = ensurePipe();
+        // strongest MEASURED-range band (extrapolated bands never headline)
+        const BINS = [[0, 2], [2, 5], [5, 10], [10, 17], [17, 24]];
+        let best = null;
+        const agg = BINS.map(() => ({ sum: 0, n: 0 }));
+        for(let i = 0; i < samples.length; i++){
+          if(p.tau[i] == null) continue;
+          const w = samples[i].rpm;
+          for(let b = 0; b < BINS.length; b++) if(w >= BINS[b][0] && w < BINS[b][1]){ agg[b].sum += p.tau[i]; agg[b].n++; break; }
+        }
+        BINS.forEach((bin, b) => {
+          if(agg[b].n < 3) return;
+          const mean = agg[b].sum / agg[b].n;
+          if(!best || Math.abs(mean) > Math.abs(best.mean)) best = { bin, mean };
+        });
+        return best ? (best.mean >= 0 ? '+' : '') + fmtSig2(best.mean) + ' nN·m @ ' + best.bin[0] + '–' + best.bin[1] + ' rpm' : '—';
+      },
+      value(){ return ''; },
+    },
+
     revs: {
       title: 'Revolutions integral N(t)', h: 220,
       formula: 'N(t) = ∫ ω/60 dt  [rev]',
@@ -660,7 +911,7 @@ export function createPanelStack(host, opts){
         const p = ensurePipe();
         const { xOf } = timeAxis(W);
         drawTimeGrid(ctx, W, H, xOf); drawGaps(ctx, W, H, xOf);
-        const sig = coef.sigma_rel || 0.08;
+        const sig = coef.sigma_rel || SIGMA_DEFAULT;
         const maxW = Math.max(0.5, ...p.work.map((w, i) => Math.abs(w) + p.dissip[i] * sig)) * 1.1;
         const yOf = v => PAD_T + (H - PAD_T - PAD_B) * (0.5 - v / (2 * maxW));
         ctx.strokeStyle = 'rgba(1,22,36,0.3)';
@@ -696,7 +947,7 @@ export function createPanelStack(host, opts){
         const p = ensurePipe();
         if(!p.work.length) return '—';
         const i = p.work.length - 1;
-        const sig = coef.sigma_rel || 0.08;
+        const sig = coef.sigma_rel || SIGMA_DEFAULT;
         return (p.work[i] >= 0 ? '+' : '') + fmtSig2(p.work[i]) + ' ± ' + fmtSig2(p.dissip[i] * sig) + ' µJ';
       },
       value(t){ const p = ensurePipe(); const i = nearestIdx(t); return i < 0 ? '—' : fmtSig2(p.work[i]) + ' µJ'; },
@@ -705,7 +956,7 @@ export function createPanelStack(host, opts){
     coasts: {
       title: 'Coast comparator', h: 0, dom: true,
       formula: 'R = T_meas(24→5) / T_cal(24→5)    ·    T_cal = ' + '—',
-      explain: 'WHAT: every time the wheel freely slowed down, it got timed like a stopwatch lap and compared with your calibration. LOOK AT: the ratio at the end of each row. MEANS: ×1.00 = the wheel slowed exactly as calibrated; ×1.20 = it kept spinning 20% longer than it should — the simplest number to quote from a session.',
+      explain: 'WHAT: every time the wheel freely slowed down, it got timed like a stopwatch lap and compared with your calibration. LOOK AT: the ratio at the end of each row, and the Δseconds per speed gate on the second line. MEANS: ×1.00 = the wheel slowed exactly as calibrated; ×1.20 = it kept spinning 20% longer than it should; "12→6 +2.4s" = crossing that gate took 2.4 s longer than the calibration predicts — the simplest numbers to quote from a session.',
       renderDom(el){
         if(!coasts.length){ el.innerHTML = '<div class="rsp-empty">no hands-off coast yet — spin the wheel above 24 rpm and let go</div>'; return; }
         const rows = coasts.map(s => {
@@ -715,9 +966,16 @@ export function createPanelStack(host, opts){
           let bands = coastBands.get(s);
           if(!bands){
             const curve = buildCurve(samples.map(p => ({ t: p.t * 1000, rpm: p.rpm })), s.t_start_ms, s.t_end_ms);
+            // clip to the winning decay (curve.dur): a re-flick's SECOND decay
+            // inside the same spin window must not supply a gate crossing
+            const clean = curve ? curve.pts.filter(pt => pt.x >= 0 && (curve.dur == null || pt.x <= curve.dur + 0.01)) : null;
+            const at = rpm => clean ? crossTime(clean, rpm) : null;
+            const t12 = at(12), t6 = at(6), t3 = at(3);
             bands = {
-              t2410: curve ? crossTime(curve.pts.filter(pt => pt.x >= 0), 10) : null,
+              t2410: at(10),
               t245: s.T24_5 != null ? s.T24_5 : (curve && curve.T245 != null ? curve.T245 : null),
+              t12_6: (t6 != null && t12 != null) ? t6 - t12 : null,
+              t6_3: (t3 != null && t6 != null) ? t3 - t6 : null,
             };
             coastBands.set(s, bands);
           }
@@ -728,15 +986,22 @@ export function createPanelStack(host, opts){
             const w = Math.min(100, v / (cal * 1.8) * 100), wc = Math.min(100, 100 / 1.8);
             return `<span class="rsp-bars"><i style="width:${w}%"></i><u style="left:${wc}%"></u></span> ${v.toFixed(1)}s`;
           };
+          // Δseconds per gate — the coast-time gain, signed vs the calibration
+          const gate = (label, meas, cal) => {
+            if(meas == null || cal == null) return `${label} <span class="rsp-dim">—</span>`;
+            const d = meas - cal;
+            return `${label} ${meas.toFixed(1)}s <b style="color:${d >= 0 ? VIOLET : AMBER}">${d >= 0 ? '+' : ''}${d.toFixed(1)}s</b>`;
+          };
           return `<div class="rsp-coast${s.interrupted ? ' int' : ''}">
             <b>coast ${s.n}</b> <span class="rsp-dim">${fmtClock(from)}–${fmtClock(to)} · peak ${s.max_rpm} rpm${s.interrupted ? ' · interrupted' : ''}</span>
             <span>24→10: ${bar(t2410, T_CAL.t24_10)}</span>
             <span>24→5: ${bar(t245, T_CAL.t24_5)}</span>
             <b class="rsp-ratio" style="color:${ratio == null ? FAINT : ratio >= 1 ? VIOLET : AMBER}">${ratio == null ? '—' : '×' + ratio.toFixed(2)}</b>
+            <span class="rsp-dim" style="flex-basis:100%">${gate('24→10:', t2410, T_CAL.t24_10)} · ${gate('24→5:', t245, T_CAL.t24_5)} · ${gate('12→6:', bands.t12_6, T_CAL.t12_6)} · ${gate('6→3:', bands.t6_3, T_CAL.t6_3)} <span style="color:#99a2a7">(Δ vs calibration — positive = coasted longer)</span></span>
           </div>`;
         });
         el.innerHTML = rows.reverse().join('') +
-          `<div class="rsp-dim" style="padding:4px 2px">calibrated: 24→10 ${T_CAL.t24_10 ? T_CAL.t24_10.toFixed(1) : '—'} s · 24→5 ${T_CAL.t24_5 ? T_CAL.t24_5.toFixed(1) : '—'} s (${esc(calNote)}) · tick = calibrated time</div>`;
+          `<div class="rsp-dim" style="padding:4px 2px">calibrated: 24→10 ${T_CAL.t24_10 ? T_CAL.t24_10.toFixed(1) : '—'} s · 24→5 ${T_CAL.t24_5 ? T_CAL.t24_5.toFixed(1) : '—'} s · 12→6 ${T_CAL.t12_6 != null ? T_CAL.t12_6.toFixed(1) : '—'} s · 6→3 ${T_CAL.t6_3 != null ? T_CAL.t6_3.toFixed(1) : '—'} s (${esc(calNote)}) · tick = calibrated time</div>`;
       },
       readout(){
         if(!coasts.length) return 'no coast yet';
@@ -749,7 +1014,7 @@ export function createPanelStack(host, opts){
     quality: {
       title: 'Data quality / sample cadence', h: 180,
       formula: 'Δt = t_i − t_{i−1}    ·    expected ≈ 0.7 s (the device refreshes ~1.4× per second at any speed)',
-      explain: 'WHAT: a health check of the measurement itself — how often a genuinely new reading arrived. LOOK AT: the dots should sit close to the dashed 0.7 s line; red stripes are radio dropouts and they explain any missing pieces in the charts above. MEANS: dots drifting above the line with no red stripe just mean the reading repeated itself (the wheel was nearly still) — only the red stripes are actual data loss.',
+      explain: 'WHAT: a health check of the measurement itself — how often a genuinely new reading arrived, plus the analysis-window cross-check. LOOK AT: the dots should sit close to the dashed 0.7 s line; red stripes are radio dropouts and they explain any missing pieces in the charts above. MEANS: only the red stripes are actual data loss. The bottom line reruns the torque estimator with shorter and longer smoothing windows — a feature that survives all three windows is real structure in the data; one that does not is a numerical artifact.',
       draw(ctx, W, H){
         const p = ensurePipe();
         const { xOf } = timeAxis(W);
@@ -774,6 +1039,17 @@ export function createPanelStack(host, opts){
           const dt = t - samples[i - 1].t;
           ctx.fillStyle = p.gap[i] ? RED : INK;
           ctx.beginPath(); ctx.arc(xOf(t), yOf(dt), 2, 0, Math.PI * 2); ctx.fill();
+        }
+        // analysis-stability line: the τ estimator rerun with shorter/longer
+        // windows vs the default — agreement within max(B/2, 3 nN·m). At the
+        // 0.7 s cadence the SAMPLE COUNT binds, so the honest label is by
+        // samples (3/5/8), not the seconds-caps.
+        if(p.stab){
+          const cls = p.stab.pct >= 85 ? 'stable across analysis windows'
+            : p.stab.pct >= 60 ? 'magnitude depends on smoothing'
+            : 'not robust across analysis windows';
+          ctx.fillStyle = GREY; ctx.font = '700 10px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+          ctx.fillText('analysis windows (3 / 5 / 8 samples): ' + cls + ' — ' + p.stab.pct + '% agreement', PAD_L + 4, H - PAD_B - 4);
         }
       },
       readout(){
@@ -871,7 +1147,7 @@ export function createPanelStack(host, opts){
     if(!s) return;
     const { ctx, w, h } = s;
     const { xOf } = timeAxis(w);
-    const timePanels = id !== 'phase' && id !== 'coasts';
+    const timePanels = id !== 'phase' && id !== 'coasts' && id !== 'byspeed';
     // selection
     if(view.selection && timePanels){
       const x0 = Math.max(PAD_L, xOf(view.selection.a)), x1 = Math.min(w - PAD_R, xOf(view.selection.b));
@@ -922,7 +1198,7 @@ export function createPanelStack(host, opts){
     const ov = B.overlay;
     if(!ov) return;
     let dragStart = null, panStart = null, longTimer = null, armed = false;
-    const isTime = id !== 'phase' && id !== 'coasts';
+    const isTime = id !== 'phase' && id !== 'coasts' && id !== 'byspeed';
     ov.style.touchAction = 'pan-y';
     const tAt = e => {
       const r = ov.getBoundingClientRect();
@@ -1021,12 +1297,29 @@ export function createPanelStack(host, opts){
       tauMean = taus.reduce((x, y) => x + y, 0) / taus.length;
       tauSd = Math.sqrt(taus.reduce((x, y) => x + (y - tauMean) ** 2, 0) / taus.length);
     }
+    // window cross-check for the selection: the alternate-window estimators'
+    // mean τ vs the default — a selection-level artifact detector
+    let tauStab = null;
+    if(tauMean != null && p.tauVar){
+      const means = p.tauVar.map(tv => {
+        const vs = idx.map(i => tv[i]).filter(v => v != null);
+        return vs.length >= 4 ? vs.reduce((x, y) => x + y, 0) / vs.length : null;
+      });
+      if(means.every(v => v != null)){
+        const maxDiff = Math.max(...means.map(v => Math.abs(v - tauMean)));
+        const bandMean = idx.reduce((a, i) => a + p.band[i], 0) / idx.length;
+        tauStab = { maxDiff, ok: maxDiff <= Math.max(0.5 * bandMean, 3) };
+      }
+    }
+    // impulse over the selection (certified trapezoid, same rule as the panel)
+    const dJ = p.imp[idx[idx.length - 1]] - p.imp[idx[0]];
     return {
       dur, n: idx.length, coverage: Math.min(100, covered / dur * 100),
       meanRpm: tSum > 0 ? wSum / tSum : null, maxR, maxT, revs,
       dE: eB - eA, tA: samples[idx[0]].t, tB: samples[idx[idx.length - 1]].t,
       power: (eB - eA) / Math.max(0.1, dur) * 1000,   // nW
       tauMean, tauSd, tauN: taus.length, tauTotal: idx.length,
+      tauStab, dJ,
     };
   }
   function showSelPopover(){
@@ -1043,7 +1336,9 @@ export function createPanelStack(host, opts){
       <div>ΔE = <b>${(st.dE >= 0 ? '+' : '') + fmtSig2(st.dE)} µJ</b> (${fmtClock(st.tA)}→${fmtClock(st.tB)}) · P̄ = <b>${fmtSig2(st.power)} nW</b></div>
       <div>${st.tauMean != null
         ? 'mean τ = <b>' + (st.tauMean >= 0 ? '+' : '') + fmtSig2(st.tauMean) + ' ± ' + fmtSig2(st.tauSd) + ' nN·m</b> (n=' + st.tauN + ')'
-        : '<span class="rsp-dim">insufficient torque data (' + st.tauN + ' of ' + st.tauTotal + ' certified)</span>'}</div>`;
+          + ' · ΔJ = <b>' + (st.dJ >= 0 ? '+' : '') + fmtSig2(st.dJ) + ' nN·m·s</b>'
+        : '<span class="rsp-dim">insufficient torque data (' + st.tauN + ' of ' + st.tauTotal + ' certified)</span>'}</div>
+      ${st.tauStab ? `<div class="${st.tauStab.ok ? '' : 'rsp-dim'}">window check: <b>${st.tauStab.ok ? 'stable' : 'depends on smoothing'}</b> (Δ ${fmtSig2(st.tauStab.maxDiff)} nN·m across 3/5/8-sample windows)</div>` : ''}`;
     selPopover.innerHTML = body + `<div class="rsp-pop-actions">
       <button type="button" data-copy>Copy</button><button type="button" data-close>✕</button></div>`;
     stackEl.prepend(selPopover);
@@ -1187,6 +1482,57 @@ export function createPanelStack(host, opts){
     exportPng,
     destroy(){ hideSelPopover(); stackEl.innerHTML = ''; },
   };
+}
+
+// ---- save-time metrics ------------------------------------------------------
+// Runs the SAME pipeline the panels use and returns the small derived numbers
+// the run row / meta CSV carries (single-estimator honesty: an exported number
+// must never disagree with what the panels showed).
+export function computeRunMetrics(samples, coef, floorTau, coasts){
+  const c = (coef && coef.K) ? coef : FACTORY_COEF;
+  const p = buildPipeline(samples, c, floorTau == null ? 5 : floorTau);
+  const last = samples.length - 1;
+  const r1 = v => Math.round(v * 10) / 10;
+  const m = {
+    impulse_nnms: last >= 0 ? r1(p.imp[last]) : 0,
+    impulse_sigma_nnms: last >= 0 ? r1(p.impSig[last]) : 0,
+    outside_band_s: r1(p.outside.s),
+    certified_s: r1(p.outside.certified_s),
+    outside_band_pct: p.outside.certified_s > 0 ? Math.round(p.outside.s / p.outside.certified_s * 100) : null,
+    outside_longest_s: r1(p.outside.longest_s),
+    outside_count: p.outside.count,
+    outside_impulse_nnms: r1(p.outside.jout),
+    stability_pct: p.stab ? p.stab.pct : null,
+  };
+  // per-coast gate times vs the calibration model (coast-time gain, Δs)
+  if(coasts && coasts.length){
+    const mc = integrateModel(c);
+    const g = rpm => crossTime(mc.pts, rpm);
+    const cal = {
+      t24_10: g(10), t24_5: g(5),
+      t12_6: (g(6) != null && g(12) != null) ? g(6) - g(12) : null,
+      t6_3: (g(3) != null && g(6) != null) ? g(3) - g(6) : null,
+    };
+    const pts = samples.map(s => ({ t: s.t * 1000, rpm: s.rpm }));
+    m.coast_gates = coasts.map(s => {
+      const curve = buildCurve(pts, s.t_start_ms, s.t_end_ms);
+      if(!curve) return { n: s.n };
+      // clip to the winning decay — same rule as the comparator panel
+      const clean = curve.pts.filter(pt => pt.x >= 0 && (curve.dur == null || pt.x <= curve.dur + 0.01));
+      const at = rpm => crossTime(clean, rpm);
+      const d = (meas, calv) => (meas != null && calv != null) ? r1(meas - calv) : null;
+      const t2410 = at(10), t245 = s.T24_5 != null ? s.T24_5 : curve.T245;
+      const t12 = at(12), t6 = at(6), t3 = at(3);
+      return {
+        n: s.n,
+        t24_10: t2410 != null ? r1(t2410) : null, d24_10: d(t2410, cal.t24_10),
+        t24_5: t245 != null ? r1(t245) : null, d24_5: d(t245, cal.t24_5),
+        d12_6: d((t6 != null && t12 != null) ? t6 - t12 : null, cal.t12_6),
+        d6_3: d((t3 != null && t6 != null) ? t3 - t6 : null, cal.t6_3),
+      };
+    });
+  }
+  return m;
 }
 
 // ---- styles -----------------------------------------------------------------

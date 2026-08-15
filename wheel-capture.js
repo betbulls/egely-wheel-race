@@ -19,7 +19,14 @@ export const SPIN_MIN_MS     = 6000;   // shorter segments = handling bumps, not
 // does in it (stays dead, or keeps being nudged by ambient air) is recorded as
 // the tail metrics: the SENSITIVITY axis the coast-down alone cannot see.
 export const TAIL_LOW_RPM    = 5;      // rawLed at/below this = tail phase
-export const TAIL_OBS_MS     = 30000;  // watch this long, then the spin closes
+export const TAIL_OBS_MS     = 30000;  // observe this long AFTER confirmed standstill, then the spin closes
+// A healthy wheel's natural sub-5-rpm coast can itself take ~15 s — the
+// observation window must not start until the wheel has actually STOPPED
+// (first counter-0 report), or the decay's end masquerades as ambient
+// activity (field bug: a "noise floor" of 64.8 nN·m that was really the
+// coast's tail). Wheels that never fully stop (genuinely ambient-driven)
+// close after TAIL_OBS_MS + STILL_GRACE_MS below the threshold instead.
+export const STILL_GRACE_MS  = 20000;
 
 // The recorded tuple layout — single owner for ingest, payload format string,
 // and any future decoder. Bump the format version on ANY change here.
@@ -127,7 +134,10 @@ export function buildCurve(rpmPts, fromMs, toMs){
   // score only from the clean decay window that won the anchor
   const clean = anchored.filter(p => p.x >= 0 && p.x <= best.dur);
   const t5 = crossTime(clean, 5);
-  return { pts: anchored, T245: t5 != null ? t5 : null };
+  // dur = end of the winning uninterrupted decay — gate-time consumers must
+  // clip to it, or a re-flick's SECOND decay inside the same spin window can
+  // supply a gate crossing the first decay never reached
+  return { pts: anchored, T245: t5 != null ? t5 : null, dur: best.dur };
 }
 
 // Single owner of the anchor-click download scaffold — the "local download
@@ -205,7 +215,7 @@ export function createCapture(opts = {}){
     fw: '', hw: '', lastBattery: null,
     // spin segmentation (rawLed-based — see header comment)
     lastCounter: null, lastZeroMs: null, startHits: 0, firstHitMs: 0, spinning: false,
-    spinStartMs: 0, lowSinceMs: null, maxLed: 0, maxRpm: 0, pendMaxRpm: 0,
+    spinStartMs: 0, lowSinceMs: null, stillSinceMs: null, maxLed: 0, maxRpm: 0, pendMaxRpm: 0,
     prevRaw: null, railRun: 0,
     simUsed: false, autoStopFired: false,
   });
@@ -247,6 +257,8 @@ export function createCapture(opts = {}){
       if(opts.onRpmSample) opts.onRpmSample(sample, rec);
       rec.lastZeroMs = null;
     } else if(frame.counter === 0 && !glitch){
+      // confirmed standstill — the tail observation window may start here
+      if(rec.spinning && frame.rawLed <= TAIL_LOW_RPM && rec.stillSinceMs == null) rec.stillSinceMs = t;
       // Standstill IS a measurement: the device keeps reporting counter 0
       // while the wheel is at rest, but the value never CHANGES, so the
       // fresh-only series used to show a stopped wheel as a fake radio gap
@@ -268,7 +280,7 @@ export function createCapture(opts = {}){
           rec.startHits++;
           if(rec.startHits >= SPIN_START_HITS){
             rec.spinning = true; rec.spinStartMs = rec.firstHitMs;
-            rec.lowSinceMs = null; rec.maxLed = frame.rawLed; rec.maxRpm = rec.pendMaxRpm;
+            rec.lowSinceMs = null; rec.stillSinceMs = null; rec.maxLed = frame.rawLed; rec.maxRpm = rec.pendMaxRpm;
             rec.startHits = 0;
           }
         } else rec.startHits = 0;
@@ -276,15 +288,21 @@ export function createCapture(opts = {}){
     } else if(!glitch){
       if(frame.rawLed > rec.maxLed) rec.maxLed = frame.rawLed;
       if(rpm > rec.maxRpm) rec.maxRpm = rpm;
-      // tail watch: fixed window once the wheel is down at/below TAIL_LOW_RPM;
-      // a gust lifting it above resets the watch (the wheel is active again)
+      // tail watch: the OBSERVATION window starts at confirmed standstill
+      // (first counter-0 report), not at "below 5 rpm" — see STILL_GRACE_MS
+      // header comment. A gust lifting the wheel above the threshold resets
+      // the whole watch (the wheel is active again).
       if(frame.rawLed <= TAIL_LOW_RPM){
         if(rec.lowSinceMs == null) rec.lowSinceMs = t;
-        else if(t - rec.lowSinceMs >= tailMs){
-          endSpin();
+        const dueStill = rec.stillSinceMs != null && t - rec.stillSinceMs >= tailMs;
+        // fallback ONLY while standstill was never confirmed — without the
+        // guard it would preempt a late stop and truncate the observation
+        const dueNeverStill = rec.stillSinceMs == null && t - rec.lowSinceMs >= tailMs + STILL_GRACE_MS;
+        if(dueStill || dueNeverStill){
+          closeSpin(rec, t, false);
           if(!rec) return;   // a consumer may stop() the capture from onSpinClosed
         }
-      } else rec.lowSinceMs = null;
+      } else { rec.lowSinceMs = null; rec.stillSinceMs = null; }
     }
     if(!glitch) rec.prevRaw = frame.rawLed;
 
@@ -311,14 +329,21 @@ export function createCapture(opts = {}){
         max_rpm: Math.round(r.maxRpm),   // TRUE peak from the counter (can far exceed 24)
       };
       if(interrupted) spin.interrupted = true;   // tail watch not completed
-      // Tail metrics over the LAST 20 s of the watch window: by then the
-      // natural 5->0 coast is long over, so only the untouched wheel's response
-      // to ambient air remains. avg rpm from EVERY line (zeros included: a
-      // dead-calm wheel scores ~0 -> "stopped"), pickups = fresh-counter upward
-      // jumps at low speed (ambient-air nudges).
+      // Tail metrics from CONFIRMED STANDSTILL onwards when we have one —
+      // whatever the wheel does after a full stop is the honest "observed
+      // standstill activity". Fallback (the wheel never stopped): the last
+      // tailMs of the watch, flagged from_still:false. avg rpm from EVERY
+      // line (zeros included: a dead-calm wheel scores ~0 -> "stopped"),
+      // pickups = fresh-counter upward jumps at low speed (motion restarts).
       let tail = null;
-      if(r.lowSinceMs != null && endMs > r.lowSinceMs){
-        const winFrom = Math.max(r.lowSinceMs, endMs - 20000);
+      // Only a COMPLETED observation window yields tail metrics: a watch cut
+      // short by Stop/leave would smuggle decay remnants into the noise floor
+      // (the exact contamination the stillness redesign removed).
+      const watchDone = r.lowSinceMs != null && (r.stillSinceMs != null
+        ? endMs - r.stillSinceMs >= tailMs
+        : endMs - r.lowSinceMs >= tailMs + STILL_GRACE_MS);
+      if(watchDone && endMs > r.lowSinceMs){
+        const winFrom = r.stillSinceMs != null ? r.stillSinceMs : Math.max(r.lowSinceMs, endMs - tailMs);
         const win = r.frames.filter(f => f[0] >= winFrom && f[0] <= endMs);
         if(win.length >= 4){
           const rpms = win.map(f => f[1] >= RPM_MIN_COUNTER ? 6000 / f[1] : 0);
@@ -331,7 +356,7 @@ export function createCapture(opts = {}){
             if(prev != null && rr > prev * 1.15 && rr >= 0.8 && rr < 8) pickups++;
             prev = rr;
           }
-          tail = { avg_rpm: Math.round(avg * 100) / 100, pickups, stopped: avg < 0.15 };
+          tail = { avg_rpm: Math.round(avg * 100) / 100, pickups, stopped: avg < 0.15, from_still: r.stillSinceMs != null };
           spin.tail = tail;
         }
       }
@@ -343,10 +368,9 @@ export function createCapture(opts = {}){
     // capture from inside onSpinClosed (the research auto-save does), and a
     // record still flagged "spinning" would make stop() close the SAME
     // segment a second time — one physical spin counted twice.
-    r.spinning = false; r.lowSinceMs = null; r.maxLed = 0; r.maxRpm = 0;
+    r.spinning = false; r.lowSinceMs = null; r.stillSinceMs = null; r.maxLed = 0; r.maxRpm = 0;
     if(spin && opts.onSpinClosed) opts.onSpinClosed(spin, curve, r);
   }
-  function endSpin(){ closeSpin(rec, rec.lowSinceMs + tailMs, false); }
 
   // ---- simulator (only meaningful while no wheel is connected) --------------
   // Mimics the real stream: ~14 lines/s, a NEW counter only every ~700 ms,
@@ -406,7 +430,8 @@ export function createCapture(opts = {}){
     releaseCapture();
     // Close an in-flight segment at the stop moment. Interrupted only when the
     // wheel was still coasting above the tail threshold (decay incomplete);
-    // a Stop pressed mid-tail-watch keeps the spin with partial tail metrics.
+    // a Stop mid-tail-watch keeps the spin but DROPS the partial tail metrics
+    // (a truncated observation would contaminate the noise floor).
     if(r.spinning){
       const lastT = r.frames.length ? r.frames[r.frames.length - 1][0] : r.spinStartMs;
       closeSpin(r, lastT, r.lowSinceMs == null);

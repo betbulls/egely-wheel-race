@@ -363,6 +363,25 @@ export function drawDevChart(canvas, curves, liveCurve){
   for(const c of curves) devLine(c, c.color, 1.8);
   if(liveCurve) devLine(liveCurve, '#5230da', 3);
 
+  // the ±30% magnifier window clips extreme wheels — say so instead of
+  // silently flattening the curve at the edge
+  let clipLo = false, clipHi = false;
+  const scanClip = c => {
+    for(const p of c.pts){
+      if(p.x < 0 || p.x > xMax || p.y < 2) continue;
+      const base = idealAt(p.x);
+      if(!base) continue;
+      const d = (p.y / base - 1) * 100;
+      if(d < -DEV) clipLo = true;
+      if(d > DEV) clipHi = true;
+    }
+  };
+  for(const c of curves) scanClip(c);
+  if(liveCurve) scanClip(liveCurve);
+  ctx.fillStyle = '#67737c'; ctx.font = '700 9.5px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  if(clipHi) ctx.fillText('▲ some values exceed +' + DEV + '% (clipped at the edge)', padL + 4, padT + 2);
+  if(clipLo) ctx.fillText('▼ some values exceed −' + DEV + '% (clipped at the edge)', padL + 4, padT + plotH - 12);
+
   ctx.fillStyle = '#67737c'; ctx.font = '11px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
   ctx.fillText('deviation from ideal [%] — the magnifier: small differences show up here first', padL + 4, 2);
 }
@@ -378,9 +397,34 @@ export function drawDerivChart(canvas, curves, liveCurve, opts){
   const padL = 44, padR = 12, padT = 18, padB = 26;
   const plotW = w - padL - padR, plotH = h - padT - padB;
   const RPM_MAX = 30;
-  const D_MAX = 4;
   const FRICTION_SPLIT = 12;   // below this rpm, excess braking = friction; above = air drag
   const ideal = r => IDEAL_A + IDEAL_B * r + IDEAL_K * Math.pow(r, 1.5);
+  // Dynamic ceiling: a heavily braked wheel's model tops the old fixed 4 rpm/s
+  // and clipped flat along the top edge (misleading — field feedback). The
+  // axis grows ONLY for content that is actually drawn: the ceiling scan and
+  // the dot renderer share ONE cap (15 rpm/s — the same bound the fit uses:
+  // a terrible wheel legitimately reaches 8-12 just below 24 rpm, a hand-grab
+  // at ~50 stays out), so an invisible artifact can never crush the chart.
+  const DOT_D_CAP = 15;
+  const quickMaxD = c => {
+    let mx = 0;
+    const p = c.pts;
+    for(let i = 1; i < p.length - 1; i++){
+      if(p[i].y > RPM_MAX || p[i].y < 2) continue;
+      const dt = p[i + 1].x - p[i - 1].x;
+      if(dt <= 0 || dt > 4) continue;
+      const d = (p[i - 1].y - p[i + 1].y) / dt;
+      if(d > mx && d < DOT_D_CAP) mx = d;
+    }
+    return mx;
+  };
+  let dTop = 0;
+  if(opts.model && opts.model.K) dTop = Math.max(dTop, opts.model.A + (opts.model.B || 0) * RPM_MAX + opts.model.K * Math.pow(RPM_MAX, 1.5));
+  for(const c of curves) dTop = Math.max(dTop, quickMaxD(c));
+  if(liveCurve) dTop = Math.max(dTop, quickMaxD(liveCurve));
+  // headroom only ABOVE the classic 0-4 axis — a normal bench wheel keeps the
+  // exact pre-change chart
+  const D_MAX = dTop > 4 ? Math.ceil(dTop * 1.1) : 4;
   // tolerance band around the ideal braking line (relative + small absolute margin)
   const bandLo = r => Math.max(0, ideal(r) * 0.7 - 0.12);
   const bandHi = r => ideal(r) * 1.35 + 0.15;
@@ -428,9 +472,10 @@ export function drawDerivChart(canvas, curves, liveCurve, opts){
   ctx.fillText(opts.calm ? 'close to the factory reference' : 'GOOD — matches the ideal wheel', 0, 0);
   ctx.restore();
 
-  // grid + axes
+  // grid + axes (label step scales with the dynamic ceiling)
   ctx.font = '10px Inter, sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'right';
-  for(let d = 0; d <= D_MAX; d++){
+  const dStep = D_MAX > 12 ? 4 : D_MAX > 6 ? 2 : 1;
+  for(let d = 0; d <= D_MAX; d += dStep){
     const y = yOf(d);
     ctx.strokeStyle = 'rgba(1,22,36,0.07)';
     ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke();
@@ -469,7 +514,8 @@ export function drawDerivChart(canvas, curves, liveCurve, opts){
       const dt = p[i + 1].x - p[i - 1].x;
       if(dt <= 0 || dt > 4) continue;
       const d = (p[i - 1].y - p[i + 1].y) / dt;
-      if(d > -0.5 && d < 6) out.push({ rpm: p[i].y, d: Math.max(0, d) });
+      // same cap as the axis scan — every point that sizes the axis is drawn
+      if(d > -0.5 && d < DOT_D_CAP) out.push({ rpm: p[i].y, d: Math.max(0, d) });
     }
     return out;
   };
@@ -656,7 +702,9 @@ export function mountWheelBench(host){
     badge.textContent = !rec.spinning
       ? `${rec.spins.length} spin${rec.spins.length === 1 ? '' : 's'} recorded — waiting for a spin`
       : rec.lowSinceMs != null
-        ? `Spin ${rec.spins.length + 1} — TAIL WATCH, hands off! ${Math.max(0, Math.ceil((TAIL_OBS_MS - (t - rec.lowSinceMs)) / 1000))}s left`
+        ? (rec.stillSinceMs == null
+          ? `Spin ${rec.spins.length + 1} — waiting for full standstill, hands off!`
+          : `Spin ${rec.spins.length + 1} — TAIL WATCH, hands off! ${Math.max(0, Math.ceil((TAIL_OBS_MS - (t - rec.stillSinceMs)) / 1000))}s left`)
         : `Spin ${rec.spins.length + 1} — max ${Math.round(rec.maxRpm)} rpm — ${((t - rec.spinStartMs) / 1000).toFixed(0)}s`;
     paintCharts();
   }
@@ -742,8 +790,8 @@ export function mountWheelBench(host){
       <ol class="awb-steps">
         <li>Connect a wheel (header <b>Connect</b>), type its <b>serial number</b>, press <b>Start</b>.</li>
         <li><b>Spin the wheel hard</b> (aim above 100 rpm), let go — and then <b>hands off to the very end</b>: after the
-            coast-down the badge switches to “TAIL WATCH” for 30&nbsp;s, recording how the untouched wheel responds to the
-            room's air. Don't stop the wheel by hand.</li>
+            coast-down the badge first waits for a <b>full standstill</b>, then runs a 30&nbsp;s “TAIL WATCH”, recording how the
+            untouched wheel responds to the room's air. Don't stop the wheel by hand.</li>
         <li>Each finished spin lands on the chart with a score + tail reading. <b>Stop &amp; save</b> stores the wheel; the next serial can follow immediately.</li>
       </ol>
     </div>
@@ -815,9 +863,9 @@ export function mountWheelBench(host){
         <span style="color:#8a6a08;font-weight:700">amber</span> = extra air drag (wheel shape),
         <span style="color:#2c4bbd;font-weight:700">blue</span> = a draft is pushing the wheel (environment, not the wheel).
         One weak spin proves nothing — judge a wheel on its <b>best</b> spin of 3 (bad seating can only subtract, never add).
-        The <b>tail reading</b> (30&nbsp;s untouched after the coast-down) is the SENSITIVITY axis: in dead-calm air the ideal
-        wheel is <b>fully stopped ~29&nbsp;s</b> after the 24-rpm crossing — anything still
-        moving past that mark is the room's air acting on the wheel. Verdicts:
+        The <b>tail reading</b> (30&nbsp;s untouched <b>after the wheel has fully stopped</b>) is the SENSITIVITY axis:
+        any motion during that window is the room's air acting on the wheel (a wheel that never fully stops within the
+        grace period is reported as such). Verdicts:
         <span style="color:#99a2a7;font-weight:700">STILL</span> = came to rest (calm air, or low pickup) ·
         <span style="color:#67737c;font-weight:700">QUIET</span> = barely moving (Ø&lt;0.8 rpm) ·
         <span style="color:#0f8a52;font-weight:700">RESPONSIVE</span> = clearly riding the air (Ø0.8–2) ·

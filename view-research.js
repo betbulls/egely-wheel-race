@@ -17,7 +17,7 @@ import {
   FACTORY_COEF, RPM_MIN_COUNTER, scoreOf, integrateModel, setupCanvas,
 } from './wheel-capture.js';
 import * as store from './research-store.js';
-import { createPanelStack } from './research-panels.js';
+import { createPanelStack, computeRunMetrics } from './research-panels.js';
 // The calibration tab shows the exact same chart TRIO as the admin Wheel test
 // (owner request) — the renderers are shared from there.
 import { drawTestChart, drawDevChart, drawDerivChart, PALETTE } from './admin-wheel-bench.js';
@@ -249,8 +249,8 @@ const scorePillHtml = t245 => {
 };
 function tailLabel(tail){
   if(!tail) return '';
-  if(tail.stopped) return 'tail: STILL';
-  return `tail: Ø${tail.avg_rpm.toFixed(1)} rpm · ${tail.pickups} air nudge${tail.pickups === 1 ? '' : 's'}`;
+  if(tail.stopped) return 'standstill: STILL';
+  return `standstill: Ø${tail.avg_rpm.toFixed(1)} rpm · ${tail.pickups} motion restart${tail.pickups === 1 ? '' : 's'}${tail.from_still === false ? ' · never fully stopped' : ''}`;
 }
 const fmtPctSigned = v => v == null ? '—' : (v > 0 ? '+' : '') + v + '%';
 
@@ -284,6 +284,8 @@ function fitSummaryHtml(fit, opts){
   if(!fit) return '';
   const o = opts || {};
   const spread = fit.quality_pct != null ? (100 - fit.quality_pct) : null;
+  const spreadS = fit.quality_spread_s;
+  const spreadTxt = spreadS != null ? (spreadS < 0.1 ? '&lt;0.1 s' : spreadS + ' s') : (spread != null ? spread + '%' : null);
   const ptsTotal = fit.per_spin ? fit.per_spin.reduce((a, p) => a + (p.pts || 0), 0) : null;
   // wording tiers only — never a scientific verdict
   const tier = spread == null ? null : spread <= 10 ? 'good' : spread <= 20 ? 'moderate' : 'limited';
@@ -291,23 +293,29 @@ function fitSummaryHtml(fit, opts){
   const head = o.progress
     ? `Calibration in progress — ${fit.spin_count} of ${store.CAL_SPINS_TARGET} spin${fit.spin_count === 1 ? '' : 's'} accepted`
     : `Calibration result${tier ? ' — ' + tierWord[tier] : ''}`;
+  // The T24→5 spread only proves the spins reached 5 rpm at similar times —
+  // the FINAL reference band also carries the speed-by-speed scatter and the
+  // standstill activity, so the sentence must not oversell a "tight band".
+  // old rows (pre-v3.2) carry quality_pct but no quality_spread_s — fall back
+  // to the relative form instead of printing "undefined s"
+  const spreadWord = spreadS != null ? ((spreadS < 0.1 ? 'less than 0.1' : spreadS) + ' s') : (spread != null ? spread + '%' : '');
   let sentence = '';
-  if(tier === 'good') sentence = `The ${fit.spin_count} accepted spins matched closely (T24→5 spread ${spread}%), giving a tight reference band.`;
-  else if(tier === 'moderate') sentence = `The ${fit.spin_count} accepted spins matched reasonably (T24→5 spread ${spread}%).`;
-  else if(tier === 'limited') sentence = `The ${fit.spin_count} accepted spins were not closely repeatable (T24→5 spread ${spread}%). The reference band is wider as a result, so smaller experimental deviations may be indistinguishable from normal calibration variation.`;
+  if(tier === 'good') sentence = `The ${fit.spin_count} accepted spins reached 5 rpm at nearly the same time (T24→5 within ${spreadWord}). Their speed-by-speed variation and the observed standstill activity set the final reference band shown on the charts.`;
+  else if(tier === 'moderate') sentence = `The ${fit.spin_count} accepted spins matched reasonably (T24→5 spread ${spreadWord}). The speed-by-speed variation and the standstill activity set the final reference band.`;
+  else if(tier === 'limited') sentence = `The ${fit.spin_count} accepted spins were not closely repeatable (T24→5 spread ${spreadWord}). The reference band is wider as a result, so smaller experimental deviations may be indistinguishable from normal calibration variation.`;
   const health = fit.grade === 'C'
-    ? 'This wheel scored below the factory band — reseat it on the needle tip and recalibrate before trusting experiment numbers.'
+    ? 'This wheel scored below the factory wheel-condition benchmark — reseat it on the needle tip and recalibrate before trusting experiment numbers.'
     : fit.grade === 'D'
-      ? 'This wheel scored well below the reference band — experiments are not recommended until it improves: reseat it on the needle tip; if the score stays low, clean the bearing.'
+      ? 'This wheel scored well below the factory wheel-condition benchmark — experiments are not recommended until it improves: reseat it on the needle tip; if the score stays low, clean the bearing.'
       : '';
   const cards = [];
   cards.push(`<div class="rs-fitcard"><div class="l">Wheel condition</div>
     <div class="v">${scorePillHtml(fit.T24_5)}</div>
     ${scoreScaleHtml(fit.score)}
     <div class="x">vs the factory reference wheel — higher = freer running${fit.score_basis ? ' · based on the ' + esc(fit.score_basis) : ''}</div></div>`);
-  if(spread != null) cards.push(`<div class="rs-fitcard"><div class="l">Repeatability</div>
-    <div class="v">${spread}% spread</div>
-    <div class="x">how closely the ${fit.spin_count} spins' T24→5 matched — lower is better</div></div>`);
+  if(spreadTxt != null) cards.push(`<div class="rs-fitcard"><div class="l">Repeatability</div>
+    <div class="v">${spreadTxt}</div>
+    <div class="x">T24→5 spread across the ${fit.spin_count} spins${spread != null ? ' (' + spread + '% relative)' : ''} — lower is better</div></div>`);
   if(fit.loo) cards.push(`<div class="rs-fitcard"><div class="l">Cross-check</div>
     <div class="v">±${fit.loo.max_abs_pct}%</div>
     <div class="x">a model built from the other spins predicts each spin this well — lower is better</div></div>`);
@@ -326,7 +334,7 @@ function fitSummaryHtml(fit, opts){
         ${fit.sigma_rel != null ? `<span>in-sample fit residual: <b>σ ±${Math.round(fit.sigma_rel * 100)}%</b></span>` : ''}
         ${ptsTotal ? `<span>fit points: <b>${ptsTotal}</b></span>` : ''}
         ${fit.band_pts ? `<span>observed range (scatter vs the pooled model): up to <b>${Math.max(...fit.band_pts.map(b => b[1]))} nN·m</b></span>` : ''}
-        ${fit.tail_avg != null ? `<span>average motion in the untouched tail: <b>Ø${fit.tail_avg} rpm</b></span>` : ''}
+        ${fit.tail_avg != null ? `<span>observed standstill activity: <b>Ø${fit.tail_avg} rpm</b></span>` : ''}
         ${fit.drift ? `<span>vs previous calibration (${fit.drift.days_since}d ago): 24→5 ${fmtPctSigned(fit.drift.t24_5_pct)} · 24→10 ${fmtPctSigned(fit.drift.t24_10_pct)} · 12→6 ${fmtPctSigned(fit.drift.t12_6_pct)}</span>` : ''}
         ${fit.algo ? `<span style="color:#99a2a7">${esc(fit.algo)}</span>` : ''}
       </div>
@@ -341,6 +349,8 @@ function fitSummaryHtml(fit, opts){
     ${health ? `<div class="rs-warn" style="margin:0 0 10px">${esc(health)}</div>` : ''}
     ${flagged}
     <div class="rs-fitgrid">${cards.join('')}</div>
+    <p class="rs-note" style="margin:2px 0 6px">Wheel condition and repeatability describe different things — a wheel can
+    behave very consistently across all three spins while still braking far more than the factory reference.</p>
     ${tech}`;
 }
 
@@ -362,7 +372,7 @@ const chartHead = k => `<div class="rs-chart-h">${esc(CAL_CHARTS[k].t)}</div><p 
 // spins' braking disagreed with the pooled model, in nN·m — the spin-to-spin
 // spread from three real coasts. Deliberately never called a confidence
 // interval (three runs cannot honestly claim statistical certainty).
-function drawBandStrip(canvas, bandPts, floorTau){
+function drawBandStrip(canvas, bandPts, floorTau, allBins){
   const s = setupCanvas(canvas);
   if(!s) return;
   const { ctx, w, h } = s;
@@ -382,12 +392,25 @@ function drawBandStrip(canvas, bandPts, floorTau){
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   // ticks at the BAND-BIN EDGES — the speed ranges the bars actually cover
   for(const r of [0, 2, 5, 10, 17, 24]){ ctx.fillStyle = '#99a2a7'; ctx.fillText(String(r), xOf(r), padT + plotH + 4); }
+  // empty bins must not read as "zero deviation" — mark them explicitly
+  if(allBins){
+    for(const [lo, hi] of allBins){
+      const wc = (lo + hi) / 2;
+      if(bandPts.some(b => Math.abs(b[0] - wc) < 0.01)) continue;
+      const x0 = xOf(lo) + 2, x1 = xOf(hi) - 2;
+      ctx.fillStyle = 'rgba(1,22,36,0.03)';
+      ctx.fillRect(x0, padT, x1 - x0, plotH);
+      ctx.fillStyle = '#99a2a7'; ctx.font = '9px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('no data', (x0 + x1) / 2, padT + plotH / 2);
+      ctx.font = '10px Inter, sans-serif';
+    }
+  }
   if(floorTau){
     ctx.strokeStyle = 'rgba(103,115,124,0.6)'; ctx.setLineDash([4, 4]);
     ctx.beginPath(); ctx.moveTo(padL, yOf(floorTau)); ctx.lineTo(padL + plotW, yOf(floorTau)); ctx.stroke();
     ctx.setLineDash([]);
     ctx.fillStyle = '#67737c'; ctx.textAlign = 'left';
-    ctx.fillText('room noise floor (untouched tail) ' + floorTau + ' nN·m', padL + 4, Math.max(padT + 6, yOf(floorTau) - 10));
+    ctx.fillText('detection floor (from the observed standstill activity) ' + floorTau + ' nN·m', padL + 4, Math.max(padT + 6, yOf(floorTau) - 10));
   }
   for(const [wc, tau] of bandPts){
     const bw = plotW / RPM_MAX * 2.6;
@@ -713,19 +736,22 @@ function mountCalibration(host, a){
     <div class="rs-card">
       <h2>Calibrate a wheel in this room</h2>
       <p class="rs-note"><b>How calibration works:</b> it measures how <b>your</b> wheel naturally slows down
-      <b>in this room</b> with nobody influencing it. Three free spins are combined into a baseline model, and the
+      <b>in this room</b> with no intentional interaction. Three free spins are combined into a baseline model, and the
       differences between them become the reference band used during experiments — the narrower the band, the
       smaller the deviations that can be told apart from normal calibration variability.
       <b>Re-calibrate when you move to a different room.</b></p>
       <p class="rs-note" style="font-weight:600;color:#401d91">3 free spins → combined baseline → reference band → experiment comparison</p>
       <ol class="rs-steps">
         <li>Pick the wheel, fill in the environment once, press <b>Start calibration</b>. From then on the settings lock and the process guides itself.</li>
-        <li><b>THREE strong spins</b> (above 140 rpm), one after another: spin, let go, <b>hands off</b> while the wheel
-        coasts down and the short 15&nbsp;s countdown runs — then spin again. Each spin is immediately <b>Accepted</b>
-        or asked to be repeated. <b>Never touch or reseat the wheel between the spins.</b> About 3–4 minutes in total.</li>
+        <li><b>THREE strong spins</b>, one after another: spin, let go, <b>hands off</b> while the wheel coasts down,
+        stops, and the short observation window runs — then spin again. Each spin is immediately <b>Accepted</b>
+        or asked to be repeated. The ~140 rpm start is recommended so the air stirred by your hand settles before
+        the wheel reaches the measured 24→2 rpm stretch. <b>Never touch or reseat the wheel between the spins.</b>
+        About 3–4 minutes in total.</li>
         <li>After the third accepted spin the calibration <b>saves itself</b>. If one spin disagrees with the other two,
         you choose: keep all three (the observed range gets wider) or repeat that spin.</li>
-        <li>If the score comes out low, lift the wheel off, reseat it, and run a new calibration — seating is the #1 cause of a weak spin.</li>
+        <li>If the score comes out low, lift the wheel off, reseat it, and run a new calibration — incorrect seating
+        is a common cause of a low score.</li>
       </ol>
     </div>
     <div class="rs-card">
@@ -845,13 +871,22 @@ function mountCalibration(host, a){
       bar.style.width = Math.round(acc * seg) + '%';
       badge.textContent = verdictMsg || `Give the wheel ONE strong spin (above 140 rpm), then let go and don't touch it again. Spin ${k} of ${CAL_SPINS}.`;
     } else if(rec.lowSinceMs != null){
-      const left = Math.max(0, Math.ceil((CAL_TAIL_MS - (t - rec.lowSinceMs)) / 1000));
-      phase.textContent = `SPIN ${k}/${CAL_SPINS} · COUNTDOWN`;
-      count.textContent = left + ' s';
-      bar.style.width = Math.round((acc + 1 - left / (CAL_TAIL_MS / 1000) * 0.2) * seg) + '%';
-      badge.textContent = k < CAL_SPINS
-        ? `Almost there — when the countdown ends, spin ${k} is evaluated. Keep hands off.`
-        : 'The final countdown — when it ends, the calibration SAVES ITSELF. Keep hands off.';
+      if(rec.stillSinceMs == null){
+        // the natural sub-5-rpm coast is still running — the observation
+        // window must not start until the wheel actually stops
+        phase.textContent = `SPIN ${k}/${CAL_SPINS} · WAITING FOR STILLNESS`;
+        count.textContent = '';
+        bar.style.width = Math.round((acc + 0.85) * seg) + '%';
+        badge.textContent = 'Nearly stopped — the moment a full standstill is confirmed, a short observation window starts. Keep hands off.';
+      } else {
+        const left = Math.max(0, Math.ceil((CAL_TAIL_MS - (t - rec.stillSinceMs)) / 1000));
+        phase.textContent = `SPIN ${k}/${CAL_SPINS} · COUNTDOWN`;
+        count.textContent = left + ' s';
+        bar.style.width = Math.round((acc + 1 - left / (CAL_TAIL_MS / 1000) * 0.15) * seg) + '%';
+        badge.textContent = k < CAL_SPINS
+          ? `Standstill confirmed — when the countdown ends, spin ${k} is evaluated. Keep hands off.`
+          : 'Standstill confirmed — when the countdown ends, the calibration SAVES ITSELF. Keep hands off.';
+      }
     } else {
       phase.textContent = `SPIN ${k}/${CAL_SPINS} · COASTING`;
       count.textContent = '';
@@ -1281,12 +1316,12 @@ function mountExperiments(host, a){
     // a wheel below the reference band should not be experimenting — advisory
     // only (trust model: the researcher decides), but it must be SAID
     const scoreWarn = cf.grade === 'D'
-      ? `<div class="rs-warn">This calibration's wheel score is <b>${cf.score} (D)</b> — well below the reference band.
-         Experiments with this wheel are <b>not recommended</b>: reseat it on the needle tip (if the score stays low,
-         clean the bearing), then recalibrate.</div>`
+      ? `<div class="rs-warn">This calibration's wheel score is <b>${cf.score} (D)</b> — well below the factory
+         wheel-condition benchmark. Experiments with this wheel are <b>not recommended</b>: reseat it on the needle
+         tip (if the score stays low, clean the bearing), then recalibrate.</div>`
       : cf.grade === 'C'
-        ? `<div class="rs-warn">This calibration's wheel score is <b>${cf.score} (C)</b> — below the factory band.
-           Reseat the wheel and recalibrate before trusting experiment numbers.</div>`
+        ? `<div class="rs-warn">This calibration's wheel score is <b>${cf.score} (C)</b> — below the factory
+           wheel-condition benchmark. Reseat the wheel and recalibrate before trusting experiment numbers.</div>`
         : '';
     box.innerHTML = (age > store.CAL_STALE_DAYS
       ? `<div class="rs-warn">This calibration is <b>${age} days old</b>. Rooms drift (temperature, drafts, dust) — consider recalibrating. If you continue, the age is recorded in the run.</div>` : '')
@@ -1493,8 +1528,28 @@ function mountExperiments(host, a){
       .sort((a, b) => a.t_ms - b.t_ms);
     const samplesCsv = store.buildSamplesCsv(rec);
     const sha = await store.sha256Hex(samplesCsv);
+    // Save-time derived metrics — the SAME pipeline the panels run, so the
+    // stored/exported numbers can never disagree with the screen. A metrics
+    // failure must never block the save (raw data first).
+    let metrics = null;
+    try {
+      const mcal = cals.find(x => x.id === m.calId);
+      // A run that NAMES a calibration must never store factory-model metrics
+      // (crash-recovery can run before the Supabase calibration list arrives —
+      // better no stored metrics than silently wrong ones).
+      if(!m.calId || (mcal && mcal.coef && mcal.coef.K)){
+        const mcoef = (mcal && mcal.coef && mcal.coef.K) ? mcal.coef : { ...FACTORY_COEF };
+        metrics = computeRunMetrics(
+          rec.rpmPts.map(p => ({ t: p.t / 1000, rpm: p.rpm })),
+          mcoef,
+          store.noiseFloorNNm(mcal && mcal.coef && mcal.coef.K ? mcal.coef : null).tau,
+          rec.spins,
+        );
+      }
+    } catch(e){ console.error('research: metrics failed', e); }
     const summary = store.summarizeRun(rec, {
       coasts: rec.spins.map(s => ({ n: s.n, t_start_ms: s.t_start_ms, t_end_ms: s.t_end_ms, T24_5: s.T24_5 ?? null, max_rpm: s.max_rpm, interrupted: !!s.interrupted, tail: s.tail || null })),
+      ...(metrics ? { metrics } : {}),
     });
     const title = store.makeTitle(m.labels || [], rec.startedAt);
     const wheel = wheels.find(w => w.id === m.wheelId) || (c.wheels || []).find(w => w.id === m.wheelId);
@@ -1697,6 +1752,7 @@ function mountExperiments(host, a){
       calibrationId: m.calId || '', coef: cal ? cal.coef : null,
       sha256: built.sha,
       format: store.RUN_FORMAT,
+      metrics: built.summary.metrics || null,
     };
     // the merged marker stream (user markers + engine events) for the CSV
     const recForCsv = { ...rec, markers: built.merged, events: [], spins: rec.spins };
@@ -1873,7 +1929,7 @@ function mountCalDetail(el, calId){
       const c2 = el.querySelector('#rscdDeriv');
       if(c2) drawDerivChart(c2, curvesD, null, { model: coef && coef.K ? coef : null, calm: true });
       const cb = el.querySelector('#rscdBand');
-      if(cb && coef && coef.band_pts) drawBandStrip(cb, coef.band_pts, store.noiseFloorNNm(coef).tau);
+      if(cb && coef && coef.band_pts) drawBandStrip(cb, coef.band_pts, store.noiseFloorNNm(coef).tau, store.CAL_BAND_BINS);
     };
     paintAll();
     // static data, cheap repaint — keep the canvases honest on resize
@@ -2090,6 +2146,7 @@ function mountRunDetail(el, runId){
         calibrationId: row.calibration_id || '',
         coef: cal ? cal.coef : null, sha256: row.sha256 || '',
         format: row.format || '',   // the run's OWN stored format — a re-export must not claim the current builder's version
+        metrics: s.metrics || null,
       };
       if(b.dataset.dl === 'samples') store.downloadText(base + '_samples.csv', store.buildSamplesCsv(rec));
       else if(b.dataset.dl === 'markers') store.downloadText(base + '_markers.csv', store.buildMarkersCsv(rec));
