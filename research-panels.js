@@ -135,7 +135,7 @@ function bandOfFactory(coef, floorTau){
 // "3 / 5 / 8 samples" for exactly this reason.
 const WIN_VARIANTS = [[8, 3], [25, 8]];
 
-function buildPipeline(samples, coef, floorTau){
+function buildPipeline(samples, coef, floorTau, coasts){
   const n = samples.length;
   const gap = new Array(n).fill(false);     // sample follows a data gap
   for(let i = 1; i < n; i++){
@@ -169,31 +169,52 @@ function buildPipeline(samples, coef, floorTau){
     }
     if(m >= 10) stab = { pct: Math.round(agree / m * 100) };
   }
-  // ghost: auto-armed on 2 consecutive decelerating samples above 8 rpm,
-  // killed by the jump rule (re-driven wheel). Only the LAST surviving arming
-  // is INTEGRATED — the scan itself is O(n), and integrating every historical
-  // arming on every rebuild was the pipeline's dominant cost.
-  let armed = null;
-  for(let i = 1; i < n; i++){
-    if(armed && samples[i].rpm > samples[i - 1].rpm * 1.2 && samples[i].rpm > 3) armed = null;   // re-driven
-    if(!armed && i >= 2 && !gap[i] && !gap[i - 1]
-       && samples[i].rpm < samples[i - 1].rpm && samples[i - 1].rpm < samples[i - 2].rpm
-       && samples[i - 1].rpm > 8){
-      armed = { t0: (samples[i - 1].t + samples[i - 2].t) / 2, w0: (samples[i - 1].rpm + samples[i - 2].rpm) / 2 };
+  // Ghosts: one per CLOSED coast window + the live (last) arming. The v1
+  // design integrated only the last arming for perf ("integrating every
+  // historical arming was the dominant cost") — but that left the deviation
+  // strip empty for the whole session except the final coast (field
+  // feedback: "why does the line disappear then reappear?"). Closed coast
+  // windows are FEW and STABLE, so per-coast integration stays cheap.
+  const armScan = (iFrom, iTo) => {
+    let armed = null;
+    for(let i = Math.max(2, iFrom); i <= iTo; i++){
+      if(armed && samples[i].rpm > samples[i - 1].rpm * 1.2 && samples[i].rpm > 3) armed = null;   // re-driven
+      if(!armed && !gap[i] && !gap[i - 1]
+         && samples[i].rpm < samples[i - 1].rpm && samples[i - 1].rpm < samples[i - 2].rpm
+         && samples[i - 1].rpm > 8){
+        armed = { t0: (samples[i - 1].t + samples[i - 2].t) / 2, w0: (samples[i - 1].rpm + samples[i - 2].rpm) / 2 };
+      }
     }
-  }
-  let ghost = null;
-  if(armed){
+    return armed;   // the LAST surviving arming in the range
+  };
+  const integrateGhost = (armed, tMax) => {
     const pts = [];
     let w = armed.w0, t = armed.t0;
-    while(w > 0.05 && t < armed.t0 + 700){
+    while(w > 0.05 && t < tMax){
       pts.push({ t, rpm: w });
       w -= decelOf(coef, w) * 0.05;
       t += 0.05;
     }
     pts.push({ t, rpm: 0 });
-    ghost = { t0: armed.t0, w0: armed.w0, pts, tStop: t };
+    return { t0: armed.t0, w0: armed.w0, pts, tStop: t };
+  };
+  const ghosts = [];
+  let lastCoastEnd = -1;
+  if(coasts && coasts.length){
+    for(const cs of coasts){
+      const from = cs.t_start_ms / 1000, to = cs.t_end_ms / 1000;
+      let iFrom = 0; while(iFrom < n && samples[iFrom].t < from) iFrom++;
+      let iTo = n - 1; while(iTo >= 0 && samples[iTo].t > to) iTo--;
+      if(iTo - iFrom < 3) continue;
+      const armed = armScan(iFrom, iTo);
+      if(armed) ghosts.push(integrateGhost(armed, to + 5));
+      lastCoastEnd = Math.max(lastCoastEnd, to);
+    }
   }
+  // live arming AFTER the last closed coast (the in-progress decay)
+  const liveArmed = armScan(2, n - 1);
+  if(liveArmed && liveArmed.t0 > lastCoastEnd) ghosts.push(integrateGhost(liveArmed, liveArmed.t0 + 700));
+  const ghost = ghosts.length ? ghosts[ghosts.length - 1] : null;
   // cumulative revolutions + energy + work ledger (trapezoid over fresh samples)
   const revs = new Array(n).fill(0);
   const energy = samples.map(s => 0.5 * INERTIA * Math.pow(s.rpm * Math.PI / 30, 2) * 1e6);  // µJ
@@ -235,8 +256,19 @@ function buildPipeline(samples, coef, floorTau){
       } else excurLen = 0;
     } else excurLen = 0;
   }
-  return { samples, tau, decel, gap, ghost, revs, energy, work, dissip, floorTau,
+  return { samples, tau, decel, gap, ghost, ghosts, revs, energy, work, dissip, floorTau,
            band, bandOf, tauVar, stab, imp, impSig, outside };
+}
+// deviation value at t across the ghost SEGMENTS — a segment only speaks
+// inside its own [t0, last-pt] domain (an early coast's "0 after end" must
+// not leak into later stretches)
+function ghostSegAt(p, t){
+  for(let i = p.ghosts.length - 1; i >= 0; i--){
+    const g = p.ghosts[i];
+    const end = g.pts.length ? g.pts[g.pts.length - 1].t : g.t0;
+    if(t >= g.t0 && t <= end) return ghostAt(g, t);
+  }
+  return null;
 }
 const ghostAt = (ghost, t) => {
   if(!ghost || t < ghost.t0) return null;
@@ -260,7 +292,7 @@ export function createPanelStack(host, opts){
   let markers = [];          // {t_ms, type, value, note, deleted}
   let coasts = [];           // spin records from the engine
   const coastBands = new WeakMap();   // per-coast band-time cache (see comparator)
-  let pipe = buildPipeline(samples, coef, floor.tau);
+  let pipe = buildPipeline(samples, coef, floor.tau, coasts);
   let pipeN = -1;
   let newWhileFrozen = 0;
 
@@ -277,14 +309,17 @@ export function createPanelStack(host, opts){
   };
 
   function ensurePipe(){
-    if(samples.length !== pipeN){ pipe = buildPipeline(samples, coef, floor.tau); pipeN = samples.length; }
+    // cache key covers BOTH feeds: samples grow live, coasts close rarely
+    const key = samples.length * 1000 + coasts.length;
+    if(key !== pipeN){ pipe = buildPipeline(samples, coef, floor.tau, coasts); pipeN = key; }
     return pipe;
   }
 
   // ---- persistence ----------------------------------------------------------
   const DEFAULT_ORDER = ['timeline', 'torque', 'impulse', 'logspeed', 'deviation', 'phase', 'byspeed', 'revs', 'energy', 'work', 'coasts', 'quality'];
   const DEFAULT_OPEN = { timeline: true, torque: true };
-  let layout = { order: DEFAULT_ORDER.slice(), open: { ...DEFAULT_OPEN }, prefs: {} };
+  const LENS_KEYS = ['all', 'motion', 'forces', 'energy', 'compare', 'quality'];
+  let layout = { order: DEFAULT_ORDER.slice(), open: { ...DEFAULT_OPEN }, prefs: {}, lens: 'all' };
   try {
     const saved = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
     if(saved && Array.isArray(saved.order)){
@@ -296,6 +331,7 @@ export function createPanelStack(host, opts){
       });
       layout.open = { ...DEFAULT_OPEN, ...(saved.open || {}) };
       layout.prefs = saved.prefs || {};
+      layout.lens = LENS_KEYS.includes(saved.lens) ? saved.lens : 'all';
     }
   } catch {}
   const persist = () => { try { localStorage.setItem(LS_KEY, JSON.stringify(layout)); } catch {} };
@@ -398,7 +434,7 @@ export function createPanelStack(host, opts){
 
   const PANELS = {
     timeline: {
-      title: 'Speed timeline + ghost', h: 300,
+      title: 'Speed timeline + ghost', h: 300, cat: 'motion',
       formula: 'ω = 6000 / counter [rpm]    ·    ghost: dω̂/dt = −(A + B·ω̂ + K·ω̂^1.5)',
       explain: 'WHAT: the wheel\'s speed over time — the main chart. LOOK AT: the dashed grey "ghost" line — it shows what the wheel would do all by itself in this room. MEANS: if the real line stays above the ghost, something kept the wheel going beyond plain physics; below it, something extra slowed it down.',
       draw(ctx, W, H){
@@ -413,20 +449,20 @@ export function createPanelStack(host, opts){
           ctx.fillStyle = r === 24 ? INK : GREY; ctx.fillText(String(r), PAD_L - 6, yOf(r));
         }
         const p = ensurePipe();
-        if(p.ghost){
+        for(const gh of p.ghosts){
           ctx.setLineDash([6, 4]); ctx.strokeStyle = FAINT; ctx.lineWidth = 1.6;
           ctx.beginPath();
           let pen = false;
-          for(const g of p.ghost.pts){
+          for(const g of gh.pts){
             if(g.t < view.t0 || g.t > view.t1){ pen = false; continue; }
             const px = xOf(g.t), py = yOf(g.rpm);
             pen ? ctx.lineTo(px, py) : ctx.moveTo(px, py); pen = true;
           }
           ctx.stroke(); ctx.setLineDash([]);
-          if(p.ghost.tStop >= view.t0 && p.ghost.tStop <= view.t1){
-            ctx.fillStyle = FAINT; ctx.textAlign = 'center'; ctx.font = '9.5px Inter, sans-serif';
-            ctx.fillText('ghost stop', xOf(p.ghost.tStop), yOf(0) - 10);
-          }
+        }
+        if(p.ghost && p.ghost.tStop >= view.t0 && p.ghost.tStop <= view.t1){
+          ctx.fillStyle = FAINT; ctx.textAlign = 'center'; ctx.font = '9.5px Inter, sans-serif';
+          ctx.fillText('ghost stop', xOf(p.ghost.tStop), yOf(0) - 10);
         }
         drawSeries(ctx, xOf, yOf, INK);
         drawPennants(ctx, xOf);
@@ -452,7 +488,7 @@ export function createPanelStack(host, opts){
     },
 
     torque: {
-      title: 'Drive-torque instrument', h: 280,
+      title: 'Drive-torque instrument', h: 280, cat: 'forces',
       formula: 'τ_drive = I·(α_meas − α_base(ω))    ·    I = 1.7×10⁻⁷ kg·m²',
       explain: 'WHAT: the push or drag acting on the wheel right now, beyond normal friction and air. LOOK AT: the bar — purple to the right = something is driving the wheel; amber to the left = something is braking it. MEANS: while the reading sits inside the grey band, it is too small to tell apart from the calibration\'s own variability — only readings outside the band count. The band B(ω) changes with speed: it is the largest of the room\'s noise floor, the three-spin calibration scatter and the model uncertainty.',
       draw(ctx, W, H){
@@ -540,7 +576,7 @@ export function createPanelStack(host, opts){
     },
 
     impulse: {
-      title: 'Drive impulse J(t)', h: 220,
+      title: 'Drive impulse J(t)', h: 220, cat: 'forces',
       formula: 'J(t) = ∫ τ_drive dt  [nN·m·s]    ·    J_out = ∫ sign(τ)·max(|τ|−B(ω), 0) dt',
       explain: 'WHAT: all the extra push (or extra brake) added up over time, regardless of how fast the wheel was turning — the slow-wheel-friendly cousin of the work ledger, which weights by speed. LOOK AT: whether the line climbs steadily out of the grey ribbon, or just wanders inside it; the caption counts how long the reading sat OUTSIDE the reference band. MEANS: a steady climb past the ribbon = a persistent influence kept accumulating; wandering inside it = indistinguishable from the calibration\'s own uncertainty. (A hand spin is itself a huge outside-band torque and counts in these totals — judge the hands-off stretches; drag-select gives per-stretch numbers.)',
       draw(ctx, W, H){
@@ -595,7 +631,7 @@ export function createPanelStack(host, opts){
     },
 
     logspeed: {
-      title: 'Log-scale speed', h: 260,
+      title: 'Log-scale speed', h: 260, cat: 'motion',
       formula: 'y = log ω    ·    ω = 6000 / counter [rpm]',
       explain: 'WHAT: the same speed chart, stretched so the slow range is easy to see. LOOK AT: the shape of the slow-down below 10 rpm — on the normal chart this part is squashed flat. MEANS: small, steady differences in how the wheel dies down show up here first; the little squares at the bottom mean "near standstill".',
       draw(ctx, W, H){
@@ -610,10 +646,10 @@ export function createPanelStack(host, opts){
           ctx.fillStyle = r === 24 ? INK : GREY; ctx.fillText(String(r), PAD_L - 6, yOf(r));
         }
         const p = ensurePipe();
-        if(p.ghost){
+        for(const gh of p.ghosts){
           ctx.setLineDash([6, 4]); ctx.strokeStyle = FAINT; ctx.lineWidth = 1.6;
           ctx.beginPath(); let pen = false;
-          for(const g of p.ghost.pts){
+          for(const g of gh.pts){
             if(g.t < view.t0 || g.t > view.t1 || g.rpm < 1.6){ pen = false; continue; }
             pen ? ctx.lineTo(xOf(g.t), yOf(g.rpm)) : ctx.moveTo(xOf(g.t), yOf(g.rpm)); pen = true;
           }
@@ -638,14 +674,14 @@ export function createPanelStack(host, opts){
     },
 
     deviation: {
-      title: 'Ghost deviation strip', h: 190,
+      title: 'Ghost deviation strip', h: 190, cat: 'motion',
       formula: 'Δ = 100 · (ω / ω̂ − 1) [%]',
-      explain: 'WHAT: a magnifying glass — how far the wheel is from its predicted slow-down, in percent. LOOK AT: where the line sits versus the 0% middle line. MEANS: 0% = exactly as predicted; a steady climb above 0% means the wheel keeps doing a little better than physics predicts — this chart notices that long before any other.',
+      explain: 'WHAT: a magnifying glass — how far the wheel is from its predicted slow-down, in percent. LOOK AT: where the line sits versus the 0% middle line. MEANS: 0% = exactly as predicted; a steady climb above 0% means the wheel keeps doing a little better than physics predicts. The strip only speaks during FREE COASTS — between them (hand-driven or standstill stretches) there is nothing to predict, so it stays blank by design.',
       draw(ctx, W, H){
         const p = ensurePipe();
         const { xOf } = timeAxis(W);
         drawTimeGrid(ctx, W, H, xOf);
-        if(!p.ghost){
+        if(!p.ghosts.length){
           ctx.fillStyle = FAINT; ctx.font = '11px Inter, sans-serif'; ctx.textAlign = 'center';
           ctx.fillText('ghost not armed — needs a hands-off coast', W / 2, H / 2);
           return;
@@ -664,34 +700,34 @@ export function createPanelStack(host, opts){
         const [i0, i1] = visRange();
         for(let i = i0; i <= i1; i++){
           const s = samples[i];
-          const g = ghostAt(p.ghost, s.t);
+          const g = ghostSegAt(p, s.t);   // every coast's own ghost speaks in its own window
           if(g == null || g < 2 || p.gap[i]){ pen = false; continue; }
           const d = (s.rpm / g - 1) * 100;
           pen ? ctx.lineTo(xOf(s.t), yOf(d)) : ctx.moveTo(xOf(s.t), yOf(d)); pen = true;
         }
         ctx.stroke();
         ctx.fillStyle = FAINT; ctx.font = '9.5px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-        ctx.fillText('band = ±' + Math.round(band) + '% (' + (floor.factory ? 'factory' : 'this room\'s') + ' calibration repeatability) · stops where ghost < 2 rpm', PAD_L + 4, PAD_T);
+        ctx.fillText('band = ±' + Math.round(band) + '% (' + (floor.factory ? 'factory' : 'this room\'s') + ' calibration repeatability) · speaks during free coasts, down to 2 rpm', PAD_L + 4, PAD_T);
       },
       readout(){
         const p = ensurePipe();
         const s = samples[samples.length - 1];
-        if(!p.ghost || !s) return '— no ghost';
-        const g = ghostAt(p.ghost, s.t);
-        if(g == null || g < 2) return '— ghost ended';
+        if(!p.ghosts.length || !s) return '— no ghost';
+        const g = ghostSegAt(p, s.t);
+        if(g == null || g < 2) return '— between coasts';
         const d = (s.rpm / g - 1) * 100;
         return (d >= 0 ? '+' : '') + fmtSig2(d) + ' %';
       },
       value(t){
         const p = ensurePipe(); const s = nearest(t);
-        if(!p.ghost || !s) return '—';
-        const g = ghostAt(p.ghost, s.t);
+        if(!p.ghosts.length || !s) return '—';
+        const g = ghostSegAt(p, s.t);
         return (g == null || g < 2) ? '—' : ((s.rpm / g - 1) * 100 >= 0 ? '+' : '') + fmtSig2((s.rpm / g - 1) * 100) + ' %';
       },
     },
 
     phase: {
-      title: 'Deceleration–speed phase map', h: 260,
+      title: 'Deceleration–speed phase map', h: 260, cat: 'forces',
       formula: '−dω/dt vs ω    ·    baseline: A + B·ω + K·ω^1.5 [rpm/s]',
       explain: 'WHAT: each dot = one moment; how strongly the wheel was slowing (up-down) at a given speed (left-right). LOOK AT: where the dots fall versus the dashed curve. MEANS: dots ON the curve = normal coasting; dots BELOW it = less braking than physics expects; dots below the zero line = the wheel was actually speeding up.',
       draw(ctx, W, H){
@@ -750,7 +786,7 @@ export function createPanelStack(host, opts){
     },
 
     byspeed: {
-      title: 'Drive by speed band', h: 240,
+      title: 'Drive by speed band', h: 240, cat: 'forces',
       formula: 'mean τ_drive per ω-band ± sd    ·    faded = outside the calibration\'s fitted range (extrapolated)',
       explain: 'WHAT: WHERE in the speed range the extra push or brake showed up — each bar is the average influence torque while the wheel was in that speed band. LOOK AT: bars that clear the grey band, and whether they stand in the faded zone. MEANS: a deviation only in the faded bands rests on model extrapolation (the calibration never measured there) — treat it with suspicion; same-direction bars across several measured bands = a speed-independent influence; a single odd band = model mismatch there, or a speed-specific effect.',
       draw(ctx, W, H){
@@ -832,7 +868,7 @@ export function createPanelStack(host, opts){
     },
 
     revs: {
-      title: 'Revolutions integral N(t)', h: 220,
+      title: 'Revolutions integral N(t)', h: 220, cat: 'motion',
       formula: 'N(t) = ∫ ω/60 dt  [rev]',
       explain: 'WHAT: the total number of turns the wheel has made since the start. LOOK AT: the steepness — steeper = spinning faster, flat = stopped. MEANS: the dashed line is how many turns coasting alone would give; any gap the solid line opens above it is "extra" turns that plain coasting cannot explain.',
       draw(ctx, W, H){
@@ -873,7 +909,7 @@ export function createPanelStack(host, opts){
     },
 
     energy: {
-      title: 'Kinetic energy E(t)', h: 220,
+      title: 'Kinetic energy E(t)', h: 220, cat: 'energy',
       formula: 'E = ½ · I · ω²    ·    0.54 µJ at 24 rpm',
       explain: 'WHAT: how much energy of motion the wheel holds, moment by moment (in millionths of a joule — the wheel is feather-light). LOOK AT: the rises — every rise means energy flowed INTO the wheel from somewhere. MEANS: drag the mouse across a stretch to read off exactly how much energy the wheel gained or lost there.',
       draw(ctx, W, H){
@@ -904,7 +940,7 @@ export function createPanelStack(host, opts){
     },
 
     work: {
-      title: 'Work ledger W(t)', h: 220,
+      title: 'Work ledger W(t)', h: 220, cat: 'energy',
       formula: 'W(t) = ΔE(t) + ∫ τ_base(ω)·ω dt    ·    flat at 0 = only ordinary physics',
       explain: 'WHAT: the bottom line of the whole experiment — the running total of energy that reached the wheel BEYOND normal friction and air. LOOK AT: whether the line leaves the grey ribbon around zero. MEANS: flat at zero = only ordinary physics happened; a climb outside the ribbon = energy arrived that the calibration cannot account for. (Note: spinning the wheel by hand also counts as energy in — judge the hands-off stretches.)',
       draw(ctx, W, H){
@@ -954,7 +990,7 @@ export function createPanelStack(host, opts){
     },
 
     coasts: {
-      title: 'Coast comparator', h: 0, dom: true,
+      title: 'Coast comparator', h: 0, dom: true, cat: 'compare',
       formula: 'R = T_meas(24→5) / T_cal(24→5)    ·    T_cal = ' + '—',
       explain: 'WHAT: every time the wheel freely slowed down, it got timed like a stopwatch lap and compared with your calibration. LOOK AT: the ratio at the end of each row, and the Δseconds per speed gate on the second line. MEANS: ×1.00 = the wheel slowed exactly as calibrated; ×1.20 = it kept spinning 20% longer than it should; "12→6 +2.4s" = crossing that gate took 2.4 s longer than the calibration predicts — the simplest numbers to quote from a session.',
       renderDom(el){
@@ -1012,7 +1048,7 @@ export function createPanelStack(host, opts){
     },
 
     quality: {
-      title: 'Data quality / sample cadence', h: 180,
+      title: 'Data quality / sample cadence', h: 180, cat: 'quality',
       formula: 'Δt = t_i − t_{i−1}    ·    expected ≈ 0.7 s (the device refreshes ~1.4× per second at any speed)',
       explain: 'WHAT: a health check of the measurement itself — how often a genuinely new reading arrived, plus the analysis-window cross-check. LOOK AT: the dots should sit close to the dashed 0.7 s line; red stripes are radio dropouts and they explain any missing pieces in the charts above. MEANS: only the red stripes are actual data loss. The bottom line reruns the torque estimator with shorter and longer smoothing windows — a feature that survives all three windows is real structure in the data; one that does not is a numerical artifact.',
       draw(ctx, W, H){
@@ -1081,12 +1117,32 @@ export function createPanelStack(host, opts){
   const nearest = t => { const i = nearestIdx(t); return i < 0 ? null : samples[i]; };
 
   // ---- DOM ------------------------------------------------------------------
-  host.innerHTML = `<div class="rsp-stack" id="rspStack"></div>`;
+  host.innerHTML = `<div class="rsp-lenses" id="rspLenses"></div><div class="rsp-stack" id="rspStack"></div>`;
   const stackEl = host.querySelector('#rspStack');
+  const lensEl = host.querySelector('#rspLenses');
   const bodies = {};   // id -> {card, bodyEl, canvas, overlay, domEl}
 
+  // Lenses: category filters over the panel stack (owner + ChatGPT-round
+  // decision) — no information is lost, the hidden panels stay live through
+  // their pipeline and return on "All".
+  const LENSES = [['all', 'All'], ['motion', 'Motion'], ['forces', 'Forces'], ['energy', 'Energy'], ['compare', 'Comparison'], ['quality', 'Quality']];
+  const visibleOrder = () => layout.order.filter(id => layout.lens === 'all' || PANELS[id].cat === layout.lens);
+  function paintLenses(){
+    lensEl.innerHTML = LENSES.map(([k, lbl]) =>
+      `<button type="button" class="rsp-lens${layout.lens === k ? ' on' : ''}" data-lens="${k}">${lbl}</button>`).join('');
+  }
+  lensEl.addEventListener('click', e => {
+    const b = e.target.closest('[data-lens]');
+    if(!b || b.dataset.lens === layout.lens) return;
+    layout.lens = b.dataset.lens;
+    persist();
+    buildStack();
+  });
+
   function buildStack(){
-    stackEl.innerHTML = layout.order.map(id => {
+    paintLenses();
+    for(const k of Object.keys(bodies)) delete bodies[k];   // drop stale refs of filtered-out panels
+    stackEl.innerHTML = visibleOrder().map(id => {
       const P = PANELS[id];
       const open = !!layout.open[id];
       return `
@@ -1113,7 +1169,7 @@ export function createPanelStack(host, opts){
         </div>
       </div>`;
     }).join('');
-    for(const id of layout.order){
+    for(const id of visibleOrder()){
       bodies[id] = {
         card: stackEl.querySelector(`[data-panel="${id}"]`),
         bodyEl: stackEl.querySelector(`[data-body="${id}"]`),
@@ -1396,10 +1452,14 @@ export function createPanelStack(host, opts){
     if(mv){
       const card = mv.closest('[data-panel]');
       const id = card.dataset.panel;
-      const i = layout.order.indexOf(id);
-      const j = mv.dataset.move === 'up' ? i - 1 : i + 1;
-      if(j < 0 || j >= layout.order.length) return;
-      [layout.order[i], layout.order[j]] = [layout.order[j], layout.order[i]];
+      // swap with the adjacent VISIBLE panel — under an active lens the true
+      // neighbor in layout.order may be filtered out
+      const vis = visibleOrder();
+      const vi = vis.indexOf(id);
+      const vj = mv.dataset.move === 'up' ? vi - 1 : vi + 1;
+      if(vj < 0 || vj >= vis.length) return;
+      const a = layout.order.indexOf(id), b = layout.order.indexOf(vis[vj]);
+      [layout.order[a], layout.order[b]] = [layout.order[b], layout.order[a]];
       persist();
       buildStack();
     }
@@ -1480,7 +1540,7 @@ export function createPanelStack(host, opts){
       paintAll(true);
     },
     exportPng,
-    destroy(){ hideSelPopover(); stackEl.innerHTML = ''; },
+    destroy(){ hideSelPopover(); host.innerHTML = ''; },
   };
 }
 
@@ -1490,7 +1550,7 @@ export function createPanelStack(host, opts){
 // must never disagree with what the panels showed).
 export function computeRunMetrics(samples, coef, floorTau, coasts){
   const c = (coef && coef.K) ? coef : FACTORY_COEF;
-  const p = buildPipeline(samples, c, floorTau == null ? 5 : floorTau);
+  const p = buildPipeline(samples, c, floorTau == null ? 5 : floorTau, coasts || []);
   const last = samples.length - 1;
   const r1 = v => Math.round(v * 10) / 10;
   const m = {
@@ -1541,6 +1601,11 @@ function styles(){
   const el = document.createElement('style');
   el.id = 'rspStyles';
   el.textContent = `
+  .rsp-lenses{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+  .rsp-lens{font-family:'Montserrat',sans-serif;font-weight:700;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
+    padding:6px 14px;border-radius:999px;border:1px solid #dfe3e6;background:#fff;color:#67737c;cursor:pointer;transition:all .12s}
+  .rsp-lens:hover{border-color:#5230da;color:#401d91}
+  .rsp-lens.on{background:#401d91;border-color:#401d91;color:#fff}
   .rsp-stack{display:flex;flex-direction:column;gap:12px}
   .rsp-card{background:#fff;border:1px solid #dfe3e6;border-radius:16px;overflow:hidden;
     box-shadow:0 6px 18px rgba(1,22,36,.05)}

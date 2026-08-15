@@ -189,6 +189,12 @@ function styles(){
   .rs-scale-l span.e1{transform:none;right:0}
   .rs-chart-h{font-family:'Montserrat',sans-serif;font-weight:600;font-size:13.5px;color:#011624;margin:16px 0 2px}
   .rs-chart-x{font-size:12px;color:#67737c;line-height:1.5;margin:0 0 4px}
+  .rs-qchips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+  .rs-qchip{font-size:11.5px;border:1px solid #dfe3e6;border-radius:999px;padding:4px 11px;color:#27384e;background:#fff;
+    font-variant-numeric:tabular-nums;cursor:default}
+  .rs-qchip b{font-weight:700;color:#67737c;text-transform:uppercase;font-size:9.5px;letter-spacing:.05em;margin-right:5px}
+  .rs-qchip.warn{border-color:rgba(184,134,11,.5);background:rgba(184,134,11,.07);color:#8a6a08}
+  .rs-qchip.warn b{color:#8a6a08}
   .rs-banner{display:flex;align-items:center;gap:10px;background:rgba(82,48,218,.07);border:1px solid rgba(82,48,218,.3);
     color:#401d91;border-radius:12px;padding:10px 14px;font-size:13px;margin-bottom:14px}
   @media (max-width:640px){ .rs-tile .v{font-size:28px} }
@@ -422,6 +428,62 @@ function drawBandStrip(canvas, bandPts, floorTau, allBins){
   }
   ctx.fillStyle = '#67737c'; ctx.font = '11px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
   ctx.fillText('observed calibration range [nN·m] vs speed [rpm] — how far each spin sat from the pooled model', padL + 4, 2);
+}
+
+// ---- quality header (4 chips) ----------------------------------------------
+// Always-visible measurement-quality summary: calibration match · reference
+// quality · speed coverage · data coverage. Advisory amber only — never a
+// verdict (red stays reserved for technical faults). Shared by the live
+// experiment screen and the run detail page.
+function computeQuality(samples, coef){
+  const wmax = coef && coef.w_fit_max != null ? coef.w_fit_max : 24;
+  let gapT = 0, total = 0, moving = 0, inRange = 0, last = null;
+  for(const s of samples){
+    if(last){
+      const dt = s.t - last.t;
+      const expected = s.rpm >= 2 ? 0.7 : 1.5;   // same gap rule as the pipeline
+      if(dt > 0 && dt < 600){ total += dt; if(dt > 2.5 * expected + 2) gapT += dt; }
+    }
+    last = s;
+    if(s.rpm >= 0.5){ moving++; if(s.rpm <= wmax) inRange++; }
+  }
+  return {
+    wmax,
+    uptimePct: total > 0 ? Math.max(0, Math.round(100 - gapT / total * 100)) : null,
+    speedPct: moving > 0 ? Math.round(inRange / moving * 100) : null,
+  };
+}
+function qualityChipsHtml(q){
+  const chip = (label, val, warn, title) =>
+    `<span class="rs-qchip${warn ? ' warn' : ''}" title="${esc(title)}"><b>${label}</b>${val}</span>`;
+  const out = [];
+  if(q.factory){
+    out.push(chip('cal', 'factory model', true,
+      'No room calibration — every torque number leans on the factory reference.'));
+  } else {
+    const parts = [q.ageDays != null ? q.ageDays + 'd old' : '—'];
+    if(q.dT != null) parts.push('ΔT ' + (q.dT > 0 ? '+' : '') + q.dT + '°C');
+    if(q.dRh != null) parts.push('ΔRH ' + (q.dRh > 0 ? '+' : '') + q.dRh + '%');
+    const warn = (q.ageDays != null && q.ageDays > store.CAL_STALE_DAYS)
+      || (q.dT != null && Math.abs(q.dT) > 3) || (q.dRh != null && Math.abs(q.dRh) > 15);
+    out.push(chip('cal match', parts.join(' · '), warn,
+      'Calibration age and the temperature/humidity difference vs the calibration. Rooms drift — a stale or mismatched calibration widens what "normal" looks like.'));
+    const c = q.coef || {};
+    const spread = c.quality_pct != null ? 100 - c.quality_pct : null;
+    const val = (c.sigma_rel != null ? 'σ ±' + Math.round(c.sigma_rel * 100) + '%' : 'σ —')
+      + (c.quality_spread_s != null
+        ? ' · spread ' + (c.quality_spread_s < 0.1 ? '<0.1' : c.quality_spread_s) + 's'
+        : (spread != null ? ' · spread ' + spread + '%' : ''));
+    out.push(chip('reference', val, spread != null && spread > 20,
+      'Model fit on the calibration\'s own spins (σ) and the three-spin repeatability (spread). A wide reference hides small effects.'));
+  }
+  out.push(chip('speed', q.speedPct != null ? q.speedPct + '% ≤ ' + q.wmax + ' rpm' : '—',
+    q.speedPct != null && q.speedPct < 70,
+    'Share of moving samples inside the calibration\'s fitted range — above it the baseline model is extrapolated.'));
+  out.push(chip('data', q.uptimePct != null ? q.uptimePct + '% uptime' : '—',
+    q.uptimePct != null && q.uptimePct < 90,
+    'Gap-free share of the radio stream. Dropouts blank the affected torque estimates.'));
+  return `<div class="rs-qchips">${out.join('')}</div>`;
 }
 
 // ---- mount ------------------------------------------------------------------
@@ -1112,6 +1174,7 @@ function mountExperiments(host, a){
   let sel = { wheelId: null, calId: null, labels: new Set(), subject: null };
   let runMarkers = [];            // user markers {t_ms,type,value,note}
   let markCount = 0;
+  let runQualityCtx = null;       // quality-header context frozen at start
   let coasts = [];
   let samples = [];               // {t (s), rpm} — feeds the panel stack
   let lastFlushed = 0, draftId = null;
@@ -1280,6 +1343,11 @@ function mountExperiments(host, a){
       paintBleRow(); paintCalSelect(); paintLabelChips(); paintSubjectPicker();
       host.querySelector('#rseWheel').addEventListener('change', paintCalSelect);
       host.querySelector('#rseStart').addEventListener('click', startExperiment);
+      // temp/RH inputs re-check the calibration-mismatch warning as you type
+      for(const q of ['#rseTemp', '#rseRh']){
+        const nEl = host.querySelector(q);
+        if(nEl) nEl.addEventListener('input', paintCalWarn);
+      }
     });
   }
 
@@ -1323,9 +1391,17 @@ function mountExperiments(host, a){
         ? `<div class="rs-warn">This calibration's wheel score is <b>${cf.score} (C)</b> — below the factory
            wheel-condition benchmark. Reseat the wheel and recalibrate before trusting experiment numbers.</div>`
         : '';
+    // temp/RH mismatch vs the calibration — air density and bearing behavior
+    // drift with conditions; advisory only, refreshed as the fields change
+    const eT = val('#rseTemp'), eRh = val('#rseRh');
+    const envWarn = ((cal.temp_c != null && eT != null && Math.abs(eT - cal.temp_c) > 3)
+      || (cal.rh_pct != null && eRh != null && Math.abs(eRh - cal.rh_pct) > 15))
+      ? `<div class="rs-warn">The room conditions you entered differ from this calibration's
+         (<b>${cal.temp_c ?? '—'}°C · ${cal.rh_pct ?? '—'}%</b>). Air density and bearing behavior drift with
+         temperature and humidity — consider recalibrating in today's conditions. The difference is recorded either way.</div>` : '';
     box.innerHTML = (age > store.CAL_STALE_DAYS
       ? `<div class="rs-warn">This calibration is <b>${age} days old</b>. Rooms drift (temperature, drafts, dust) — consider recalibrating. If you continue, the age is recorded in the run.</div>` : '')
-      + scoreWarn;
+      + envWarn + scoreWarn;
   }
 
   function paintLabelChips(){
@@ -1407,6 +1483,7 @@ function mountExperiments(host, a){
     const cal = cals.find(x => x.id === sel.calId);
     run.innerHTML = `
       <div class="rs-status" id="rseStatus"></div>
+      <div id="rseQuality"></div>
       <div id="rseSummary"></div>
       <div class="rs-hero" id="rseHero" style="display:none">
         <div class="rs-tile"><span class="rs-pip" id="rsePip"></span>
@@ -1460,6 +1537,18 @@ function mountExperiments(host, a){
     host.querySelector('#rseSimSpin').style.display = cap.simActive() ? '' : 'none';
 
     const coef = calCoef();
+    // freeze the quality-header context: calibration age + the temp/RH delta
+    // between this run's setup values and the calibration's
+    {
+      const calRow = cals.find(x => x.id === sel.calId);
+      const expT = val('#rseTemp'), expRh = val('#rseRh');
+      runQualityCtx = {
+        factory: calIsFactory(), coef,
+        ageDays: calRow ? store.calAgeDays(calRow) : null,
+        dT: (expT != null && calRow && calRow.temp_c != null) ? Math.round((expT - calRow.temp_c) * 10) / 10 : null,
+        dRh: (expRh != null && calRow && calRow.rh_pct != null) ? Math.round(expRh - calRow.rh_pct) : null,
+      };
+    }
     stack = createPanelStack(host.querySelector('#rseStack'), {
       mode: 'live', coef,
       floor: store.noiseFloorNNm(calIsFactory() ? null : coef),
@@ -1489,10 +1578,15 @@ function mountExperiments(host, a){
     host.querySelector('#rseSimSpin').addEventListener('click', () => cap.simSpin());
     host.querySelector('#rseStop').addEventListener('click', () => stopExperiment());
 
-    let pipFlash = 0, lastN = 0;
+    let pipFlash = 0, lastN = 0, qTick = 0;
     uiTimer = setInterval(() => {
       const rec = cap.rec();
       if(!rec) return;
+      // quality header refresh ~1 Hz (fresh data only arrives at 1.4 Hz)
+      if(qTick++ % 4 === 0){
+        const qEl = host.querySelector('#rseQuality');
+        if(qEl && runQualityCtx) qEl.innerHTML = qualityChipsHtml({ ...runQualityCtx, ...computeQuality(samples, runQualityCtx.coef) });
+      }
       const clock = host.querySelector('#rseClock');
       if(clock) clock.textContent = fmtClock(cap.now() / 1000);
       // hero vitals
@@ -1562,7 +1656,7 @@ function mountExperiments(host, a){
     // measured against even if the calibration is edited/archived later, and
     // (b) the SUBJECT can see the true charts (RLS keeps other people's
     // calibration/wheel ROWS owner-only, but this run is shared with them).
-    if(cal) env.cal = { coef: cal.coef, location: cal.location, created_at: cal.created_at };
+    if(cal) env.cal = { coef: cal.coef, location: cal.location, created_at: cal.created_at, temp_c: cal.temp_c ?? null, rh_pct: cal.rh_pct ?? null };
     if(wheel) env.wheel = { serial: wheel.serial, nickname: wheel.nickname || null };
     // local JSON FIRST — before any network
     downloadJson({
@@ -1997,7 +2091,7 @@ function mountRunDetail(el, runId){
     // wheel serial + calibration coef + subject profile (independent lookups)
     const [wheelQ, calQ, subQ, ownerQ] = await Promise.all([
       row.wheel_id ? supabase.from('research_wheels').select('serial, nickname').eq('id', row.wheel_id).maybeSingle() : Promise.resolve({ data: null }),
-      row.calibration_id ? supabase.from('research_calibrations').select('coef, location, created_at').eq('id', row.calibration_id).maybeSingle() : Promise.resolve({ data: null }),
+      row.calibration_id ? supabase.from('research_calibrations').select('coef, location, created_at, temp_c, rh_pct').eq('id', row.calibration_id).maybeSingle() : Promise.resolve({ data: null }),
       row.subject_user_id ? supabase.from('profiles').select('id, display_name, avatar_url').eq('id', row.subject_user_id).maybeSingle() : Promise.resolve({ data: null }),
       supabase.from('profiles').select('display_name').eq('id', row.user_id).maybeSingle(),
     ]);
@@ -2030,6 +2124,7 @@ function mountRunDetail(el, runId){
         </div>
         ${isOwner ? '<div id="rsdLabels"></div>' : ''}
         ${row.notes ? `<p class="rs-note">${esc(row.notes)}</p>` : ''}
+        <div id="rsdQuality"></div>
         <div class="rs-replaybar" id="rsdReplay"></div>
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 10px">
           <span class="rs-presets" id="rsdPresets" style="margin-left:0">
@@ -2037,7 +2132,6 @@ function mountRunDetail(el, runId){
             <button type="button" class="rs-preset" data-preset="300">5 min</button>
             <button type="button" class="rs-preset on" data-preset="full">Full</button>
           </span>
-          <span class="rs-note" style="margin:0;font-size:12px">Shift+drag = pan · Ctrl+scroll = zoom · click a chart = inspect a sample · drag = stats for a stretch</span>
         </div>
         <div id="rsdStackHost"></div>
         <div class="rs-hash">SHA-256 (samples.csv): ${esc(row.sha256 || '—')}</div>
@@ -2058,6 +2152,20 @@ function mountRunDetail(el, runId){
     const samples = (row.rpm_samples || []).map(p => ({ t: p[0] / 1000, rpm: p[1] }));
     const markers = (row.markers || []).filter(m => ['mark', 'note', 'direction'].includes(m.type));
     const coasts = (s.coasts || []);
+
+    // quality header — same 4 chips the live screen shows, frozen at the run's data
+    {
+      const calT = (cal && cal.temp_c != null) ? cal.temp_c : null;
+      const calRh = (cal && cal.rh_pct != null) ? cal.rh_pct : null;
+      const qEl = el.querySelector('#rsdQuality');
+      if(qEl) qEl.innerHTML = qualityChipsHtml({
+        factory, coef,
+        ageDays: envSnap.calibration_age_days != null ? envSnap.calibration_age_days : null,
+        dT: (row.temp_c != null && calT != null) ? Math.round((row.temp_c - calT) * 10) / 10 : null,
+        dRh: (row.rh_pct != null && calRh != null) ? Math.round(row.rh_pct - calRh) : null,
+        ...computeQuality(samples, coef),
+      });
+    }
     stack = createPanelStack(el.querySelector('#rsdStackHost'), {
       mode: 'review', coef,
       floor: store.noiseFloorNNm(factory ? null : coef),
