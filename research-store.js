@@ -466,6 +466,168 @@ export function buildMetaCsv(rec, meta){
   return BOM + 'key,value\n' + kv.map(([k, v]) => csvCell(k) + ',' + csvCell(v)).join('\n') + '\n';
 }
 
+// The derived per-sample series (the panels' own arrays, from computeRunSeries)
+// as a canonical CSV. Empty cell = uncertified/blank — NEVER a fake zero.
+export function buildSeriesCsv(startedAtIso, rows){
+  const head = 'utc_iso,t_s,rpm_true,tau_drive_nnm,band_nnm,decel_rpms,ghost_rpm,ghost_dev_pct,revolutions,energy_uj,work_uj,drive_impulse_nnms,impulse_sigma_nnms,after_gap';
+  const cell = v => v == null ? '' : v;
+  const out = rows.map(r => [
+    isoAt(startedAtIso, Math.round(r.t_s * 1000)), r.t_s, r.rpm,
+    cell(r.tau_nnm), cell(r.band_nnm), cell(r.decel_rpms),
+    cell(r.ghost_rpm), cell(r.dev_pct),
+    r.revs, r.energy_uj, r.work_uj, r.impulse_nnms, r.impulse_sigma_nnms, r.gap,
+  ].join(','));
+  return BOM + head + '\n' + out.join('\n') + '\n';
+}
+
+// ---- data package (ZIP) -----------------------------------------------------
+// Dependency-free ZIP writer (STORED entries + CRC32) — the app is buildless,
+// and a research data package must be ONE file a researcher can archive.
+export function makeZip(files){
+  const enc = new TextEncoder();
+  const crcTable = new Uint32Array(256);
+  for(let n = 0; n < 256; n++){
+    let c = n;
+    for(let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    crcTable[n] = c >>> 0;
+  }
+  const crc32 = bytes => {
+    let c = 0xFFFFFFFF;
+    for(let i = 0; i < bytes.length; i++) c = crcTable[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  };
+  const d = new Date();
+  const dosTime = ((d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1)) & 0xFFFF;
+  const dosDate = (((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate()) & 0xFFFF;
+  const u16 = v => [v & 255, (v >> 8) & 255];
+  const u32 = v => [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255];
+  const chunks = [], central = [];
+  let offset = 0;
+  for(const f of files){
+    const name = enc.encode(f.name);
+    const data = enc.encode(f.text);
+    const crc = crc32(data);
+    const head = new Uint8Array([
+      0x50, 0x4B, 0x03, 0x04, ...u16(20), ...u16(0x0800), ...u16(0), ...u16(dosTime), ...u16(dosDate),
+      ...u32(crc), ...u32(data.length), ...u32(data.length), ...u16(name.length), ...u16(0),
+    ]);
+    chunks.push(head, name, data);
+    central.push({ name, data, crc, offset });
+    offset += head.length + name.length + data.length;
+  }
+  const cdStart = offset;
+  for(const e of central){
+    const rec = new Uint8Array([
+      0x50, 0x4B, 0x01, 0x02, ...u16(20), ...u16(20), ...u16(0x0800), ...u16(0), ...u16(dosTime), ...u16(dosDate),
+      ...u32(e.crc), ...u32(e.data.length), ...u32(e.data.length), ...u16(e.name.length), ...u16(0), ...u16(0),
+      ...u16(0), ...u16(0), ...u32(0), ...u32(e.offset),
+    ]);
+    chunks.push(rec, e.name);
+    offset += rec.length + e.name.length;
+  }
+  chunks.push(new Uint8Array([
+    0x50, 0x4B, 0x05, 0x06, ...u16(0), ...u16(0), ...u16(central.length), ...u16(central.length),
+    ...u32(offset - cdStart), ...u32(cdStart), ...u16(0),
+  ]));
+  return new Blob(chunks, { type: 'application/zip' });
+}
+
+// The package's self-description — a researcher must be able to interpret
+// every file and column with NOTHING but this text.
+export function buildReadme(m){
+  const c = m.coef || {};
+  return `EGELY WHEEL RESEARCH — DATA PACKAGE
+====================================
+run_id:        ${m.runId || '-'}
+title:         ${m.title || '-'}
+recorded:      ${m.startedAt || '-'}  ->  ${m.endedAt || '-'}  (UTC)
+researcher:    ${m.researcherName || '-'}
+subject:       ${m.subjectName || '-'}
+wheel:         serial ${m.wheelSerial || '-'}${m.wheelNickname ? ' ("' + m.wheelNickname + '")' : ''}
+device:        fw ${m.fw || '-'} / hw ${m.hw || '-'}${m.bleDevice ? ' / BLE "' + m.bleDevice + '"' : ''}
+environment:   ${m.tempC != null ? m.tempC + ' degC' : '-'} · ${m.rhPct != null ? m.rhPct + ' %RH' : '-'}
+format:        ${m.format || '-'}
+sha256(samples.csv): ${m.sha256 || '-'}
+
+FILES
+-----
+samples.csv      The raw radio stream, one row per received line (~14/s). THE
+                 archival file — the SHA-256 above was computed over its exact
+                 bytes. counter = revolution period in ~10 ms units;
+                 rpm_true = 6000/counter; counter 0 = standstill; fresh = 1
+                 when the counter value changed (a genuinely new measurement,
+                 ~every 0.7 s); led = the device's own 0-24 display value
+                 (rails at 24), raw_led = the same before de-spiking.
+series.csv       Derived quantities at the fresh-sample cadence — the exact
+                 numbers the on-screen instruments showed (same estimator,
+                 same code path). EMPTY CELLS mean "uncertified / not
+                 defined here" and are deliberate — never read them as zero.
+markers.csv      Researcher marks, notes, direction annotations (manual, the
+                 device cannot measure direction), engine events (battery,
+                 radio drops), coast start/end rows. Times in ms + UTC.
+meta.csv         Every scalar in key,value form: environment, wheel identity,
+                 the full calibration provenance (model, score, repeatability,
+                 validation, observed band, algorithm version) and the run's
+                 derived metrics.
+run.json         The same, machine-readable, plus the per-coast records.
+calibration.json The calibration snapshot this run was measured against.
+README.txt       This file.
+
+series.csv COLUMNS
+------------------
+t_s                seconds since run start
+rpm_true           wheel speed [rpm] (6000/counter; 0 = reported standstill)
+tau_drive_nnm      influence torque [nN*m]: I*(alpha_measured - alpha_base),
+                   where alpha_base comes from the calibration model below;
+                   positive = drives the current rotation, negative = brakes
+                   it beyond the model. Estimator: least-squares slope over
+                   the last 2-5 fresh samples spanning <= 15 s, never across
+                   a data gap or a re-spin; baseline is zero at standstill.
+band_nnm           reference band B(omega) [nN*m]: the largest of the room's
+                   detection floor (observed standstill activity), the
+                   calibration model uncertainty (sigma_rel), and the
+                   observed three-spin calibration scatter. |tau| inside the
+                   band is indistinguishable from calibration variability.
+decel_rpms         measured deceleration [-d(rpm)/dt]
+ghost_rpm          the "ghost": the calibration model integrated forward from
+                   each free coast's start — what the wheel would do on its
+                   own. Empty between coasts (nothing to predict there).
+ghost_dev_pct      100*(rpm/ghost - 1); empty where ghost < 2 rpm
+revolutions        cumulative revolutions (trapezoid over fresh samples)
+energy_uj          kinetic energy [microjoule] = 0.5*I*omega^2
+work_uj            work ledger [microjoule]: Delta E + integral of
+                   tau_base*omega dt — energy beyond ordinary physics
+drive_impulse_nnms cumulative integral of tau_drive dt [nN*m*s]
+impulse_sigma_nnms model-uncertainty envelope of the impulse
+after_gap          1 = this sample follows a radio gap (the estimator was
+                   restarted; affected values are blank)
+
+CALIBRATION (the baseline every number leans on)
+------------------------------------------------
+model:   decel[rpm/s] = A + B*omega + K*omega^1.5   (omega in rpm)
+A=${c.A ?? '-'}  B=${c.B ?? 0}  K=${c.K ?? '-'}   fitted: ${c.fit ?? '-'}
+T24->5 = ${c.T24_5 ?? '-'} s   wheel score ${c.score ?? '-'}${c.grade ? ' (' + c.grade + ')' : ''}${c.score_basis ? ' — ' + c.score_basis : ''}
+repeatability: T24->5 spread ${c.quality_spread_s != null ? c.quality_spread_s + ' s' : (c.quality_pct != null ? (100 - c.quality_pct) + '%' : '-')}
+out-of-sample validation (leave-one-out): ${c.loo ? '+/-' + c.loo.max_abs_pct + '%' : '-'}
+fitted range: ${c.w_fit_min != null ? c.w_fit_min + '-' + c.w_fit_max + ' rpm (outside it the model is extrapolated)' : '-'}
+algorithm: ${c.algo || '-'}
+moment of inertia I = 1.7e-7 kg*m^2 (+/-10%) -> absolute torque/energy scale +/-10%
+
+HONESTY NOTES
+-------------
+- This software cannot distinguish air currents, static or vibration from
+  any other influence; shielding and controls are the researcher's
+  responsibility.
+- Empty cells are deliberate blanks (uncertified), never zeros.
+- The observed calibration range is a repeatability measure from three real
+  coast-downs, NOT a confidence interval.
+- Direction (CW/CCW) markers are manual researcher annotations; the device
+  measures speed magnitude only.
+- A hand spin is itself a large outside-band torque; cumulative metrics
+  include it — judge hands-off stretches.
+`;
+}
+
 // Excel-HU convenience copy of any canonical CSV: sep=; hint line, semicolon
 // delimiter, comma decimals. Never hashed, never archival.
 export function toExcelHu(canonicalCsv){

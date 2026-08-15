@@ -13,11 +13,11 @@ import { supabase } from './db.js';
 import * as auth from './auth.js';
 import * as ble from './ble.js';
 import {
-  createCapture, buildCurve, downloadJson, liveRpmOf, fmtRpm,
+  createCapture, buildCurve, downloadJson, downloadBlob, liveRpmOf, fmtRpm,
   FACTORY_COEF, RPM_MIN_COUNTER, scoreOf, integrateModel, setupCanvas,
 } from './wheel-capture.js';
 import * as store from './research-store.js';
-import { createPanelStack, computeRunMetrics } from './research-panels.js';
+import { createPanelStack, computeRunMetrics, computeRunSeries } from './research-panels.js';
 // The calibration tab shows the exact same chart TRIO as the admin Wheel test
 // (owner request) — the renderers are shared from there.
 import { drawTestChart, drawDevChart, drawDerivChart, PALETTE } from './admin-wheel-bench.js';
@@ -428,6 +428,25 @@ function drawBandStrip(canvas, bandPts, floorTau, allBins){
   }
   ctx.fillStyle = '#67737c'; ctx.font = '11px Inter, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
   ctx.fillText('observed calibration range [nN·m] vs speed [rpm] — how far each spin sat from the pooled model', padL + 4, 2);
+}
+
+// ---- data package -----------------------------------------------------------
+// One .zip with EVERYTHING a researcher needs to work standalone: the hashed
+// raw stream, the derived per-sample series (same estimator as the screen),
+// markers, all metadata (kv + machine-readable), the calibration snapshot and
+// a self-describing README. (Owner request: "minden adat, egy letölthető,
+// önmagában értelmezhető struktúrában".)
+function downloadPackage(o){
+  const files = [
+    { name: 'README.txt', text: store.buildReadme(o.readmeMeta) },
+    { name: 'samples.csv', text: o.samplesCsv },
+    { name: 'series.csv', text: store.buildSeriesCsv(o.startedAt, o.seriesRows) },
+    { name: 'markers.csv', text: o.markersCsv },
+    { name: 'meta.csv', text: o.metaCsv },
+    { name: 'run.json', text: JSON.stringify(o.runJson, null, 1) },
+    { name: 'calibration.json', text: JSON.stringify(o.calJson, null, 1) },
+  ];
+  downloadBlob(o.base + '_package.zip', store.makeZip(files));
 }
 
 // ---- quality header (4 chips) ----------------------------------------------
@@ -1649,6 +1668,7 @@ function mountExperiments(host, a){
     const wheel = wheels.find(w => w.id === m.wheelId) || (c.wheels || []).find(w => w.id === m.wheelId);
     const env = { ua: navigator.userAgent };
     if(rec.simUsed) env.sim = true;
+    if(bleState.deviceName) env.ble_device = bleState.deviceName;   // which physical device recorded this
     const cal = cals.find(x => x.id === m.calId);
     if(cal) env.calibration_age_days = store.calAgeDays(cal);
     // SNAPSHOT the calibration model + wheel identity onto the run itself:
@@ -1761,6 +1781,7 @@ function mountExperiments(host, a){
         ${err ? `<div class="rs-warn">${err}</div>` : ''}
         <div class="rs-hash">SHA-256 (samples.csv): ${built.sha}<br><span style="color:#99a2a7">File hash — proof the exported data is unaltered.</span></div>
         <div class="rs-dl" id="rseDl">
+          <button type="button" class="rs-mini" data-dl="package" style="font-weight:800">⬇ Data package (.zip)</button>
           <button type="button" class="rs-mini" data-dl="samples">samples.csv</button>
           <button type="button" class="rs-mini" data-dl="markers">markers.csv</button>
           <button type="button" class="rs-mini" data-dl="meta">meta.csv</button>
@@ -1854,6 +1875,27 @@ function mountExperiments(host, a){
     else if(which === 'markers') store.downloadText(base + '_markers.csv', store.buildMarkersCsv(recForCsv));
     else if(which === 'meta') store.downloadText(base + '_meta.csv', store.buildMetaCsv(rec, metaObj));
     else if(which === 'xlhu') store.downloadText(base + '_samples_excel-hu.csv', store.toExcelHu(built.samplesCsv));
+    else if(which === 'package'){
+      const hasCal = !!(cal && cal.coef && cal.coef.K);
+      const coefP = hasCal ? cal.coef : { ...FACTORY_COEF };
+      const seriesRows = computeRunSeries(
+        rec.rpmPts.map(p => ({ t: p.t / 1000, rpm: p.rpm })),
+        coefP, store.noiseFloorNNm(hasCal ? cal.coef : null).tau, rec.spins);
+      const rj = { ...built.row };
+      delete rj.rpm_samples;   // raw is in samples.csv, fresh series in series.csv
+      downloadPackage({
+        base, samplesCsv: built.samplesCsv,
+        markersCsv: store.buildMarkersCsv(recForCsv),
+        metaCsv: store.buildMetaCsv(rec, metaObj),
+        seriesRows, startedAt: rec.startedAt,
+        readmeMeta: { ...metaObj, title: built.title, startedAt: rec.startedAt, endedAt: rec.endedAt,
+          fw: rec.fw, hw: rec.hw, bleDevice: (built.row.env || {}).ble_device || '', format: store.RUN_FORMAT },
+        runJson: rj,
+        calJson: hasCal
+          ? { calibration_id: cal.id, coef: cal.coef, location: cal.location, created_at: cal.created_at, temp_c: cal.temp_c ?? null, rh_pct: cal.rh_pct ?? null }
+          : { note: 'no room calibration — factory model', coef: { ...FACTORY_COEF } },
+      });
+    }
   }
 
   // ---------------- runs list ----------------
@@ -2136,6 +2178,7 @@ function mountRunDetail(el, runId){
         <div id="rsdStackHost"></div>
         <div class="rs-hash">SHA-256 (samples.csv): ${esc(row.sha256 || '—')}</div>
         <div class="rs-dl" id="rsdDl">
+          <button type="button" class="rs-mini" data-dl="package" style="font-weight:800">⬇ Data package (.zip)</button>
           <button type="button" class="rs-mini" data-dl="samples">samples.csv</button>
           <button type="button" class="rs-mini" data-dl="markers">markers.csv</button>
           <button type="button" class="rs-mini" data-dl="meta">meta.csv</button>
@@ -2260,6 +2303,24 @@ function mountRunDetail(el, runId){
       else if(b.dataset.dl === 'markers') store.downloadText(base + '_markers.csv', store.buildMarkersCsv(rec));
       else if(b.dataset.dl === 'meta') store.downloadText(base + '_meta.csv', store.buildMetaCsv(rec, metaObj));
       else if(b.dataset.dl === 'xlhu') store.downloadText(base + '_samples_excel-hu.csv', store.toExcelHu(store.buildSamplesCsv(rec)));
+      else if(b.dataset.dl === 'package'){
+        const seriesRows = computeRunSeries(samples, coef, store.noiseFloorNNm(factory ? null : coef).tau, coasts);
+        const rj = { ...row };
+        delete rj.rpm_samples;   // raw is in samples.csv, fresh series in series.csv
+        downloadPackage({
+          base, samplesCsv: store.buildSamplesCsv(rec),
+          markersCsv: store.buildMarkersCsv(rec),
+          metaCsv: store.buildMetaCsv(rec, metaObj),
+          seriesRows, startedAt: row.started_at,
+          readmeMeta: { ...metaObj, title: row.title, startedAt: row.started_at, endedAt: row.ended_at,
+            fw: row.fw, hw: row.hw, bleDevice: (row.env || {}).ble_device || '', format: row.format || store.RUN_FORMAT },
+          runJson: rj,
+          calJson: cal
+            ? { calibration_id: row.calibration_id || null, coef: cal.coef || null, location: cal.location || null,
+                created_at: cal.created_at || null, temp_c: cal.temp_c ?? null, rh_pct: cal.rh_pct ?? null }
+            : { note: 'no room calibration — factory model', coef: { ...FACTORY_COEF } },
+        });
+      }
     });
     const del = el.querySelector('#rsdDelete');
     if(del) del.addEventListener('click', async () => {

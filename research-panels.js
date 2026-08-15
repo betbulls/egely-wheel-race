@@ -1595,6 +1595,29 @@ export function computeRunMetrics(samples, coef, floorTau, coasts){
   return m;
 }
 
+// Per-sample derived series for the data package — the EXACT arrays the panels
+// drew, one row per fresh sample, so a researcher never has to reimplement the
+// estimator. Blank (null) = uncertified, never a fake zero.
+export function computeRunSeries(samples, coef, floorTau, coasts){
+  const c = (coef && coef.K) ? coef : FACTORY_COEF;
+  const p = buildPipeline(samples, c, floorTau == null ? 5 : floorTau, coasts || []);
+  const r = (v, k) => v == null ? null : Math.round(v * k) / k;
+  return samples.map((s, i) => {
+    const g = ghostSegAt(p, s.t);
+    return {
+      t_s: r(s.t, 1000), rpm: r(s.rpm, 1000),
+      tau_nnm: r(p.tau[i], 100), band_nnm: r(p.band[i], 100),
+      decel_rpms: r(p.decel[i], 1000),
+      ghost_rpm: g != null ? r(g, 100) : null,
+      dev_pct: (g != null && g >= 2) ? r((s.rpm / g - 1) * 100, 100) : null,
+      revs: r(p.revs[i], 100), energy_uj: r(p.energy[i], 10000),
+      work_uj: r(p.work[i], 1000),
+      impulse_nnms: r(p.imp[i], 100), impulse_sigma_nnms: r(p.impSig[i], 100),
+      gap: p.gap[i] ? 1 : 0,
+    };
+  });
+}
+
 // ---- styles -----------------------------------------------------------------
 function styles(){
   if(document.getElementById('rspStyles')) return;
