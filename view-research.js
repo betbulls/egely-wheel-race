@@ -470,9 +470,8 @@ function drawBandStrip(canvas, bandPts, floorTau, allBins){
 // markers, all metadata (kv + machine-readable), the calibration snapshot and
 // a self-describing README. (Owner request: "minden adat, egy letölthető,
 // önmagában értelmezhető struktúrában".)
-function downloadPackage(o){
+async function downloadPackage(o){
   const files = [
-    { name: 'README.txt', text: store.buildReadme(o.readmeMeta) },
     { name: 'samples.csv', text: o.samplesCsv },
     { name: 'series.csv', text: store.buildSeriesCsv(o.startedAt, o.seriesRows) },
     { name: 'markers.csv', text: o.markersCsv },
@@ -480,6 +479,11 @@ function downloadPackage(o){
     { name: 'run.json', text: JSON.stringify(o.runJson, null, 1) },
     { name: 'calibration.json', text: JSON.stringify(o.calJson, null, 1) },
   ];
+  // EVERY file gets a hash into the README, not just the archival samples.csv —
+  // the package must be auditable file by file (ChatGPT review point, accepted)
+  const hashes = [];
+  for(const f of files) hashes.push([f.name, await store.sha256Hex(f.text)]);
+  files.unshift({ name: 'README.txt', text: store.buildReadme(o.readmeMeta, hashes) });
   downloadBlob(o.base + '_package.zip', store.makeZip(files));
 }
 
@@ -1553,6 +1557,16 @@ function mountExperiments(host, a){
     const say = (k, t) => { msg.className = 'rs-msg ' + k; msg.textContent = t; };
     if(!sel.wheelId){ say('err', 'Pick a wheel.'); return; }
     if(!sel.calId){ say('err', 'This wheel needs a calibration first (Calibration tab).'); return; }
+    // A research run never falls back to the factory model SILENTLY: if the
+    // selected calibration has no usable fitted curve, refuse to start rather
+    // than record data that only looks calibrated.
+    {
+      const calRow = cals.find(x => x.id === sel.calId);
+      if(!(calRow && calRow.coef && calRow.coef.K)){
+        say('err', 'This calibration has no usable fitted curve — recalibrate this wheel (Calibration tab) before running an experiment.');
+        return;
+      }
+    }
     if(!bleState.connected && !cap.simActive()){ say('err', 'Connect the wheel first, or enable the simulator.'); return; }
     startLive();
   }
@@ -1873,7 +1887,7 @@ function mountExperiments(host, a){
           ${m.subject ? `<span>subject: ${avatarHtml(m.subject.avatarUrl || (sel.subject && sel.subject.avatarUrl), m.subject.name)} <b>${esc(m.subject.name)}</b></span>` : ''}
           <span>${built.summary.duration_s}s · peak <b>${built.summary.peak_rpm} rpm</b> · ${built.summary.revolutions} rev</span>
           ${built.summary.metrics && built.summary.metrics.energy_in_uj != null
-            ? `<span title="All the energy the wheel received during this run — from the hand, the air, anything. The instrument cannot tell where it came from — only that it went in.">energy in, total <b>${built.summary.metrics.energy_in_uj} µJ</b> ± ${built.summary.metrics.energy_in_sigma_uj}</span>` : ''}
+            ? `<span title="All the energy the wheel received during this run — from the hand, the air, anything. The instrument cannot tell where it came from — only that it went in. It is a NET figure: an extra push and an equal extra drag cancel each other out.">energy in, total <b>${built.summary.metrics.energy_in_uj} µJ</b> ± ${built.summary.metrics.energy_in_sigma_uj} · net</span>` : ''}
           <span>${res.id ? '<b style="color:#0f8a52">DB ✓</b>' : '<b style="color:#c2415b">DB failed</b>'}</span>
         </div>
         <div id="rseSumLabels"></div>
@@ -2306,10 +2320,10 @@ function mountRunDetail(el, runId){
           ${isOwner ? '' : `<span>${(row.labels || []).map(l => '#' + esc(l)).join(' ')}</span>`}
         </div>
         <div class="rs-statband">
-          <div class="rs-stat hi" title="All the energy the wheel received during this run — from the hand, the air, anything. What its motion gained plus what friction and air took while it turned, using the calibrated drag. The instrument cannot tell WHERE it came from — only that it went in.">
+          <div class="rs-stat hi" title="All the energy the wheel received during this run — from the hand, the air, anything. What its motion gained plus what friction and air took while it turned, using the calibrated drag. The instrument cannot tell WHERE it came from — only that it went in. It is a NET figure: an extra push and an equal extra drag cancel each other out.">
             <div class="v" id="rsdEnergyV">—</div>
             <div class="l">Energy in, total</div>
-            <div class="f" id="rsdEnergyF">from all sources combined</div>
+            <div class="f" id="rsdEnergyF">net, from all sources combined</div>
           </div>
           <div class="rs-stat">
             <div class="v">${s.peak_rpm ?? '—'}<small>rpm</small></div>
@@ -2369,7 +2383,7 @@ function mountRunDetail(el, runId){
           const m = computeRunMetrics(samples, coef, store.noiseFloorNNm(factory ? null : coef).tau, coasts);
           if(m.energy_in_uj != null){
             vEl.innerHTML = `${m.energy_in_uj}<small>µJ</small>`;
-            if(fEl) fEl.textContent = `± ${m.energy_in_sigma_uj} µJ · hand, air, anything`;
+            if(fEl) fEl.textContent = `± ${m.energy_in_sigma_uj} µJ · net · hand, air, anything`;
           }
         } catch {}
       }

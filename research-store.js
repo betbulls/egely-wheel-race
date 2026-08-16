@@ -536,7 +536,7 @@ export function makeZip(files){
 
 // The package's self-description — a researcher must be able to interpret
 // every file and column with NOTHING but this text.
-export function buildReadme(m){
+export function buildReadme(m, fileHashes){
   const c = m.coef || {};
   return `EGELY WHEEL RESEARCH — DATA PACKAGE
 ====================================
@@ -549,7 +549,10 @@ wheel:         serial ${m.wheelSerial || '-'}${m.wheelNickname ? ' ("' + m.wheel
 device:        fw ${m.fw || '-'} / hw ${m.hw || '-'}${m.bleDevice ? ' / BLE "' + m.bleDevice + '"' : ''}
 environment:   ${m.tempC != null ? m.tempC + ' degC' : '-'} · ${m.rhPct != null ? m.rhPct + ' %RH' : '-'}
 format:        ${m.format || '-'}
-sha256(samples.csv): ${m.sha256 || '-'}
+sha256(samples.csv): ${m.sha256 || '-'}${fileHashes && fileHashes.length ? `
+
+FILE HASHES (SHA-256, computed over the exact bytes at export)
+${fileHashes.map(([n, h]) => n.padEnd(17) + h).join('\n')}` : ''}
 
 FILES
 -----
