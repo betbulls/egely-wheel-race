@@ -104,6 +104,13 @@ export function createWheel3d(host, api){
   // revolution sets flash to 1, flash decays at 3.2/s (~0.3 s).
   let rpm = 0, angle = 0, flash = 0, dead = false;
   let three = null;   // { renderer, scene, camera, wheelNode, dispose }
+  // Display clock: deliberately ~one radio beat behind the newest sample, so
+  // the NEXT reading is already known and the dial can glide through every
+  // value in between (the real device steps 24, 23, 22 — so does this one).
+  // The clock is a small servo: gap ≈ DELAY runs at 1×, a growing gap (replay
+  // fast-forward, tab wake) catches up at up to 5×, a shrinking one slows.
+  let dispT = null;
+  const DELAY = 0.8;
 
   // Minimal orbit: drag rotates around the target; zoom needs Ctrl (or an
   // active drag) so plain scrolling over the stage still scrolls the PAGE, and
@@ -240,22 +247,24 @@ export function createWheel3d(host, api){
   const ro = new ResizeObserver(resize);
   ro.observe(host);
 
-  // The FIGURE and the LED show the measured reading itself; only the rotation
-  // is eased. A displayed number must always be a real sample — and before any
-  // sample exists the state is unknown, never a fake "0 rpm / still".
-  let lastShown;   // undefined ≠ null: the very first paint must run even with no data
-  function paintLeds(measured){
-    const noData = measured == null;
-    const idx = noData ? 0 : ledIndexOf(measured);
+  // The LED follows the GLIDING display value (it must visit every step, like
+  // the real dial); the printed FIGURE stays a real sample — the reading the
+  // glide is departing from. Before any sample exists the state is unknown,
+  // never a fake "0 rpm / still".
+  let lastShown, lastLedShown = -1;
+  function paintLeds(sweep, figure){
+    const noData = figure == null;
+    const idx = sweep == null ? 0 : ledIndexOf(sweep);
     if(three && three.setLed) three.setLed(idx);
+    if(idx !== lastLedShown){ lastLedShown = idx; host.dataset.rw3Led = String(idx); }
     // revolution flash rides on the emissive intensity — a per-frame uniform,
     // no texture upload; base glow between flashes is 50% (handoff contract)
     if(three && three.housingMat) three.housingMat.emissiveIntensity = idx ? (0.6 + 0.4 * flash) * 3.4 : 0;
-    const shown = noData ? null : Math.round(measured * 10) / 10;
+    const shown = noData ? null : Math.round(figure * 10) / 10;
     if(shown !== lastShown){
       lastShown = shown;
       rpmEl.textContent = noData ? '—' : (shown >= 0.05 ? shown.toFixed(1) + ' rpm' : 'still');
-      qEl.textContent = noData ? 'no reading yet' : 'vitality quotient ' + Math.round(measured / BASELINE_RPM * 100) + '%';
+      qEl.textContent = noData ? 'no reading yet' : 'vitality quotient ' + Math.round(figure / BASELINE_RPM * 100) + '%';
     }
   }
 
@@ -268,11 +277,25 @@ export function createWheel3d(host, api){
     if(prev == null){ prev = ts; return; }
     const dt = Math.min(0.1, (ts - prev) / 1000);
     prev = ts;
-    // ease the ROTATION toward the measured rpm — readings arrive ~every
-    // 0.7 s and the real rotor never steps; the printed number stays raw
-    const raw = api.rpm();
-    const target = raw == null ? 0 : Math.max(0, raw);
-    rpm += (target - rpm) * Math.min(1, dt * 5);
+    // the delayed display clock: glide between two KNOWN readings — a planted
+    // cursor shows that exact reading instead, with no delay and no glide
+    let sweep = null, figure = null;
+    const pin = api.pinned();
+    if(pin !== undefined){
+      sweep = pin; figure = pin;
+      dispT = null;
+    } else {
+      const headT = api.head();
+      if(headT != null){
+        if(dispT == null || dispT > headT || headT - dispT > 5) dispT = Math.max(0, headT - DELAY);
+        const rate = Math.min(5, Math.max(0, (headT - dispT) / DELAY));
+        dispT = Math.min(headT, dispT + dt * rate);
+        const s = api.speedAt(dispT);
+        if(s){ sweep = s.rpm; figure = s.anchor; }
+      }
+    }
+    const target = sweep == null ? 0 : Math.max(0, sweep);
+    rpm += (target - rpm) * Math.min(1, dt * 8);   // light easing rounds the corner at each real reading
     if(rpm < 0.02 && target === 0) rpm = 0;
     const before = angle;
     angle += rpm / 60 * Math.PI * 2 * dt;
@@ -282,7 +305,7 @@ export function createWheel3d(host, api){
       if(three.wheelNode) three.wheelNode.rotation.y = angle;
       three.renderer.render(three.scene, three.camera);
     }
-    paintLeds(raw);
+    paintLeds(sweep, figure);
   }
 
   function destroy(){

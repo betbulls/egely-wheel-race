@@ -721,7 +721,7 @@ export function createPanelStack(host, opts){
       title: 'The wheel itself, in 3D', h: 0, dom: true, cat: 'motion',
       lede: 'Here you see the wheel turning at the speed the measurement shows right now — and the LED on its dial lighting up, like the real device.',
       formula: '<span class="fn">3D model</span>egely_wheel_20230814v2.gltf (1:1 scan)<span class="fsep">·</span>LED <i>n</i> = <i>n</i> <span class="fu">rpm</span><span class="fsep">·</span>6 rpm = 100% vitality quotient',
-      explain: '<p><b>The one question: what is the wheel doing right now?</b></p><ul><li>The model is the real device at true proportions, and it turns exactly as fast as the measurement says — in a replay it follows the playhead; click any chart to jump it to that moment.</li><li>The dial works like the real one: LED <i>n</i> lights at <i>n</i> turns per minute (red to 6, yellow to 12, green to 24; above 24 the top LED simply stays lit), and it pulses once per completed revolution.</li><li>The figure below is the measured reading itself; only the rotation glides between readings, which arrive about every 0.7 s.</li></ul><p><b>In practice:</b> drag to look around, Ctrl+scroll to zoom. Use it in replays to SEE the run — the charts tell you numbers, this shows the wheel.</p>',
+      explain: '<p><b>The one question: what is the wheel doing right now?</b></p><ul><li>The model is the real device at true proportions, and it turns exactly as fast as the measurement says — in a replay it follows the playhead; click any chart to jump it to that moment.</li><li>The dial works like the real one: LED <i>n</i> lights at <i>n</i> turns per minute (red to 6, yellow to 12, green to 24; above 24 the top LED simply stays lit), and it pulses once per completed revolution.</li><li>The dial runs one radio beat (~0.7 s) behind on purpose: the next reading is already known, so the display can glide through every value in between — the LED steps 24, 23, 22 like the real device instead of skipping. The figure below always shows the real reading the glide departs from; the charts and exports always use the raw readings.</li></ul><p><b>In practice:</b> drag to look around, Ctrl+scroll to zoom. Use it in replays to SEE the run — the charts tell you numbers, this shows the wheel.</p>',
       renderDom(el){
         // idempotent: the render loop lives its own life once mounted
         if(el.dataset.rw3) return;
@@ -731,12 +731,31 @@ export function createPanelStack(host, opts){
           if(!el.isConnected) { delete el.dataset.rw3; return; }
           el.innerHTML = '';
           m.createWheel3d(el, {
-            rpm: () => {
-              // the moment the panel must show: the planted cursor, else the
-              // head. null = no reading exists — the viewer must say so, a
-              // fake "0 rpm" would violate the blank-state rule
-              if(view.cursorT != null){ const s = nearest(view.cursorT); return s ? s.rpm : null; }
-              const s = samples[samples.length - 1];
+            // The viewer runs ONE RADIO BEAT (~0.7 s) behind the newest sample
+            // on purpose: with the next reading already known, the dial can
+            // glide through every value in between — the LED steps 24, 23, 22
+            // like the real device instead of skipping (owner request).
+            // speedAt interpolates between two REAL readings only, and never
+            // across a radio gap; anchor = the real reading the glide departs
+            // from (the printed figure must always be a real sample).
+            head: () => samples.length ? samples[samples.length - 1].t : null,
+            speedAt: t => {
+              const n = samples.length;
+              if(!n) return null;
+              if(t <= samples[0].t) return { rpm: samples[0].rpm, anchor: samples[0].rpm };
+              if(t >= samples[n - 1].t) return { rpm: samples[n - 1].rpm, anchor: samples[n - 1].rpm };
+              let lo = 0, hi = n - 1;
+              while(hi - lo > 1){ const m2 = (lo + hi) >> 1; (samples[m2].t <= t) ? lo = m2 : hi = m2; }
+              const a = samples[lo], b = samples[hi], span = b.t - a.t;
+              if(span > 2.5) return { rpm: a.rpm, anchor: a.rpm };   // dropout: hold, never sweep across
+              const f = (t - a.t) / Math.max(1e-9, span);
+              return { rpm: a.rpm + (b.rpm - a.rpm) * f, anchor: a.rpm };
+            },
+            // planted cursor: that exact reading, no delay, no sweep.
+            // undefined = no cursor (follow the head); null = cursor misses.
+            pinned: () => {
+              if(view.cursorT == null) return undefined;
+              const s = nearest(view.cursorT);
               return s ? s.rpm : null;
             },
           });
