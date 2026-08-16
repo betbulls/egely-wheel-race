@@ -863,7 +863,7 @@ export function createPanelStack(host, opts){
       title: 'Slow-down at each speed', h: 260, cat: 'forces',
       lede: 'Here you see one dot per reading: how fast the wheel was losing speed at the speed it was turning.',
       formula: '<span class="fn">Deceleration–speed phase map</span>−d<i>ω</i>/d<i>t</i> vs <i>ω</i><span class="fsep">·</span>baseline: <i>A</i> + <i>B</i>·<i>ω</i> + <i>K</i>·<i>ω</i><sup>1.5</sup> <span class="fu">rpm/s</span>',
-      explain: 'Left to right is the wheel\'s speed in rpm; bottom to top is how fast it was losing speed, in rpm per second, and the darker line labelled "holding speed" is where it would neither slow nor gain. The dashed dark curve is the calibration — the slowing this wheel did on its own at each speed. It was fitted up to 24 rpm, so to the right of that mark it is the same formula carried on past where it was ever measured. Each dot is one reading, placed at the speed it was turning: violet when it slowed clearly less than the curve, amber when clearly more, grey when close to it; older dots are faint, newer solid, and the last one wears a ring. The vertical scale is fixed from −2 to +4 rpm per second and readings beyond either end are pinned to the edge. This picture has no clock — the time window and the zoom above do not change it.',
+      explain: 'Left to right is the wheel\'s speed in rpm; bottom to top is how fast it was losing speed, in rpm per second, and the darker line labelled "holding speed" is where it would neither slow nor gain. The dashed dark curve is the calibration — the slowing this wheel did on its own at each speed. It was fitted up to 24 rpm, so to the right of that mark it is the same formula carried on past where it was ever measured. Each dot is one reading, placed at the speed it was turning: violet when it slowed clearly less than the curve, amber when clearly more, grey when close to it; older dots are faint, newer solid, and the last one wears a ring. In the tinted zone below 5 rpm the dots stay grey and faded on purpose: down there a single revolution takes longer than several radio readings, so the slow-down estimate scatters, and drafts dominate anyway — that scatter must not be read as a verdict either way. The vertical scale is fixed from −2 to +4 rpm per second; readings beyond either end are pinned to the edge, and a note appears when many fast readings sit on the top edge. This picture has no clock — the time window and the zoom above do not change it.',
       draw(ctx, W, H){
         const p = ensurePipe();
         const RPM_MAX = Math.max(30, ...samples.filter((s, i) => p.decel[i] != null).map(s => s.rpm)) * 1.05;
@@ -888,6 +888,14 @@ export function createPanelStack(host, opts){
         ctx.font = '10px Inter, sans-serif';
         ctx.fillStyle = FAINT; ctx.textAlign = 'left';
         ctx.fillText('holding speed', PAD_L + 4, yOf(0) + 4);
+        // Below ~5 rpm the estimate cannot carry a verdict: one revolution
+        // outlasts several radio readings (the firmware's speed figure lags and
+        // staircases), the true slowing is tiny, and drafts dominate (bench
+        // finding). The zone is tinted and its dots stay NEUTRAL — scatter down
+        // there must not read as violet/amber judgements.
+        const LOWR = 5;
+        ctx.fillStyle = 'rgba(1,22,36,0.035)';
+        ctx.fillRect(xOf(0), PAD_T, xOf(Math.min(LOWR, RPM_MAX)) - xOf(0), H - PAD_T - PAD_B);
         // baseline + tint zones
         ctx.setLineDash([6, 4]); ctx.strokeStyle = INK; ctx.lineWidth = 1.6;
         ctx.beginPath();
@@ -900,12 +908,16 @@ export function createPanelStack(host, opts){
         const idxs = [];
         for(let i = 0; i < samples.length; i++) if(p.decel[i] != null) idxs.push(i);
         const n = idxs.length;
+        let pinned = 0;
         idxs.forEach((i, k) => {
           const alpha = 0.15 + 0.75 * (k / Math.max(1, n - 1));
           const d = p.decel[i];
+          const low = samples[i].rpm < LOWR;
+          if(d > D_MAX) pinned++;
           const base = decelOf(coef, samples[i].rpm);
-          ctx.globalAlpha = alpha;
-          ctx.fillStyle = d < base - Math.max(0.15, base * 0.3) ? VIOLET : d > base + Math.max(0.15, base * 0.35) ? AMBER : GREY;
+          ctx.globalAlpha = low ? alpha * 0.55 : alpha;
+          ctx.fillStyle = low ? FAINT
+            : d < base - Math.max(0.15, base * 0.3) ? VIOLET : d > base + Math.max(0.15, base * 0.35) ? AMBER : GREY;
           ctx.beginPath(); ctx.arc(xOf(samples[i].rpm), yOf(d), 2.4, 0, Math.PI * 2); ctx.fill();
         });
         ctx.globalAlpha = 1;
@@ -913,6 +925,12 @@ export function createPanelStack(host, opts){
           const i = idxs[n - 1];
           ctx.strokeStyle = INK; ctx.lineWidth = 1.4;
           ctx.beginPath(); ctx.arc(xOf(samples[i].rpm), yOf(p.decel[i]), 5, 0, Math.PI * 2); ctx.stroke();
+        }
+        // honesty notes: the mushy low end + how many fast readings sit ON the ceiling
+        caption(ctx, 'left tint: below ' + LOWR + ' rpm one turn outlasts several readings and drafts dominate — dots stay grey, no verdict', PAD_L + 4, H - PAD_B - 30, W - PAD_L - PAD_R - 120, { color: FAINT });
+        if(pinned / Math.max(1, n) > 0.15){
+          ctx.fillStyle = GREY; ctx.font = '700 10px Inter, sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+          ctx.fillText(pinned + ' fast readings pinned at the +' + D_MAX + ' edge (the wheel slows harder than the scale up there)', W - PAD_R, PAD_T + 2);
         }
       },
       readout(){
