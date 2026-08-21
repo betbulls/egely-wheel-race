@@ -119,6 +119,7 @@ const PLATFORMS = [
     list: [
       'Open <b>Chrome</b> on Mac or Windows.',
       'Make sure Bluetooth is enabled.',
+      'On a <b>Mac</b>, also allow Chrome to use Bluetooth: <b>System Settings → Privacy &amp; Security → Bluetooth</b> → switch <b>Google Chrome</b> on, then fully quit and reopen Chrome. Without this the device list stays empty.',
       'Go to <b>live.egelywheel.com</b>.',
       'Tap <b>Connect</b> and choose your Egely Wheel.',
     ],
@@ -156,7 +157,7 @@ const QUICKFIX = [
 // its own entry, phrased in the user's words. Keep answers short and concrete.
 const TROUBLE_GROUPS = [
   ['I can’t connect', [
-    ['I don’t see my wheel in the list', 'Only nearby, powered-on devices appear in the list. Check the wheel is switched on and within arm’s reach, and that its <b>9V battery</b> is fresh — a nearly-empty battery can make the wheel invisible. If another phone, tablet or app is already connected to the wheel, it won’t appear either — disconnect it there first. Finally, open your phone’s <b>Settings → Bluetooth</b>: if “Egely Wheel” happens to be listed under My Devices, tap the ⓘ next to it and choose <b>Forget This Device</b>. (Most of the time it won’t be listed there — that’s normal, just move on.)'],
+    ['I don’t see my wheel in the list', 'Only nearby, powered-on devices appear in the list. Check the wheel is switched on and within arm’s reach, and that its <b>9V battery</b> is fresh — a nearly-empty battery can make the wheel invisible. If another phone, tablet or app is already connected to the wheel, it won’t appear either — disconnect it there first. Finally, open your phone’s <b>Settings → Bluetooth</b>: if “Egely Wheel” happens to be listed under My Devices, tap the ⓘ next to it and choose <b>Forget This Device</b>. (Most of the time it won’t be listed there — that’s normal, just move on.) On a <b>Mac</b>, an always-empty list usually means Chrome isn’t allowed to use Bluetooth: <b>System Settings → Privacy &amp; Security → Bluetooth</b> → enable <b>Google Chrome</b>, then quit and reopen Chrome.'],
     ['It says “That device is not an Egely Wheel”', 'The list shows every Bluetooth device around you, and the one you picked wasn’t the wheel. Tap <b>Connect</b> again and choose the entry named <b>Egely Wheel</b>. If no names are shown, switch the wheel off and on and pick the entry that newly appears.'],
     ['It says “Connection problem” or the connection failed', 'Technical-looking messages like “BLE connect timed out” or “GATT Server is disconnected” all mean the same thing: the link didn’t come up. One common cause is the wheel being <b>paired in your device’s Bluetooth settings</b> — check there and remove it if listed (see below), close any other app or tab that might be using the wheel, then try again. If it still fails, follow the five steps under <b>“Having trouble? Try this first”</b>, just above these questions.'],
     ['It says my browser can’t connect to Bluetooth', 'Your current browser can’t talk to Bluetooth devices. On a computer or Android phone, open <b>live.egelywheel.com</b> in <b>Chrome</b> (or Edge). On iPhone and iPad, Chrome won’t help either — use the <b>Bluefy</b> app instead, see the iPhone &amp; iPad card above.'],
